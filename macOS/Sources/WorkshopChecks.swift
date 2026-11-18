@@ -109,8 +109,12 @@ import AppKit
     _=workshop.down(placement)
     check(workshop.editing && workshop.captures(seat) && !workshop.captures(CGPoint(x:320,y:33)),
           "after placement only the sled takes clicks and the play session stays open")
-    workshop.finishEditing()
-    check(!workshop.captures(seat) && transitions==[true,false],
+    let playMenu=NSMenu()
+    workshop.appendMenu(to:playMenu)
+    let done=playMenu.item(withTitle:"Play on the snow")?.submenu?.item(withTitle:"Done playing")
+    let doneEnabled=done?.isEnabled==true
+    if let done=done,let command=done.action {_=NSApplication.shared.sendAction(command,to:done.target,from:done)}
+    check(doneEnabled && !workshop.captures(seat) && transitions==[true,true,false],
           "Done playing restores other apps' clicks and switches tools without reopening panels")
     workshop.onEditingChanged=nil
     return ok

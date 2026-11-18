@@ -44,7 +44,8 @@ struct WorkshopPiece: Codable {
     private(set) var pieces: [WorkshopPiece] = []
     var onEditingChanged: (() -> Void)?
     private(set) var editing = false {
-        didSet { if editing != oldValue {onEditingChanged?()} }
+        // Selecting a different tool should fold a panel the user reopened while editing.
+        didSet { if editing || oldValue {onEditingChanged?()} }
     }
     private(set) var selected: UUID?
     private var index: Int? { pieces.firstIndex { $0.id == selected } }

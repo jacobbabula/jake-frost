@@ -7,7 +7,7 @@ import AppKit
     private let gifts=MacGifts(mailboxRoot:FrostApp.testMailbox)
     private lazy var visitorControls = MacVisitorControls(settings:settings,summon:{ [weak self] kind in
         guard let self = self, let canvas = self.currentScene?.view else { return }
-        if kind == .train { _ = canvas.giftTrain.visit() } else { canvas.visitors.summon(kind,in:canvas.world) }
+        if kind == .train { canvas.giftTrain.visit() } else { canvas.visitors.summon(kind,in:canvas.world) }
         canvas.needsDisplay = true; self.startFrames()
     },onChange:{ [weak self] in self?.applyPreferences() })
     private var scenes=[UInt32:ScreenScene]()
@@ -122,8 +122,11 @@ import AppKit
             if let existing=scenes[id] {existing.panel.setFrame(frame,display:true)}
             else {
                 let scene=ScreenScene(frame:frame)
-                scene.view.workshop.configure(settings:settings,displayID:id)
-                scene.view.workshop.onEditingChanged = { [weak self] in self?.updateWorkshopPanels() }
+                let workshop=scene.view.workshop
+                workshop.configure(settings:settings,displayID:id)
+                workshop.onEditingChanged = { [weak self,weak workshop] in
+                    self?.updateWorkshopPanels(toolSelected:workshop?.editing == true)
+                }
                 scenes[id]=scene
             }
         }
@@ -134,9 +137,9 @@ import AppKit
     private func displayID(_ screen:NSScreen)->UInt32? {
         (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
     }
-    private func updateWorkshopPanels() {
+    private func updateWorkshopPanels(toolSelected:Bool = false) {
         let editing = scenes.values.contains { $0.view.workshop.editing }
-        guard workshopActive != editing else { return }
+        guard workshopActive != editing || toolSelected else { return }
         workshopActive = editing
         welcome?.setWorkshopEditing(editing)
         gifts.setWorkshopEditing(editing)

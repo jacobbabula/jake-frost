@@ -145,6 +145,9 @@ import AppKit
     _ = NSApplication.shared.sendAction(select,to:tool.target,from:tool)
     guard win.isCollapsed,anchored(win.frame,to:toolAnchor),alreadyFolded.isCollapsed,
           !closed.isVisible,!closed.isCollapsed else { print("FAIL: starting a workshop tool did not fold exactly the visible open forms");return false }
+    win.expand()
+    workshop.placeSled()
+    guard win.isCollapsed,anchored(win.frame,to:toolAnchor) else {print("FAIL: selecting another tool did not refold the open panel");return false}
     menu.removeAllItems(); workshop.appendMenu(to:menu)
     guard let stop=menu.items.compactMap({$0.submenu}).compactMap({$0.item(withTitle:"Done playing")}).first,
           let end=stop.action else {return false}
