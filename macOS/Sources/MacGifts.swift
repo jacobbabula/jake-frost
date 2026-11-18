@@ -17,6 +17,7 @@ extension SnowWorld {
     private var timer: Timer?, composer: AnchoredPanel?, sharing: NSSharingServicePicker?
     private var senderField = NSTextField(), noteField = NSTextField(), kindField = NSPopUpButton()
     private var shareButton = NSButton(), feedback = NSTextField(wrappingLabelWithString: "")
+    private var deliveryPages: NSTabView?
     private var activeID: String?, pendingReceipt: FrostGift?, replayGift: FrostGift?
     private var needsDrain = true, lastFailure: String?
     private let mailboxRoot: URL?
@@ -159,6 +160,12 @@ extension SnowWorld {
             let buttons=NSStackView(views:[shareButton,save]);buttons.spacing=8
             column.addArrangedSubview(buttons)
             let delivery = NSTabView()
+            delivery.tabViewType = .noTabsNoBorder
+            let deliveryChoice=NSSegmentedControl(labels:["Online friends","Shared folder"],trackingMode:.selectOne,
+                                                   target:self,action:#selector(changeDelivery(_:)))
+            deliveryChoice.selectedSegment=0
+            deliveryChoice.setAccessibilityLabel("Gift delivery")
+            column.addArrangedSubview(deliveryChoice)
             for (title, view) in [("Online friends",online.controls()),("Shared folder",friends.controls())] {
                 let tab = NSTabViewItem(identifier:title); tab.label=title
                 let host = NSView(); host.addSubview(view); view.translatesAutoresizingMaskIntoConstraints=false
@@ -167,9 +174,10 @@ extension SnowWorld {
                                              view.topAnchor.constraint(equalTo:host.topAnchor,constant:8)])
                 tab.view=host; delivery.addTabViewItem(tab)
             }
+            deliveryPages=delivery
             column.addArrangedSubview(delivery)
             delivery.widthAnchor.constraint(equalTo:column.widthAnchor).isActive=true
-            delivery.heightAnchor.constraint(equalToConstant:208).isActive=true
+            delivery.heightAnchor.constraint(equalToConstant:174).isActive=true
             if let content=panel.contentView {
                 content.addSubview(column)
                 NSLayoutConstraint.activate([column.leadingAnchor.constraint(equalTo:content.leadingAnchor,constant:22),
@@ -184,6 +192,10 @@ extension SnowWorld {
         prepareComposer()
         NSApp.activate(ignoringOtherApps:true);composer?.expand();composer?.makeKeyAndOrderFront(nil);composer?.makeFirstResponder(noteField)
         friends.poll(force:true);online.poll(force:true)
+    }
+
+    @objc private func changeDelivery(_ sender:NSSegmentedControl) {
+        deliveryPages?.selectTabViewItem(at:sender.selectedSegment)
     }
 
     func setWorkshopEditing(_ active:Bool) { composer?.setWorkshopEditing(active) }
@@ -231,19 +243,22 @@ extension MacGifts {
         panel.orderFront(nil)
         func descendants(_ view:NSView)->[NSView] { [view]+view.subviews.flatMap(descendants) }
         guard let tabs=descendants(content).compactMap({$0 as? NSTabView}).first,
+              let choice=descendants(content).compactMap({$0 as? NSSegmentedControl}).first,
+              let action=choice.action, choice.segmentCount==2,
+              (0..<2).map({choice.label(forSegment:$0) ?? ""}) == tabs.tabViewItems.map({$0.label}),
               tabs.tabViewItems.map({$0.label}) == ["Online friends","Shared folder"] else {return false}
         for (index,required) in [["Copy Invitation","Accept Invitation","Send to Friend","Check Deliveries","Remove"],
                                   ["Connect Folder…","Disconnect","Send to Friend"]].enumerated() {
-            tabs.selectTabViewItem(at:index)
+            choice.selectedSegment=index;_ = NSApp.sendAction(action,to:choice.target,from:choice)
             content.layoutSubtreeIfNeeded()
-            guard let page=tabs.selectedTabViewItem?.view else {return false}
+            guard tabs.selectedTabViewItem === tabs.tabViewItem(at:index),let page=tabs.selectedTabViewItem?.view else {return false}
             let buttons=descendants(page).compactMap{$0 as? NSButton}
             guard required.allSatisfy({ title in buttons.contains { button in
                 button.title==title && button.action != nil && button.target != nil &&
                     content.bounds.contains(button.convert(button.bounds,to:content))
             } }) else {return false}
         }
-        tabs.selectTabViewItem(at:0)
+        choice.selectedSegment=0;_ = NSApp.sendAction(action,to:choice.target,from:choice)
         guard let png=MacPanelSnapshot.png(panel) else {return false}
         guard let folder=ProcessInfo.processInfo.environment["JAKEFROST_MAC_GALLERY"] else {return true}
         do {
