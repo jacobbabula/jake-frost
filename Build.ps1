@@ -1,4 +1,4 @@
-﻿param([string]$OutputDirectory = $PSScriptRoot)
+param([string]$OutputDirectory = $PSScriptRoot)
 $ErrorActionPreference = 'Stop'
 $framework = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
 if (!(Test-Path (Join-Path $framework 'csc.exe'))) {
@@ -10,11 +10,14 @@ $binary = Join-Path $OutputDirectory 'JakeFrost.exe'
 $options = @('/nologo', '/optimize+', '/target:winexe', '/platform:anycpu', '/utf8output',
     "/out:$binary", "/win32manifest:$source\JakeFrost.manifest",
     "/win32icon:$source\JakeFrost.ico", "/resource:$source\JakeFrost.ico,JakeFrost.Icon",
-    '/r:System.dll', '/r:System.Core.dll', '/r:System.Xaml.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll', '/r:System.Web.Extensions.dll')
+    '/r:System.dll', '/r:System.Core.dll', '/r:System.Xaml.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll', '/r:System.Web.Extensions.dll','/r:System.Security.dll')
 foreach ($name in @('WindowsBase', 'PresentationCore', 'PresentationFramework')) {
     $options += "/r:$framework\WPF\$name.dll"
 }
 $sources = @(Get-ChildItem -LiteralPath $source -Filter '*.cs' | ForEach-Object FullName)
+foreach ($scene in 'Switchback','Lantern','SwitchbackNight','LanternNight') {
+    $options += "/resource:$source\Wallpapers\$scene.jpg,JakeFrost.Wallpaper.$scene"
+}
 $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
 $markup = Join-Path $tempRoot ('JakeFrost-markup-' + [Guid]::NewGuid().ToString('N'))
 $null = [IO.Directory]::CreateDirectory($markup)

@@ -86,7 +86,12 @@ namespace Frostpane
             WinterArt.DrawObjects(dc, scene);
             DrawDecorations(dc,scene);
             DrawSnowplough(dc,scene);
-            foreach (Snowman man in scene.Snowmen) DrawSnowman(dc, man);
+            foreach (Snowman man in scene.Snowmen) {
+                var player=scene.FightingSnowman(man);
+                if(player!=null) dc.PushTransform(VisitorArtwork.SnowmanPose(player));
+                DrawSnowman(dc,man);
+                if(player!=null) {VisitorArtwork.ThrowingTwig(dc,player); dc.Pop();}
+            }
             foreach (SnowBall ball in scene.Balls)
             {
                 if (ball.InFlight) WinterArt.DrawThrow(dc, ball);

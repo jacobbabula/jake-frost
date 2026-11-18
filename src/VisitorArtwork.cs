@@ -7,7 +7,7 @@ using System.Windows.Media;
 
 namespace Frostpane
 {
-    internal static class VisitorArtwork
+    internal static partial class VisitorArtwork
     {
         private static readonly Dictionary<string,Brush> inks=new Dictionary<string,Brush>();
         private static readonly Dictionary<string,Geometry> paths=new Dictionary<string,Geometry>();
@@ -43,6 +43,7 @@ namespace Frostpane
             R(d,"#F1223C41",left,top,w,h,8);d.DrawText(t,new Point(left+10,top+6));
         }
         internal static void Draw(DrawingContext d,SnowScene scene) {
+            DrawFight(d,scene);
             foreach(WinterVisitor v in scene.Visitors) {
                 Matrix pose=Matrix.Identity;
                 pose.Scale(v.Scale,v.Scale);
@@ -72,24 +73,54 @@ namespace Frostpane
             L(d,"#F7DFA5",.8,x+w*.47,y+1,x+w*.47,y+h-1);
         }
         private static void Yeti(DrawingContext d,WinterVisitor v) {
-            bool wave=v.Met&&v.Wait<=v.Dwell;
+            bool stopped=v.Met && v.Wait<=v.Dwell;
+            bool chopping=v.Timber!=null && v.Met;
+            double stride=stopped?0:Math.Sin(v.Travel/(7*v.Scale));
+            double beat=(v.Wait/SnowScene.ChopBeat)%1;
+            double bob=stopped?.55*Math.Sin(v.Wait*3):-Math.Abs(stride)*2;
+            double windup=beat<.54 ? -25-78*beat/.54 :
+                          beat<.72 ? -103+127*(beat-.54)/.18 : 24-49*(beat-.72)/.28;
             d.PushTransform(new ScaleTransform(v.Facing,1));
-            double stride=wave?0:Math.Sin(v.Travel/(8*v.Scale));double bob=wave?Math.Sin(v.Wait*3.2)*.8:-Math.Abs(stride)*2;
-            E(d,"#59608288",0,-1,17,3);
-            E(d,"#769BA8",-7+stride*5,-3,6.2,4.1);E(d,"#A0BBC4",8-stride*5,-3,6.3,4.2);
+            E(d,"#4A57777B",0,-.7,18,2.8);
+            E(d,"#7593A9",-8+stride*4,-3.8,6.6,4);E(d,"#94B3BF",8-stride*4,-3.5,7,3.7);
             d.PushTransform(new TranslateTransform(0,bob));
-            P(d,"#AAC9D2","M-14,-36 Q-23,-30 -21,-17 L-24,-16 -21,-11 -22,-9 Q-15,-7 -13,-17 L-9,-27 Z");
-            P(d,"#E1ECDF","M-10,-35 Q-2,-43 7,-37 Q18,-34 17,-21 L19,-18 16,-17 18,-13 14,-13 Q11,-4 4,-4 L1,-6 -1,-4 -4,-6 -8,-5 Q-15,-7 -16,-18 Q-15,-26 -10,-35 Z");
-            P(d,"#B5D0D3","M-14,-18 Q-10,-11 -5,-12 L-3,-9 -1,-11 3,-8 7,-10 10,-7 Q5,-3 -1,-5 L-5,-4 -7,-6 -11,-5 Q-15,-8 -14,-18 Z");
-            E(d,"#D9E8E0",1,-39,14,13);
-            P(d,"#E9EFE1","M-10,-45 L-9,-51 -5,-48 -3,-54 0,-50 4,-53 6,-48 10,-50 10,-44 Z");
-            E(d,"#7FABA9",3,-37,9.5,7);E(d,"#314F50",.2,-38.5,1.2,1.65);E(d,"#314F50",7,-38.5,1.2,1.65);
-            E(d,"#39575A",4.1,-35.4,2.5,1.5);L(d,"#567576",1,2.5,-32.3,5.8,-32);
-            E(d,"#F5FAEA",.4,-39.1,.38,.48);E(d,"#F5FAEA",7.2,-39.1,.38,.48);
-            P(d,"#BDD5D4","M-7,-27 L-4,-25 -5,-27 -1,-25 1,-26 3,-24 5,-26 7,-25 8,-27 Q1,-22 -7,-27 Z");
-            d.PushTransform(new RotateTransform(wave?-105+Math.Sin(v.Wait*4)*19:stride*13,12,-30));
-            P(d,"#C3DAD9","M9,-31 Q14,-38 17,-29 L22,-18 19,-19 20,-15 17,-17 17,-14 Q11,-16 10,-22 Z");d.Pop();
-            d.Pop();d.Pop();
+            // A little ridge of curled fur frames a round muzzle and two short ram horns.
+            P(d,"#798FA2","M-14,-29 Q-20,-26 -20,-17 Q-22,-12 -17,-12 Q-14,-10 -11,-18 Z");
+            P(d,"#95AEBB","M-12,-28 Q-19,-22 -18,-12 L-19,-9 -16,-10 Q-13,-3 -8,-4 L-7,-2 -4,-4 Q1,-2 5,-4 L8,-3 9,-5 Q17,-5 17,-16 Q17,-28 9,-30 Z");
+            P(d,"#EDF0E7","M-11,-28 Q-17,-20 -15,-13 L-17,-11 -14,-12 Q-14,-6 -9,-7 L-8,-5 -5,-7 Q1,-4 5,-6 L7,-5 9,-7 Q16,-8 15,-18 Q15,-27 8,-29 Z");
+            P(d,"#BED4D7","M-10,-15 Q-8,-11 -6,-12 L-4,-10 -3,-12 1,-10 2,-12 4,-11 7,-14 Q2,-7 -4,-9 Q-10,-9 -10,-15 Z");
+            P(d,"#A7504A","M-9,-25 Q-12,-20 -14,-17 L-11,-17 -11,-15 Q-6,-17 -4,-23 Z");
+            L(d,"#E89472",1.8,-12,-18,-9,-17.5);
+            E(d,"#BD6056",1,-26.2,13.1,3.8);E(d,"#E58B71",2,-27,10,1.6);
+            P(d,"#756B70","M-12,-38 Q-20,-40 -18,-48 Q-17,-52 -14,-53 Q-16,-46 -9,-45 Z M10,-41 Q15,-47 12,-52 Q20,-49 18,-43 Q17,-38 12,-37 Z");
+            P(d,"#D9AE87","M-13,-41 Q-18,-43 -16,-49 Q-16,-45 -10,-44 Z M12,-42 Q16,-46 14,-49 Q18,-46 16,-42 Z");
+            P(d,"#91AFBC","M-16,-40 Q-15,-49 -6,-50 L-2,-55 1,-52 6,-54 7,-51 Q16,-49 18,-39 L20,-36 17,-36 19,-32 16,-32 Q13,-25 5,-25 L3,-23 0,-25 -3,-23 -5,-25 Q-15,-25 -17,-33 L-19,-32 -18,-37 -20,-37 Z");
+            P(d,"#F6F3E6","M-15,-40 Q-14,-48 -5,-48 L-2,-52 0,-49 5,-52 5,-49 Q15,-48 16,-39 L18,-37 15,-37 17,-34 14,-34 Q13,-28 5,-27 L2,-25 0,-27 -3,-25 -5,-27 Q-13,-27 -15,-34 L-17,-34 -16,-38 -18,-38 Z");
+            E(d,"#A7C6CC",2,-36.7,11.8,7.6);E(d,"#BBDADD",3,-36,10,5.7);
+            E(d,"#DDACA5",-6,-34.9,2.5,1.35);E(d,"#DDACA5",11.4,-35.5,2.1,1.2);
+            E(d,"#293944",-1.3,-38,1.9,2.4);E(d,"#293944",8.1,-38.6,1.8,2.25);
+            E(d,"#FFFFFF",-1.8,-38.9,.68,.82);E(d,"#FFFFFF",7.6,-39.35,.65,.75);
+            E(d,"#526674",4,-35.6,2.1,1.25);
+            P(d,"#485762","M.3,-33.6 Q3,-31.9 7,-33.7 Q6.4,-30 3.8,-30.3 Q1.5,-30.2 .3,-33.6 Z");
+            P(d,"#FFFBE8","M1,-33.3 L3.2,-32.8 2.5,-31.7 Z");
+            if(v.CarryingLog) {
+                d.PushTransform(new RotateTransform(-14,8,-20));
+                R(d,"#946543",-16,-27,36,10,4);L(d,"#C99A69",1.3,-12,-24,11,-24);
+                E(d,"#E3B579",18,-22,4.8,5);E(d,"#AD7B51",18,-22,2.8,3.4);E(d,"#E3B579",18,-22,1.7,2.1);
+                d.Pop();
+            }
+            double arm=chopping ? windup : v.CarryingLog?-48:stopped?-89+Math.Sin(v.Wait*5)*14:stride*13;
+            d.PushTransform(new RotateTransform(arm,10,-21));
+            P(d,"#9AB6C0","M8,-24 Q12,-28 15,-22 L19,-16 Q21,-11 17,-10 Q13,-8 10,-15 Z");
+            P(d,"#E1EAE4","M9,-24 Q12,-26 14,-21 L17,-17 16,-15 18,-15 Q17,-12 14,-13 Q11,-15 9,-20 Z");
+            if(chopping) {
+                L(d,"#7C5948",2.9,14,-14,25,-19);
+                L(d,"#D4AF82",.95,16,-15,24,-18.6);
+                P(d,"#647D8A","M21,-21 L25,-23 Q26,-21 29,-21 L29,-16 Q26,-13 24,-13 L23,-17 20,-18 Z");
+                P(d,"#D3E4E3","M27,-20 L29,-21 29,-16 Q26,-13 24,-13 L24,-15 Q27,-17 27,-20 Z");
+                E(d,"#AEC8CC",15,-15,2.4,2.4);
+            }
+            d.Pop();d.Pop();d.Pop();
         }
         private static void Deer(DrawingContext d,double x,double y,double t) {
             d.PushTransform(new TranslateTransform(x,y));

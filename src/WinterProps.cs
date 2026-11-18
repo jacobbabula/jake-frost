@@ -4,10 +4,15 @@ using System.Windows;
 
 namespace Frostpane
 {
+    [Flags]
+    internal enum TreeTrim { None=0, Baubles=1, Lights=2, Twinkle=4, All=Baubles|Lights|Twinkle }
+
     internal sealed class WinterTree
     {
         public double X, Y, Size, Angle;
         public int Style;
+        internal TreeTrim Trim=TreeTrim.All;
+        internal int Palette=-1;
         internal bool Hidden;
         internal SnowBank Support;
         internal double Anchor, FallSpeed, GrowLeft;
@@ -24,6 +29,7 @@ namespace Frostpane
 
     internal sealed class LightString
     {
+        internal const double MinimumBulbScale=.5, MaximumBulbScale=5;
         public double X1, Y1, X2, Y2;
         // A negative bend retains the gentle preset as the endpoints move.
         internal double Bend = -1, BulbScale = 1;
@@ -82,6 +88,10 @@ namespace Frostpane
         public readonly List<LightString> Lights = new List<LightString>();
         public readonly List<WinterSled> Sleds = new List<WinterSled>();
         public int LightPalette;
+        internal double NewBulbScale=1;
+        internal bool TwinkleLights=true;
+        internal TreeTrim NewTreeTrim=TreeTrim.All;
+        internal int NewTreePalette=1;
         internal Func<string,bool> IsMountWindowAlive;
         private enum MountState { Visible, Covered, Closed }
         private struct WindowLife {internal double Checked;internal bool Alive;}
@@ -161,12 +171,25 @@ namespace Frostpane
                 for(int j=1;j<=parts;j++) {
                     double t=(double)j/parts,nx=strand.X1+dx*t,ny=strand.Y1+dy*t+4*sag*t*(1-t);
                     double vx=nx-px,vy=ny-py;
-                    double u=Limit(((x-px)*vx+(y-py-3*strand.BulbScale)*vy)/Math.Max(.001,vx*vx+vy*vy),0,1);
-                    if(LightHit(x,y-3*strand.BulbScale,px+u*vx,py+u*vy,radius)) return strand;
+                    double segmentLength=Math.Max(.001,vx*vx+vy*vy);
+                    for(int band=0;band<3;band++) {
+                        // Cover the wire, sockets and glass even at the largest bulb size.
+                        double localY=y-band*6.5*strand.BulbScale;
+                        double u=Limit(((x-px)*vx+(localY-py)*vy)/segmentLength,0,1);
+                        if(LightHit(x,localY,px+u*vx,py+u*vy,radius)) return strand;
+                    }
                     px=nx;py=ny;
                 }
             }
             return null;
+        }
+
+        internal void RemoveTree(WinterTree tree)
+        {
+            if(tree==null || !Trees.Remove(tree)) return;
+            Decorations.RemoveAll(delegate(PlacedDecoration d){return d.Tree==tree;});
+            if(selectedTree==tree || (selectedItem!=null && selectedItem.Tree==tree)) ClearPropSelection();
+            if(selectedGiftTree==tree) selectedGiftTree=null;
         }
 
         private void EraseProp(double x, double y)
@@ -176,7 +199,7 @@ namespace Frostpane
             WinterSled sled = SledAt(x, y);
             if (sled != null) { Sleds.Remove(sled); return; }
             WinterTree tree = TreeAt(x, y);
-            if (tree != null) { Trees.Remove(tree); Decorations.RemoveAll(delegate(PlacedDecoration d){return d.Tree==tree;}); return; }
+            if (tree != null) { RemoveTree(tree); return; }
             LightString strand = StringAt(x, y);
             if (strand != null) Lights.Remove(strand);
         }
@@ -185,6 +208,11 @@ namespace Frostpane
         {
             PropsCancel();
             if (floor == null) return;
+            if(tool==PlayTool.StyleTree) {
+                var tree=TreeAt(x,y);
+                if(tree!=null) {tree.Palette=NewTreePalette;tree.Trim=NewTreeTrim;}
+                return;
+            }
             if(tool==PlayTool.Decorate && SelectedDecoration==DecorationKind.Tree) tool=PlayTool.Tree;
             if(tool==PlayTool.Decorate && SelectedDecoration==DecorationKind.Lights) tool=PlayTool.Lights;
             propTool = tool;
@@ -218,7 +246,8 @@ namespace Frostpane
                 {
                     if (Trees.Count >= 40) return;
                     creatingProp = true;
-                    draggedTree = new WinterTree { X = x, Y = y, Size = Between(55, 81), Style = random.Next(12), GrowLeft=.55 };
+                    draggedTree = new WinterTree { X=x,Y=y,Size=Between(55,81),Style=random.Next(12),GrowLeft=.55,
+                        Trim=NewTreeTrim,Palette=NewTreePalette };
                     Trees.Add(draggedTree);
                 }
                 propOffsetX = draggedTree.X - x;
@@ -234,7 +263,7 @@ namespace Frostpane
                 {
                     if (Lights.Count >= 40) return;
                     creatingProp = true;
-                    draggedLights = new LightString { Palette=(int)Limit(LightPalette,0,2) };
+                    draggedLights = new LightString { Palette=(int)Limit(LightPalette,0,2), BulbScale=NewBulbScale };
                     DefaultStrand(draggedLights, x, y);
                     Lights.Add(draggedLights);
                 }
@@ -585,7 +614,7 @@ namespace Frostpane
             foreach (WinterTree tree in Trees)
             {
                 tree.GrowLeft=Math.Max(0,tree.GrowLeft-dt);
-                if (tree == draggedTree) continue;
+                if (tree == draggedTree || IsLeaving(tree)) continue;
                 MountState state=ResolveMount(ref tree.Support,ref tree.Anchor);
                 tree.Hidden=state==MountState.Covered;
                 if(tree.Hidden) continue;
@@ -608,7 +637,7 @@ namespace Frostpane
             for (int i = Lights.Count - 1; i >= 0; i--)
             {
                 LightString strand = Lights[i];
-                if (strand == draggedLights) continue;
+                if (strand == draggedLights || IsLeaving(strand)) continue;
                 MountState left=ResolveMount(ref strand.Left.Support,ref strand.Left.Anchor);
                 MountState right=ResolveMount(ref strand.Right.Support,ref strand.Right.Anchor);
                 if(left==MountState.Closed || right==MountState.Closed) {Lights.RemoveAt(i);continue;}

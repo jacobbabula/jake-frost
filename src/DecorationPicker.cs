@@ -23,7 +23,7 @@ namespace Frostpane
                 var content=new StackPanel {Orientation=Orientation.Vertical,HorizontalAlignment=HorizontalAlignment.Center};
                 content.Children.Add(new Image{Source=DecorationArt.Icon(kind),Width=34,Height=34});
                 content.Children.Add(new TextBlock{Text=NameOf(kind),HorizontalAlignment=HorizontalAlignment.Center,
-                    FontSize=10,Margin=new Thickness(0,3,0,0),Foreground=Brushes.White});
+                    FontSize=11,Margin=new Thickness(0,3,0,0),Foreground=Brushes.MidnightBlue});
                 var button=new Button{Content=content,Width=77,Height=62,Margin=new Thickness(2),Padding=new Thickness(1),
                     Background=DecorationArt.Tile,Cursor=Cursors.Hand,ToolTip=NameOf(kind)};
                 AutomationProperties.SetName(button,NameOf(kind));
@@ -43,7 +43,7 @@ namespace Frostpane
     {
         private static readonly Dictionary<string,Brush> ink=new Dictionary<string,Brush>();
         private static readonly Dictionary<DecorationKind,DrawingImage> pictures=new Dictionary<DecorationKind,DrawingImage>();
-        internal static readonly Brush Tile=B("#263D41"), Selected=B("#4A6A5B"), Remove=B("#B64F42");
+        internal static readonly Brush Tile=B("#F0F7FC"), Selected=B("#C7E7FA"), Remove=B("#B64F42");
         internal static readonly Pen Handle=Pen("#53786E",1.6), Cross=Pen("#FFFFFF",1.4);
         internal static readonly Brush Grip=B("#E619454C");
         internal static readonly Pen Edge=Pen("#E4F3FFF7",1.2), Frame=Pen("#A7A8E2D6",1);

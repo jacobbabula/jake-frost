@@ -35,7 +35,7 @@ namespace Frostpane
             nextPloughSide = -nextPloughSide;
         }
 
-        partial void ClearSnowplough() { Plough = null; }
+        partial void ClearSnowplough() { Plough = null; leavingDecorations.Clear(); }
 
         private double TireBed(double x,double scale)
         {
@@ -64,11 +64,13 @@ namespace Frostpane
 
         partial void StepSnowplough(double dt)
         {
+            if (floor==null || dt<=0) return;
+            double travel=52*VisitorPace*dt;
+            StepLeavingDecorations(travel);
             WinterPlough p=Plough;
-            if(p==null || floor==null || dt<=0) return;
+            if(p==null) return;
             Point oldLip=TruckPoint(p,37,0), oldTop=TruckPoint(p,30,-18);
             Point oldHeel=TruckPoint(p,-25,0);
-            double travel=52*VisitorPace*dt;
             p.Time+=dt;p.X+=p.Facing*travel;p.WheelTurn+=travel/(6.4*p.Scale);
             GroundPlough(p,dt);
             Point lip=TruckPoint(p,37,0),top=TruckPoint(p,30,-18),heel=TruckPoint(p,-25,0);
@@ -166,11 +168,11 @@ namespace Frostpane
                 ContactCircle(m,m.X,m.Y-m.BaseRadius,m.BaseRadius,reach,low,f);
             }
             foreach(WinterTree t in Trees) {
-                if(t.Hidden || t==draggedTree || (t.Support!=null && !t.Support.IsFloor))continue;
+                if(t.Hidden || IsLeaving(t) || t==draggedTree || (t.Support!=null && !t.Support.IsFloor))continue;
                 ContactArt(t,DecorationKind.Tree,t.X,t.Y,t.Angle,t.DisplaySize/96,t.Support==floor?loadTop:high,low,f);
             }
             foreach(PlacedDecoration d in Decorations) {
-                if(d.Hidden || d.Tree!=null || d==draggedDecoration || (d.Mount.Support!=null && !d.Mount.Support.IsFloor))continue;
+                if(d.Hidden || IsLeaving(d) || d.Tree!=null || d==draggedDecoration || (d.Mount.Support!=null && !d.Mount.Support.IsFloor))continue;
                 ContactArt(d,d.Kind,d.X,d.Y,d.Angle,d.Scale,d.Mount.Support==floor?loadTop:high,low,f);
             }
             foreach(WinterSled s in Sleds) {
@@ -182,7 +184,7 @@ namespace Frostpane
             if(DailyPresent!=null && DailyPresent.Y>=(Math.Abs(VisitorGround(DailyPresent.X)-DailyPresent.Y)<6?loadTop:high) && DailyPresent.Y-25<=low)
                 AddContact(DailyPresent,DailyPresent.X-12,DailyPresent.X+12,DailyPresent.Y-25,DailyPresent.Y,f);
             foreach(LightString l in Lights) {
-                if(l.Hidden || l==draggedLights || (l.Left.Support!=null && !l.Left.Support.IsFloor) ||
+                if(l.Hidden || IsLeaving(l) || l==draggedLights || (l.Left.Support!=null && !l.Left.Support.IsFloor) ||
                     (l.Right.Support!=null && !l.Right.Support.IsFloor))continue;
                 double left=double.PositiveInfinity,right=double.NegativeInfinity,minY=double.PositiveInfinity,maxY=double.NegativeInfinity;
                 int samples=Math.Max(8,Math.Min(200,(int)Math.Ceiling((l.Length+2*l.Sag)/6)));
@@ -208,19 +210,73 @@ namespace Frostpane
                 c.InQueue=true;c.Advance=Math.Max(0,contact-c.Near);
                 leader=c.Far+c.Advance+.6;bladeContacts[i]=c;
             }
-            // Once the front object reaches the display edge, park its followers in
-            // order. A plow pass never deletes a decoration or packs every pivot onto one pixel.
-            double boundary=f>0?width:0;
+            double edgeOfDisplay=f>0?width:0;
+            double boundary=edgeOfDisplay;
             for(int i=bladeContacts.Count-1;i>=0;i--) {
                 PloughContact c=bladeContacts[i];if(!c.InQueue)continue;
-                double shift=Math.Max(0,Math.Min(c.Advance,boundary-c.Far));
-                boundary=Math.Min(boundary,c.Near+shift);
-                if(shift>0)MoveWithBlade(c.Item,shift*f,speed*f);
+                bool decoration=c.Item is WinterTree || c.Item is PlacedDecoration || c.Item is LightString;
+                double shift=decoration ? c.Advance : Math.Max(0,Math.Min(c.Advance,boundary-c.Far));
+                if(!decoration)boundary=Math.Min(boundary,c.Near+shift);
+                if(shift<=0)continue;
+                MoveWithBlade(c.Item,shift*f,speed*f);
+                if(decoration && c.Far+shift>=edgeOfDisplay)
+                    leavingDecorations.Add(new LeavingDecoration {Item=c.Item,Facing=f});
             }
             foreach(SnowBall b in Balls)if(b.Below!=null) {
                 b.X=b.Below.X;b.Y=b.Below.Y-.78*(b.Radius+b.Below.Radius);
             }
             foreach(PlacedDecoration d in Decorations)if(d.Tree!=null && d!=draggedDecoration) SetTreePosition(d);
+        }
+
+        private struct LeavingDecoration
+        {
+            internal object Item;
+            internal int Facing;
+        }
+
+        private readonly List<LeavingDecoration> leavingDecorations=new List<LeavingDecoration>();
+
+        private bool IsLeaving(object item)
+        {
+            for(int i=0;i<leavingDecorations.Count;i++)
+                if(leavingDecorations[i].Item==item)return true;
+            return false;
+        }
+
+        private void StepLeavingDecorations(double travel)
+        {
+            for(int i=leavingDecorations.Count-1;i>=0;i--) {
+                LeavingDecoration exit=leavingDecorations[i];
+                object item=exit.Item;
+                var tree=item as WinterTree;
+                var decoration=item as PlacedDecoration;
+                var strand=item as LightString;
+                if(item==draggedTree || item==draggedDecoration || item==draggedLights ||
+                    (tree!=null && !Trees.Contains(tree)) || (decoration!=null && !Decorations.Contains(decoration)) ||
+                    (strand!=null && !Lights.Contains(strand))) {
+                    leavingDecorations.RemoveAt(i);continue;
+                }
+                MoveWithBlade(item,travel*exit.Facing,0);
+                double left,right;
+                if(strand!=null) {
+                    left=Math.Min(strand.X1,strand.X2)-12*strand.BulbScale;
+                    right=Math.Max(strand.X1,strand.X2)+12*strand.BulbScale;
+                } else if(tree!=null) {
+                    left=tree.X-tree.DisplaySize;right=tree.X+tree.DisplaySize;
+                    foreach(PlacedDecoration d in Decorations) if(d.Tree==tree) {
+                        SetTreePosition(d);
+                        left=Math.Min(left,d.X-32*d.Scale);right=Math.Max(right,d.X+32*d.Scale);
+                    }
+                } else {
+                    left=decoration.X-34*decoration.Scale;right=decoration.X+34*decoration.Scale;
+                }
+                if(exit.Facing>0 ? left<=width : right>=0)continue;
+                if(tree!=null) {
+                    RemoveTree(tree);
+                } else if(strand!=null)Lights.Remove(strand);
+                else Decorations.Remove(decoration);
+                leavingDecorations.RemoveAt(i);
+            }
         }
 
         private void MoveWithBlade(object item,double dx,double velocity)
@@ -241,19 +297,18 @@ namespace Frostpane
             }
             var tree=item as WinterTree;
             if(tree!=null) {
-                tree.X=Limit(tree.X+dx,0,width);
+                tree.X+=dx;
                 if(tree.Support==floor){tree.Anchor=tree.X/width;RestTree(tree,floor);}
                 return;
             }
             var d=item as PlacedDecoration;
             if(d!=null) {
-                d.X=Limit(d.X+dx,0,width);
+                d.X+=dx;
                 if(d.Mount.Support==floor){d.Mount.Anchor=d.X/width;RestDecoration(d,floor);}
                 return;
             }
             var l=item as LightString;
             if(l!=null) {
-                dx=Limit(dx,-Math.Min(l.X1,l.X2),width-Math.Max(l.X1,l.X2));
                 l.X1+=dx;l.X2+=dx;
                 if(l.Left.Support==floor)l.Left.Anchor=l.X1/width;
                 if(l.Right.Support==floor)l.Right.Anchor=l.X2/width;
@@ -265,29 +320,36 @@ namespace Frostpane
 
         private bool SpreadPloughedSnow(WinterPlough p,Point lip,double cell)
         {
-            // Start shallow at the lip and taper back to the unworked blanket.
-            // A full bank carries its excess forward until there is room or the plow exits.
+            // Cut only the face touching the blade. Distant, unworked terrain keeps its contour.
             int first=p.Facing>0 ? (int)Math.Floor((lip.X-floor.X)/cell)+1 : (int)Math.Ceiling((lip.X-floor.X)/cell)-1;
             bool changed=false;
+            double lipDepth=Math.Max(0,floor.Y-lip.Y);
+            double bite=Math.Max(3*cell,25*p.Scale);
             for(int j=first;j>=0 && j<floor.Heights.Length;j+=p.Facing) {
                 double distance=(j*cell+floor.X-lip.X)*p.Facing;
-                double cap=Math.Max(0,floor.Y-lip.Y+.43*distance);
+                if(distance>=bite)break;
+                double cap=lipDepth+.28*distance;
                 if(floor.Heights[j]<=cap)break;
-                // The face of an existing solid bank sloughs into the blade. Limit
-                // only the connected rise, leaving separate hills ahead untouched.
-                p.Carry+=floor.Heights[j]-cap;floor.Heights[j]=cap;changed=true;
+                double t=Limit((distance-cell)/(bite-cell),0,1);
+                double cut=(floor.Heights[j]-cap)*(1-t*t*(3-2*t));
+                p.Carry+=cut;floor.Heights[j]-=cut;changed=true;
             }
             if(p.Carry<.001)return changed;
-            double reach=Math.Max(cell*9,76*p.Scale), load=p.Carry;
+            // Loose snow rolls over in a broad, rounded bank; heavier loads spread further ahead.
+            double reach=Math.Max(cell*7,Math.Min(120*p.Scale,42*p.Scale+Math.Sqrt(p.Carry*cell)*1.3));
+            double load=p.Carry, peak=Math.Min(.115*reach,18*p.Scale);
+            double blanket=floor.HeightAt(lip.X+p.Facing*reach);
             int count=(int)Math.Ceiling(reach/cell);
             for(int n=0;n<count;n++) {
                 int index=first+n*p.Facing;
                 if(index<0 || index>=floor.Heights.Length)continue;
                 double distance=(index*cell+floor.X-lip.X)*p.Facing;
-                double wedge=Math.Max(0,Math.Min(distance,reach-distance))*.43;
-                int a=Math.Max(0,index-1),b=Math.Min(floor.Heights.Length-1,index+1);
-                double cap=Math.Min(floor.Maximum(index),Math.Min(floor.Y-lip.Y+wedge,Math.Min(floor.Heights[a],floor.Heights[b])+.43*cell));
-                double lift=Math.Min(Math.Max(0,cap-floor.Heights[index]),load*2*Math.Sin(Math.PI*Limit(distance/reach,0,1))/(count+1));
+                double t=Limit(distance/reach,0,1), weight=Math.Sin(Math.PI*t);
+                weight*=weight;
+                double bed=lipDepth+(blanket-lipDepth)*t*t*(3-2*t);
+                double cap=Math.Min(floor.Maximum(index),bed+peak*weight);
+                if(distance<=cell)cap=Math.Min(cap,lipDepth+.4*distance);
+                double lift=Math.Min(Math.Max(0,cap-floor.Heights[index]),load*2*weight/(count+1));
                 lift=Math.Min(lift,p.Carry);
                 if(lift<=.00001)continue;
                 floor.Heights[index]+=lift;p.Carry-=lift;changed=true;

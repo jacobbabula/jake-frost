@@ -66,7 +66,7 @@ struct FrostGift {
         gift.note = sanitized(try text(6, max: 280)); gift.dress = try text(12, max: 8192)
         gift.size = try number(8, 3...160); gift.mid = try number(9, 1...64)
         gift.head = try number(10, 1...64); gift.facing = try number(11, -1...1)
-        if kind == .snowman && (gift.size > 50 || gift.mid > gift.size || gift.head > gift.mid) { throw invalid }
+        if kind == .snowman && (gift.size > 50 || gift.mid > 50 || gift.head > 50) { throw invalid }
         return gift
     }
 

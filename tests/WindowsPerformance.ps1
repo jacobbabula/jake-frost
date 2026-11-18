@@ -14,7 +14,7 @@ try {
     $binary = Join-Path $scratch 'WindowsPerformance.exe'
     $arguments = @('/nologo','/optimize+','/utf8output','/main:WindowsPerformance',"/out:$binary",
         '/r:System.dll','/r:System.Core.dll','/r:System.Xaml.dll','/r:System.Drawing.dll',
-        '/r:System.Windows.Forms.dll','/r:System.Web.Extensions.dll')
+        '/r:System.Windows.Forms.dll','/r:System.Web.Extensions.dll','/r:System.Security.dll')
     foreach ($name in 'WindowsBase','PresentationCore','PresentationFramework') {
         $arguments += "/r:$framework\WPF\$name.dll"
     }

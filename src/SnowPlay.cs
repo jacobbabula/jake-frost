@@ -4,7 +4,7 @@ using System.Diagnostics;
 
 namespace Frostpane
 {
-    internal enum PlayTool { Roll, Puff, Pile, Throw, Tree, Lights, Sled, Erase, Decorate, Arrange }
+    internal enum PlayTool { Roll, Puff, Pile, Throw, Tree, Lights, Sled, Erase, Decorate, Arrange, StyleTree }
 
     internal sealed partial class SnowScene
     {
@@ -65,7 +65,7 @@ namespace Frostpane
             ApplyDepth();
             playActive=true; playX=stampX=x; playY=stampY=y;
             switch (tool) {
-                case PlayTool.Roll: PointerDown(x,y); break;
+                case PlayTool.Roll: motion.Clear(); SampleThrow(x,y,InputClock()); PointerDown(x,y); break;
                 case PlayTool.Puff: BrushPuff(x,y); break;
                 case PlayTool.Pile: SculptAt(x,y,12); break;
                 case PlayTool.Throw: BeginThrow(x,y); break;
@@ -78,7 +78,7 @@ namespace Frostpane
             if (!playActive) return;
             playX=x; playY=y;
             switch (tool) {
-                case PlayTool.Roll: PointerMove(x,y); break;
+                case PlayTool.Roll: SampleThrow(x,y,InputClock()); PointerMove(x,y); break;
                 case PlayTool.Throw: SampleThrow(x,y); PointerMove(x,y); break;
                 case PlayTool.Puff:
                 case PlayTool.Pile: BrushStroke(x,y); break;
@@ -90,7 +90,7 @@ namespace Frostpane
         {
             if (!playActive) return;
             switch (tool) {
-                case PlayTool.Roll: PointerUp(x,y); break;
+                case PlayTool.Roll: SampleThrow(x,y,InputClock()); PointerUp(x,y); motion.Clear(); break;
                 case PlayTool.Throw: PlayMove(x,y); FinishThrow(); break;
                 case PlayTool.Puff:
                 case PlayTool.Pile: BrushStroke(x,y); break;
@@ -119,6 +119,16 @@ namespace Frostpane
         {
             double dx=x-cx,dy=y-cy; return dx*dx+dy*dy<=radius*radius;
         }
+        private static bool TouchesFigure(Snowman m,double x,double y,double radius)
+        {
+            double baseY=m.Y-m.BaseRadius;
+            double midY=baseY-.78*(m.BaseRadius+m.MidRadius);
+            double headY=midY-.78*(m.MidRadius+m.HeadRadius);
+            return InCircle(x,y,m.X,baseY,m.BaseRadius+radius) ||
+                   InCircle(x,y,m.X,midY,m.MidRadius+radius) ||
+                   InCircle(x,y,m.X,headY,m.HeadRadius+radius);
+        }
+
         private Snowman DirectSnowman(double x,double y)
         {
             for (int i=Snowmen.Count-1;i>=0;i--) {
@@ -126,9 +136,7 @@ namespace Frostpane
                 double baseY=m.Y-m.BaseRadius;
                 double midY=baseY-.78*(m.BaseRadius+m.MidRadius);
                 double headY=midY-.78*(m.MidRadius+m.HeadRadius);
-                if (InCircle(x,y,m.X,baseY,m.BaseRadius+1) ||
-                    InCircle(x,y,m.X,midY,m.MidRadius+1) ||
-                    InCircle(x,y,m.X,headY,m.HeadRadius+1) ||
+                if (TouchesFigure(m,x,y,1) ||
                     (Math.Abs(x-m.X)<=m.HeadRadius*1.36+1 && y>=headY-m.HeadRadius*2.25 && y<headY))
                     return m;
             }
@@ -198,7 +206,7 @@ namespace Frostpane
             DirectMove(x,y);
             if (directTarget==DirectTarget.Sled || directTarget==DirectTarget.Tree) PropsUp(x,y);
             else if (!directDragged && directTarget==DirectTarget.Bank) PuffAtSnow(directX,directY);
-            else if (directDragged && heldBall!=null && LaunchIfFast(heldBall,345)) {
+            else if (directDragged && heldBall!=null && LaunchIfFast(heldBall,345,true)) {
                 heldBall.Held=false; heldBall=null;
             }
             else PointerUp(x,y);
@@ -362,9 +370,10 @@ namespace Frostpane
             LaunchIfFast(b,55);
             motion.Clear();
         }
-        private bool LaunchIfFast(SnowBall b,double threshold)
+        private void ReleaseVelocity(out double vx,out double vy)
         {
-            if (motion.Count<2) return false;
+            vx=vy=0;
+            if (motion.Count<2) return;
             ThrowSample first=motion[0],next=motion[1],last=motion[motion.Count-1];
             double start=Math.Max(first.T,last.T-.125);
             if (next.T>first.T && start>first.T) {
@@ -372,13 +381,69 @@ namespace Frostpane
                 first.X+=(next.X-first.X)*fraction;first.Y+=(next.Y-first.Y)*fraction;
             }
             double dt=Math.Max(.04,last.T-start);
-            double vx=(last.X-first.X)/dt,vy=(last.Y-first.Y)/dt;
+            vx=(last.X-first.X)/dt; vy=(last.Y-first.Y)/dt;
+        }
+
+        private bool LaunchIfFast(SnowBall b,double threshold,bool allowRoll=false)
+        {
+            double vx,vy;
+            ReleaseVelocity(out vx,out vy);
+            if (allowRoll && Math.Abs(vy)<Math.Abs(vx)*.45) {
+                double foot=b.Y+b.Radius,surface;
+                if (FindSupport(b.X,foot-3,foot+4,2,out surface)!=null) return false;
+            }
             double speed=Math.Sqrt(vx*vx+vy*vy);
             if (speed<=threshold) return false;
             double factor=Math.Min(1,1150/speed);
             b.Vx=vx*factor; b.Vy=vy*factor; b.InFlight=true;
             return true;
         }
+        private bool HitFigure(SnowBall b)
+        {
+            for (int i=Snowmen.Count-1;i>=0;i--) {
+                Snowman m=Snowmen[i];
+                if (m.Held || !TouchesFigure(m,b.X,b.Y,b.Radius)) continue;
+                CrumbleFigure(m,b.Vx,Math.Abs(b.Vy));
+                return true;
+            }
+            return false;
+        }
+
+        private void BreakBall(SnowBall b,SnowBank surface)
+        {
+            foreach (SnowBall other in Balls) if (other.Below==b) other.Below=null;
+            if (surface!=null) Deposit(surface,b.X,b.Radius*.52);
+            double speed=Math.Sqrt(b.Vx*b.Vx+b.Vy*b.Vy);
+            ScatterSnow(b.X,b.Y,b.Radius,b.Vx,speed);
+            Balls.Remove(b);
+        }
+
+        private void ScatterSnow(double x,double y,double radius,double vx,double speed)
+        {
+            double power=Limit(.65+speed/820+radius/85,.75,1.85);
+            PowderBurst(x,y,(int)Limit(radius+speed/40,12,54),vx,power);
+            // Larger fragments carry momentum and settle into nearby drifts.
+            int chunks=Math.Min((int)Limit(radius/3,3,10),ParticleLimit+300-Flakes.Count);
+            for (int i=0;i<chunks;i++) {
+                Flake f=NewFlake(x+Between(-.55,.55)*radius,y+Between(-.6,.25)*radius);
+                f.Clump=true; f.Crystal=false; f.Radius=Limit(radius*Between(.12,.28),1.8,7);
+                f.ThrowX=Limit(vx*.30,-220,220)+Between(-76,76)*power;
+                f.ThrowY=Between(-140,-48)*power;
+                Flakes.Add(f);
+            }
+        }
+
+        private void CrumbleFigure(Snowman m,double vx,double impact)
+        {
+            double baseY=m.Y-m.BaseRadius,midY=baseY-.78*(m.BaseRadius+m.MidRadius);
+            double headY=midY-.78*(m.MidRadius+m.HeadRadius);
+            double speed=Math.Sqrt(vx*vx+impact*impact);
+            ScatterSnow(m.X,baseY,m.BaseRadius,vx*.45,speed);
+            ScatterSnow(m.X,midY,m.MidRadius,vx*.70,speed);
+            ScatterSnow(m.X,headY,m.HeadRadius,vx,speed);
+            Snowmen.Remove(m);
+        }
+
         private void AdvanceThrow(SnowBall b,double dt)
         {
             b.Vy=Math.Min(930,b.Vy+565*dt);
@@ -390,15 +455,9 @@ namespace Frostpane
                 double surface;
                 SnowBank bank=FindSupport(b.X,foot,b.Y+b.Radius,2,out surface);
                 bool hit=bank!=null || b.X<=b.Radius || b.X>=width-b.Radius || b.Y<=b.Radius || b.Y+b.Radius>=height;
-                if (!hit) {
-                    foreach (Snowman m in Snowmen)
-                        if (!m.Held && Math.Abs(b.X-m.X)<b.Radius+m.BaseRadius*.78 &&
-                            b.Y+b.Radius>=m.Y-m.Height && b.Y-b.Radius<=m.Y) { hit=true; break; }
-                }
-                if (!hit) continue;
-                if (bank!=null) { b.Y=surface-b.Radius; Deposit(bank,b.X,b.Radius*.42); }
-                PowderBurst(Limit(b.X,1,width-1),Limit(b.Y,1,height-1),32,b.Vx,1.25);
-                Balls.Remove(b);
+                if (!HitFigure(b) && !hit) continue;
+                if (bank!=null) b.Y=surface-b.Radius;
+                BreakBall(b,bank);
                 return;
             }
         }

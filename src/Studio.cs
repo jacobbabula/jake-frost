@@ -64,17 +64,43 @@ namespace Frostpane
         }
         private void EnsureDecorationGallery()
         {
-            var host=Control<Border>("DecorPane");
+            var host=Control<Border>("DecorGalleryHost");
             if (host.Child!=null) return;
             var picker=new DecorationPicker(delegate(DecorationKind kind) {
                 prefs.Decoration=kind; ActivateTool(PlayTool.Decorate);
             });
-            var gallery=new StackPanel();
-            gallery.Children.Add(new TextBlock {Text="Pick a decoration to place it on your desktop. Drag its circular arrow to rotate, or use Arrange to edit it later.",
-                TextWrapping=TextWrapping.Wrap,Margin=new Thickness(3,0,3,8)});
-            gallery.Children.Add(picker);
             picker.SelectKind(prefs.Decoration);
-            host.Child=gallery;
+            host.Child=picker;
+            UpdateTreePreview();
+        }
+
+        private void ConnectTreeDesigner()
+        {
+            var palette=Control<ComboBox>("TreePalette");
+            palette.SelectedIndex=prefs.TreePalette;
+            palette.SelectionChanged+=delegate {
+                if(palette.SelectedIndex<0) return;
+                prefs.TreePalette=palette.SelectedIndex;
+                UpdateTreePreview();ApplyPreferences();SaveSoon();
+            };
+            BindTreeTrim("TreeBaubles",TreeTrim.Baubles);
+            BindTreeTrim("TreeLights",TreeTrim.Lights);
+            BindTreeTrim("TreeTwinkle",TreeTrim.Twinkle);
+            Control<Button>("PlantTreeButton").Click+=delegate{ActivateTool(PlayTool.Tree);};
+            Control<Button>("RestyleTreeButton").Click+=delegate{ActivateTool(PlayTool.StyleTree);};
+        }
+
+        private void BindTreeTrim(string name,TreeTrim flag)
+        {
+            SetupOption(name,(prefs.TreeTrimOptions&flag)!=0,delegate(bool enabled) {
+                if(enabled) prefs.TreeTrimOptions|=flag;else prefs.TreeTrimOptions&=~flag;
+                UpdateTreePreview();ApplyPreferences();
+            });
+        }
+
+        private void UpdateTreePreview()
+        {
+            Control<Image>("TreePreview").Source=SnowArtwork.TreePreview(prefs.TreeTrimOptions,prefs.TreePalette);
         }
         private void SetupOption(string id,bool initial,Action<bool> set)
         {
@@ -88,7 +114,7 @@ namespace Frostpane
             for(int i=0;i<monitors.Count;i++) {
                 var m=monitors[i];
                 var cb=new CheckBox {Content="Display "+(i+1)+"  ("+m.Bounds.Width+" × "+m.Bounds.Height+")",
-                    Foreground=System.Windows.Media.Brushes.White,Margin=new Thickness(0,3,12,3),IsChecked=!prefs.HiddenScreens.Contains(m.Id)};
+                    Margin=new Thickness(0,3,12,3),IsChecked=!prefs.HiddenScreens.Contains(m.Id)};
                 list.Children.Add(cb);
                 BindToggle(cb,delegate(bool enabled) {
                     if(enabled) prefs.HiddenScreens.Remove(m.Id);else prefs.HiddenScreens.Add(m.Id);

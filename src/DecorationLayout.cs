@@ -74,6 +74,12 @@ namespace Frostpane
                     .Append('\t').Append(man.Facing<0?"-1":"1");
                 WriteMount(text,support,support==null?0:Limit((man.X-support.X)/support.Width,0,1));
             }
+            // Keep the original tree rows readable by older versions.
+            for(int i=0;i<Trees.Count;i++) {
+                var tree=Trees[i];
+                if(tree.Palette>=0 || tree.Trim!=TreeTrim.All)
+                    text.Append("\nTrim\t").Append(i).Append('\t').Append((int)tree.Trim).Append('\t').Append(tree.Palette);
+            }
             return text.ToString();
         }
 
@@ -127,7 +133,7 @@ namespace Frostpane
         {
             if (floor == null || width < 1 || height < 1 || data == null || data.Length > MaxLayoutLength) return;
             if (data.Length == 0) { ReplaceDecorations(new List<WinterTree>(),new List<LightString>(),new List<PlacedDecoration>(),new List<Snowman>()); return; }
-            string[] lines = data.Split(new char[] {'\n'}, 313);
+            string[] lines = data.Split(new char[] {'\n'}, 353);
             string[] header = lines[0].TrimEnd('\r').Split('\t');
             double oldWidth, oldHeight;
             if (header.Length != 3 || header[0] != LayoutTag ||
@@ -143,6 +149,12 @@ namespace Frostpane
                 if (lines[i].Length > 1024) continue;
                 string[] row = lines[i].TrimEnd('\r').Split('\t');
                 if(row[0]=="D") {ReadCatalogRow(row,sx,sy,trees,catalog);continue;}
+                if(row[0]=="Trim") {
+                    int index;
+                    if(row.Length==4 && int.TryParse(row[1],out index) && index>=0 && index<trees.Count)
+                        ReadTreeTrim(trees[index],row[2],row[3]);
+                    continue;
+                }
                 double x, y;
                 if (row.Length < 3 || !ReadLayoutNumber(row[1], out x) || !ReadLayoutNumber(row[2], out y)) continue;
                 x = Limit(x * sx, 0, width); y = Limit(y * sy, 0, height);
@@ -186,7 +198,8 @@ namespace Frostpane
                         double bend,scale;int palette;
                         if(!ReadLayoutNumber(row[15],out bend) || !ReadLayoutNumber(row[16],out scale) ||
                             !int.TryParse(row[17],NumberStyles.Integer,CultureInfo.InvariantCulture,out palette)) continue;
-                        strand.Bend=bend<0?-1:Limit(bend*sy,0,512);strand.BulbScale=Limit(scale,.55,2.8);
+                        strand.Bend=bend<0?-1:Limit(bend*sy,0,512);
+                        strand.BulbScale=Limit(scale,LightString.MinimumBulbScale,LightString.MaximumBulbScale);
                         strand.Palette=(int)Limit(palette<0?LightPalette:palette,0,2);
                     } else {
                         strand.Bend=Math.Min(22,Math.Abs(strand.X2-strand.X1)*.10);

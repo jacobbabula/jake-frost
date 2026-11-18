@@ -24,8 +24,18 @@ namespace Frostpane
         private bool warmWeather, pointerInside;
         private double weatherBudget, wx, wy, pointerMovedAt;
         private double stormClock;
-        internal bool LightningEnabled=true;
-        internal double LightningTime,LightningX,LightningY;
+        private bool lightningEnabled;
+        internal const double StrikeDuration=.78;
+        internal double LightningTime;
+        internal StreamGeometry LightningBolt,LightningBranches;
+        internal bool LightningEnabled {
+            get { return lightningEnabled; }
+            set {
+                if(value==lightningEnabled) return;
+                lightningEnabled=value;
+                ResetStorm();
+            }
+        }
         internal bool HasSnowWeather { get { return weather==WeatherMode.Snow || weather==WeatherMode.HeavySnow; } }
         internal WeatherMode Weather {
             get { return weather; }
@@ -46,8 +56,47 @@ namespace Frostpane
         partial void ClearWeatherParticles()
         {
             WeatherParticles.Clear();
-            weatherBudget=0; warmWeather=false; LightningTime=0;
-            stormClock=Between(13,25);
+            weatherBudget=0; warmWeather=false;
+            ResetStorm();
+        }
+
+        private void ResetStorm()
+        {
+            LightningTime=0;
+            LightningBolt=null; LightningBranches=null;
+            stormClock=1.15;
+        }
+
+        private void StartStrike()
+        {
+            // Keep a single branching path throughout the flash and its afterglow.
+            double x=Between(width*.20,width*.80), y=-4;
+            double depth=Between(.25,.48)*height, drift=Between(-.42,.42)*depth;
+            LightningBolt=new StreamGeometry();
+            LightningBranches=new StreamGeometry();
+            using(var bolt=LightningBolt.Open())
+            using(var branches=LightningBranches.Open()) {
+                var origin=new Point(x,y);
+                bolt.BeginFigure(origin,false,false);
+                const int segments=15;
+                for(int i=1;i<=segments;i++) {
+                    double t=i/(double)segments;
+                    var point=new Point(Limit(x+drift*t+Between(-.035,.035)*depth,0,width),y+t*depth);
+                    bolt.LineTo(point,true,false);
+                    if(i==3 || i==6 || i==9) {
+                        double reach=Between(.11,.26)*depth*(i==6?-1:1);
+                        branches.BeginFigure(point,false,false);
+                        for(int j=1;j<=4;j++) {
+                            double u=j/4.0;
+                            branches.LineTo(new Point(point.X+reach*u+Between(-.012,.012)*depth,
+                                point.Y+Math.Abs(reach)*u*.91),true,false);
+                        }
+                    }
+                }
+            }
+            LightningBolt.Freeze(); LightningBranches.Freeze();
+            LightningTime=StrikeDuration;
+            stormClock=Between(9,22);
         }
 
         internal void SetWeatherPointer(double x,double y,bool inside)
@@ -132,10 +181,7 @@ namespace Frostpane
             else weatherBudget=0;
             LightningTime=Math.Max(0,LightningTime-dt);
             if (weather!=WeatherMode.Rain || !LightningEnabled || target==0) { LightningTime=0; return; }
-            if ((stormClock-=dt)<=0) {
-                LightningTime=.31; LightningX=Between(width*.1,width*.9); LightningY=Between(0,height*.12);
-                stormClock=Between(20,47);
-            }
+            if ((stormClock-=dt)<=0) StartStrike();
         }
 
         private bool ValidSupport(SnowBank bank)
@@ -251,10 +297,8 @@ namespace Frostpane
             private static readonly Pen[] StarTrail={Stroke("#A290B9EC",1.21),Stroke("#ABBBA875",1.21),Stroke("#A7BA99DA",1.21)};
             private static readonly Pen[] StarWake={Stroke("#4B99B7E6",.81),Stroke("#53C4A076",.81),Stroke("#52AD99CD",.81)};
             private static readonly Brush[] StarHead={Ink("#F2F6FF"),Ink("#FFF3D4"),Ink("#F3EDFF")};
-            private static readonly Pen BoltShadow=Stroke("#707E94D4",2.35),Bolt=Stroke("#C9D7DDFF",.9);
-            private static readonly Geometry BoltShape=FrozenPath("M 0,0 L 4,12 -1,15 4,28 10,33 6,36 12,46 M 3,24 L -3,26 -7,32");
-
-            private static Geometry FrozenPath(string path){Geometry g=Geometry.Parse(path);g.Freeze();return g;}
+            private static readonly Pen BoltHalo=Stroke("#367A9FF9",8), BoltEdge=Stroke("#ABB1CFFF",3.4);
+            private static readonly Pen BoltCore=Stroke("#FFF1F6FF",1.45), Branch=Stroke("#BFC6DCFF",1.08);
             private static Sprite[,] Foliage(bool isLeaf) {
                 Sprite[,] result=new Sprite[3,36];
                 for(int v=0;v<3;v++) {
@@ -320,10 +364,15 @@ namespace Frostpane
                         case WeatherMode.Starfall: DrawStar(dc,p);break;
                     }
                 }
-                if(scene.Weather==WeatherMode.Rain && scene.LightningEnabled && scene.LightningTime>0){
-                    dc.PushOpacity(Math.Sin(Math.PI*scene.LightningTime/.31)*.62);
-                    dc.PushTransform(new TranslateTransform(scene.LightningX,scene.LightningY));
-                    dc.DrawGeometry(null,BoltShadow,BoltShape);dc.DrawGeometry(null,Bolt,BoltShape);dc.Pop();dc.Pop();
+                if(scene.Weather==WeatherMode.Rain && scene.LightningEnabled && scene.LightningTime>0) {
+                    double age=1-scene.LightningTime/SnowScene.StrikeDuration;
+                    double brightness=Math.Min(1,.2+age*18)*Math.Pow(1-age,1.45);
+                    dc.PushOpacity(brightness);
+                    dc.DrawGeometry(null,BoltHalo,scene.LightningBolt);
+                    dc.DrawGeometry(null,Branch,scene.LightningBranches);
+                    dc.DrawGeometry(null,BoltEdge,scene.LightningBolt);
+                    dc.DrawGeometry(null,BoltCore,scene.LightningBolt);
+                    dc.Pop();
                 }
             }
             private static double LimitGlow(double value){return Math.Max(0,Math.Min(7,value*7.99));}

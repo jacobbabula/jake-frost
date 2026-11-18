@@ -2,20 +2,21 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Jake Frost" Width="510" SizeToContent="Height" WindowStartupLocation="CenterScreen"
         WindowStyle="None" ResizeMode="CanMinimize" AllowsTransparency="True" Background="Transparent"
-        FontFamily="Segoe UI" FontSize="13" Foreground="#EAF1EE" UseLayoutRounding="True">
+        FontFamily="Segoe UI" FontSize="13" Foreground="#183C53" UseLayoutRounding="True">
   <Window.Resources>
+    <Geometry x:Key="Snowflake">M12,1 L12,23 M2.5,6.5 L21.5,17.5 M2.5,17.5 L21.5,6.5 M8.7,4.3 L12,7.5 15.3,4.3 M8.7,19.7 L12,16.5 15.3,19.7 M3.5,10.9 L8,9.7 6.8,5.1 M17.2,18.9 L16,14.3 20.5,13.1 M3.5,13.1 L8,14.3 6.8,18.9 M17.2,5.1 L16,9.7 20.5,10.9</Geometry>
     <ControlTemplate x:Key="ToolTile" TargetType="RadioButton">
-      <Border x:Name="TileFrame" CornerRadius="5" Background="#22383B" BorderBrush="#344B4D" BorderThickness="1" Padding="6">
+      <Border x:Name="TileFrame" CornerRadius="5" Background="#FFFFFF" BorderBrush="#C8DFEB" BorderThickness="1" Padding="6">
         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
       </Border>
       <ControlTemplate.Triggers>
-        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="TileFrame" Property="Background" Value="#344C4D"/></Trigger>
-        <Trigger Property="IsChecked" Value="True"><Setter TargetName="TileFrame" Property="Background" Value="#375249"/><Setter TargetName="TileFrame" Property="BorderBrush" Value="#9ABBA5"/></Trigger>
-        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="TileFrame" Property="BorderBrush" Value="#F2D19C"/></Trigger>
+        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="TileFrame" Property="Background" Value="#E9F6FD"/></Trigger>
+        <Trigger Property="IsChecked" Value="True"><Setter TargetName="TileFrame" Property="Background" Value="#D8EEFB"/><Setter TargetName="TileFrame" Property="BorderBrush" Value="#58A2C9"/></Trigger>
+        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="TileFrame" Property="BorderBrush" Value="#186CA4"/></Trigger>
       </ControlTemplate.Triggers>
     </ControlTemplate>
     <Style TargetType="Button" x:Key="Button">
-      <Setter Property="Foreground" Value="#DCEAE6"/><Setter Property="Background" Value="#263B40"/>
+      <Setter Property="Foreground" Value="#183F59"/><Setter Property="Background" Value="#E2F0F9"/>
       <Setter Property="Padding" Value="12,7"/><Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
@@ -26,39 +27,39 @@
           <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="Opacity" Value="0.80"/></Trigger>
           <Trigger Property="IsPressed" Value="True"><Setter TargetName="Frame" Property="Opacity" Value="0.61"/></Trigger>
           <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Frame" Property="Opacity" Value="0.43"/></Trigger>
-          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#E5BA86"/><Setter TargetName="Frame" Property="BorderThickness" Value="1"/></Trigger>
+          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#1269AC"/><Setter TargetName="Frame" Property="BorderThickness" Value="1"/></Trigger>
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style TargetType="Button" BasedOn="{StaticResource Button}"/>
     <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#102024"/><Setter Property="Foreground" Value="#E6F1E9"/>
-      <Setter Property="BorderBrush" Value="#46605D"/><Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CaretBrush" Value="#D9ECD9"/><Setter Property="SelectionBrush" Value="#608678"/>
+      <Setter Property="Background" Value="#EFF6FB"/><Setter Property="Foreground" Value="#15384E"/>
+      <Setter Property="BorderBrush" Value="#A4C1D2"/><Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CaretBrush" Value="#205673"/><Setter Property="SelectionBrush" Value="#87B7D5"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
     </Style>
     <Style TargetType="ComboBoxItem">
-      <Setter Property="Foreground" Value="#E6F1E9"/><Setter Property="Padding" Value="7,5"/>
+      <Setter Property="Foreground" Value="#15384E"/><Setter Property="Padding" Value="7,5"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem">
-        <Border x:Name="Cell" Padding="{TemplateBinding Padding}" Background="#21363A"><ContentPresenter/></Border>
-        <ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Cell" Property="Background" Value="#3C5651"/></Trigger>
-          <Trigger Property="IsSelected" Value="True"><Setter TargetName="Cell" Property="Background" Value="#355149"/></Trigger></ControlTemplate.Triggers>
+        <Border x:Name="Cell" Padding="{TemplateBinding Padding}" Background="#FFFFFF"><ContentPresenter/></Border>
+        <ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Cell" Property="Background" Value="#DBEFFB"/></Trigger>
+          <Trigger Property="IsSelected" Value="True"><Setter TargetName="Cell" Property="Background" Value="#D0E9F8"/></Trigger></ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style TargetType="ComboBox">
-      <Setter Property="Foreground" Value="#E6F1E9"/><Setter Property="MinHeight" Value="27"/>
+      <Setter Property="Foreground" Value="#15384E"/><Setter Property="MinHeight" Value="27"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
         <Grid>
           <ToggleButton x:Name="Drop" Focusable="False" ClickMode="Press" IsChecked="{Binding IsDropDownOpen,RelativeSource={RelativeSource TemplatedParent},Mode=TwoWay}">
             <ToggleButton.Template><ControlTemplate TargetType="ToggleButton">
-              <Border CornerRadius="4" Background="#20363A" BorderBrush="#455C59" BorderThickness="1">
-                <Path HorizontalAlignment="Right" Margin="0,0,9,0" VerticalAlignment="Center" Stroke="#C4D6CB" StrokeThickness="1.4" Data="M0,0 L3,3 L6,0"/>
+              <Border CornerRadius="4" Background="#F6FAFD" BorderBrush="#B8CFDC" BorderThickness="1">
+                <Path HorizontalAlignment="Right" Margin="0,0,9,0" VerticalAlignment="Center" Stroke="#30566D" StrokeThickness="1.4" Data="M0,0 L3,3 L6,0"/>
               </Border>
             </ControlTemplate></ToggleButton.Template>
           </ToggleButton>
           <ContentPresenter Margin="7,2,23,2" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"/>
           <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" Focusable="False" AllowsTransparency="True">
-            <Border MinWidth="{Binding ActualWidth, ElementName=Drop}" MaxHeight="300" Background="#21363A" BorderBrush="#567269" BorderThickness="1" CornerRadius="4" Padding="2">
+            <Border MinWidth="{Binding ActualWidth, ElementName=Drop}" MaxHeight="300" Background="#FFFFFF" BorderBrush="#AAC8D9" BorderThickness="1" CornerRadius="4" Padding="2">
               <ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/></ScrollViewer>
             </Border>
           </Popup>
@@ -67,6 +68,14 @@
       </ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style TargetType="TextBlock" x:Key="Label"><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="FontSize" Value="14"/></Style>
+    <Style TargetType="TextBlock" x:Key="SectionHeading">
+      <Setter Property="FontWeight" Value="SemiBold"/><Setter Property="FontSize" Value="17"/>
+      <Setter Property="Foreground" Value="#183E57"/><Setter Property="Margin" Value="0,0,0,5"/>
+    </Style>
+    <Style TargetType="Border" x:Key="SectionCard">
+      <Setter Property="CornerRadius" Value="10"/><Setter Property="Padding" Value="12,10"/>
+      <Setter Property="Background" Value="#FBFDFE"/><Setter Property="BorderBrush" Value="#D6E6EE"/><Setter Property="BorderThickness" Value="1"/>
+    </Style>
     <Style TargetType="RepeatButton" x:Key="InvisibleTrack">
       <Setter Property="Focusable" Value="False"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></Setter.Value></Setter>
@@ -76,13 +85,13 @@
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider">
         <Grid Background="Transparent">
-          <Border Height="4" Margin="7,0" Background="#4C6464" CornerRadius="2" VerticalAlignment="Center"/>
-          <Border Width="1" Height="10" Background="#7E9991" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          <Border Height="4" Margin="7,0" Background="#BCD5E4" CornerRadius="2" VerticalAlignment="Center"/>
+          <Border Width="1" Height="10" Background="#81A4BA" HorizontalAlignment="Center" VerticalAlignment="Center"/>
           <Track x:Name="PART_Track">
             <Track.DecreaseRepeatButton><RepeatButton Style="{StaticResource InvisibleTrack}" Command="Slider.DecreaseLarge"/></Track.DecreaseRepeatButton>
             <Track.Thumb><Thumb Width="17" Height="17"><Thumb.Template><ControlTemplate TargetType="Thumb">
-              <Ellipse x:Name="Grip" Fill="#C4E1CD" Stroke="#56756B" StrokeThickness="1"/>
-              <ControlTemplate.Triggers><Trigger Property="IsDragging" Value="True"><Setter TargetName="Grip" Property="Fill" Value="#FBE2AF"/></Trigger></ControlTemplate.Triggers>
+              <Ellipse x:Name="Grip" Fill="#4598C8" Stroke="#2D6B93" StrokeThickness="1"/>
+              <ControlTemplate.Triggers><Trigger Property="IsDragging" Value="True"><Setter TargetName="Grip" Property="Fill" Value="#2375AD"/></Trigger></ControlTemplate.Triggers>
             </ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
             <Track.IncreaseRepeatButton><RepeatButton Style="{StaticResource InvisibleTrack}" Command="Slider.IncreaseLarge"/></Track.IncreaseRepeatButton>
           </Track>
@@ -92,27 +101,27 @@
     <Style TargetType="CheckBox">
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
         <StackPanel Orientation="Horizontal">
-          <Border x:Name="Switch" Width="29" Height="17" CornerRadius="9" Background="#526365" Margin="0,0,9,0" VerticalAlignment="Center">
-            <Ellipse x:Name="Dot" Width="11" Height="11" Fill="#EAF0E8" HorizontalAlignment="Left" Margin="3,0"/>
+          <Border x:Name="Switch" Width="29" Height="17" CornerRadius="9" Background="#A4B7C2" Margin="0,0,9,0" VerticalAlignment="Center">
+            <Ellipse x:Name="Dot" Width="11" Height="11" Fill="#FFFFFF" HorizontalAlignment="Left" Margin="3,0"/>
           </Border>
           <ContentPresenter VerticalAlignment="Center"/>
         </StackPanel>
         <ControlTemplate.Triggers>
-          <Trigger Property="IsChecked" Value="True"><Setter TargetName="Switch" Property="Background" Value="#91BAA3"/><Setter TargetName="Dot" Property="HorizontalAlignment" Value="Right"/><Setter TargetName="Dot" Property="Fill" Value="#1C3830"/></Trigger>
-          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Switch" Property="BorderBrush" Value="#F1CD9A"/><Setter TargetName="Switch" Property="BorderThickness" Value="1"/></Trigger>
+          <Trigger Property="IsChecked" Value="True"><Setter TargetName="Switch" Property="Background" Value="#2879AA"/><Setter TargetName="Dot" Property="HorizontalAlignment" Value="Right"/><Setter TargetName="Dot" Property="Fill" Value="#FFFFFF"/></Trigger>
+          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Switch" Property="BorderBrush" Value="#186CA4"/><Setter TargetName="Switch" Property="BorderThickness" Value="1"/></Trigger>
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style TargetType="RadioButton">
-      <Setter Property="Foreground" Value="#B5C8C4"/><Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Foreground" Value="#466379"/><Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
         <Border x:Name="Frame" Padding="3,7" Background="Transparent" CornerRadius="5">
           <ContentPresenter HorizontalAlignment="Center"/>
         </Border>
         <ControlTemplate.Triggers>
-          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="Background" Value="#304448"/></Trigger>
-          <Trigger Property="IsChecked" Value="True"><Setter TargetName="Frame" Property="Background" Value="#385450"/><Setter Property="Foreground" Value="#EAF8ED"/><Setter Property="FontWeight" Value="SemiBold"/></Trigger>
-          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#E5BA86"/><Setter TargetName="Frame" Property="BorderThickness" Value="1"/></Trigger>
+          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="Background" Value="#D9EBF8"/></Trigger>
+          <Trigger Property="IsChecked" Value="True"><Setter TargetName="Frame" Property="Background" Value="#FFFFFF"/><Setter Property="Foreground" Value="#164D73"/><Setter Property="FontWeight" Value="SemiBold"/></Trigger>
+          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="#1269AC"/><Setter TargetName="Frame" Property="BorderThickness" Value="1"/></Trigger>
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
@@ -123,52 +132,56 @@
       <Setter Property="IsMoveToPointEnabled" Value="True"/><Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
   </Window.Resources>
-  <Border CornerRadius="15" BorderThickness="1" BorderBrush="#43575B" Background="#16282C" ClipToBounds="True">
+  <Border CornerRadius="15" BorderThickness="1" BorderBrush="#B5CBD9" ClipToBounds="True">
+   <Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FFFFFF" Offset="0"/><GradientStop Color="#FFFFFF" Offset=".6"/><GradientStop Color="#F6FAFD" Offset="1"/></LinearGradientBrush></Border.Background>
    <Grid>
     <DockPanel x:Name="ExpandedPanel">
       <Grid x:Name="TitleBar" DockPanel.Dock="Top" Margin="19,13,12,12" Background="Transparent">
         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <Viewbox Width="24" Height="24" Margin="0,0,9,0"><Path Stroke="#C6E4D7" StrokeThickness="1.65" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M12,1 L12,23 M2.5,6.5 L21.5,17.5 M2.5,17.5 L21.5,6.5 M8.7,4.3 L12,7.5 15.3,4.3 M8.7,19.7 L12,16.5 15.3,19.7 M3.5,10.9 L8,9.7 6.8,5.1 M17.2,18.9 L16,14.3 20.5,13.1 M3.5,13.1 L8,14.3 6.8,18.9 M17.2,5.1 L16,9.7 20.5,10.9"/></Viewbox>
-        <TextBlock Grid.Column="1" Text="Jake Frost" FontFamily="Georgia" FontSize="23" VerticalAlignment="Center"/>
+        <Border Background="#E0F2FD" CornerRadius="10" Height="38" Width="38" Padding="8" Margin="0,0,10,0">
+          <Path Stroke="#287BA7" StrokeThickness="1.65" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Stretch="Uniform" Data="{StaticResource Snowflake}"/>
+        </Border>
+        <TextBlock Grid.Column="1" Text="Jake Frost" FontWeight="SemiBold" FontSize="23" Foreground="#143E5A" VerticalAlignment="Center"/>
         <Button x:Name="PauseButton" Grid.Column="2" Content="Pause snow" Margin="0,0,9,0" Padding="11,5" ToolTip="Pause or resume falling snow"/>
         <Button x:Name="MinimizeButton" Grid.Column="3" Content="−" FontSize="17" Padding="8,1" Background="Transparent" ToolTip="Minimize here" AutomationProperties.Name="Minimize here"/>
-        <Button x:Name="HideButton" Grid.Column="4" Background="Transparent" FontSize="18" Padding="6,0" Foreground="#ABBFBB" Content="×" ToolTip="Hide in system tray" AutomationProperties.Name="Hide in system tray"/>
+        <Button x:Name="HideButton" Grid.Column="4" Background="Transparent" FontSize="18" Padding="6,0" Foreground="#42667F" Content="×" ToolTip="Hide in system tray" AutomationProperties.Name="Hide in system tray"/>
       </Grid>
-      <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
-       <StackPanel>
-      <Border Margin="17,10,17,0" Background="#102024" Padding="3" CornerRadius="7">
+      <Border DockPanel.Dock="Top" Margin="17,0,17,0" Background="#EAF3F8" BorderBrush="#C6DAE5" BorderThickness="1" Padding="3" CornerRadius="8">
         <UniformGrid Columns="4"><RadioButton x:Name="WorkshopTab" GroupName="PanelTab" Content="Workshop" IsChecked="True"/><RadioButton x:Name="WeatherTab" GroupName="PanelTab" Content="Weather"/><RadioButton x:Name="DecorTab" GroupName="PanelTab" Content="Decorate"/><RadioButton x:Name="FriendsTab" GroupName="PanelTab" Content="Friends"/></UniformGrid>
       </Border>
-      <StackPanel x:Name="WorkshopPane" Margin="15,12,15,0">
-        <TextBlock Text="Choose a tool, then use it on your desktop. Press Esc when you’re done." TextWrapping="Wrap" Foreground="#C5DDD0" Margin="3,0,3,8"/>
-        <Border x:Name="ToolsHost"/>
-        <CheckBox x:Name="GrabOption" Margin="3,12,3,3" Foreground="#D3DFD9" Cursor="Hand" Content="Grab, roll and throw snow directly on my desktop"/>
-        <Grid Margin="3,13,3,0">
-          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
-          <TextBlock Style="{StaticResource Label}" Text="New light strings" VerticalAlignment="Center" Margin="0,0,12,0"/>
-          <Border Grid.Column="1" Background="#102024" CornerRadius="7" Padding="3">
-            <UniformGrid Columns="3"><RadioButton x:Name="Warm" Content="Candlelight" GroupName="Colors"/><RadioButton x:Name="Festive" Content="Festive" GroupName="Colors"/><RadioButton x:Name="Aurora" Content="Aurora" GroupName="Colors"/></UniformGrid>
-          </Border>
-        </Grid>
-        <WrapPanel Margin="3,7,3,2">
-          <CheckBox x:Name="PuffOption" Margin="0,7,17,0" Foreground="#D3DFD9" Cursor="Hand" Content="Puff flakes on click" ToolTip="Click a falling flake while using your apps. The flake lets your click through."/>
-          <CheckBox x:Name="RememberOption" Margin="0,7,0,0" Foreground="#D3DFD9" Cursor="Hand" Content="Remember decorations and snowmen" ToolTip="Restore your desktop decorations and completed snowmen when Jake Frost opens again."/>
-        </WrapPanel>
-        <DockPanel Margin="3,14,3,3">
+      <Border DockPanel.Dock="Bottom" BorderBrush="#D2E4EE" BorderThickness="0,1,0,0" Margin="17,11,17,0" Padding="0,5,0,7">
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+          <Button x:Name="ClearButton" Background="Transparent" Foreground="#34566C" Padding="8,4" Content="Clear scene"/>
+          <Button x:Name="QuitButton" Background="Transparent" Foreground="#34566C" Padding="8,4" Margin="5,0,0,0" Content="Quit"/>
+        </StackPanel>
+      </Border>
+      <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+       <StackPanel>
+      <StackPanel x:Name="WorkshopPane" Margin="17,12,17,1">
+        <Border Style="{StaticResource SectionCard}"><StackPanel>
+          <TextBlock Style="{StaticResource SectionHeading}" Text="Desktop tools"/>
+          <TextBlock Text="Choose a tool to use on your desktop. Press Esc to finish." TextWrapping="Wrap" Foreground="#476479" Margin="0,0,0,7"/>
+          <Border x:Name="ToolsHost"/>
+        </StackPanel></Border>
+        <Border Style="{StaticResource SectionCard}" Margin="0,8,0,0"><StackPanel>
+        <TextBlock Text="Visitors" Style="{StaticResource SectionHeading}"/>
+        <UniformGrid Columns="3" Margin="-2,0">
+          <Button x:Name="PloughButton" Content="Snowplough" Margin="2" Padding="3,6"/>
+          <Button x:Name="SnowmenButton" Content="Snowmen" Margin="2" Padding="3,6"/>
+          <Button x:Name="YetiButton" Content="Yeti" Margin="2" Padding="3,6"/>
+          <Button x:Name="SantaButton" Content="Santa" Margin="2" Padding="3,6"/>
+          <Button x:Name="ElfFightButton" Content="Elf snowball fight" ToolTip="Send elves to play a snowball fight on your desktop." Margin="2" Padding="3,6"/>
+          <Button x:Name="SnowmanFightButton" Content="Wake the snowmen" ToolTip="Wake your desktop snowmen for a snowball fight." Margin="2" Padding="3,6"/>
+        </UniformGrid>
+        <DockPanel Margin="0,7,0,0">
           <TextBlock Text="Visitor speed" Style="{StaticResource Label}" Margin="0,0,12,0" VerticalAlignment="Center"/>
-          <Border Background="#102024" CornerRadius="7" Padding="3"><UniformGrid Columns="3">
+          <Border Background="#EFF6FB" CornerRadius="7" Padding="3"><UniformGrid Columns="3">
             <RadioButton x:Name="VisitorSpeed0" GroupName="VisitorSpeed" Content="Leisurely"/>
             <RadioButton x:Name="VisitorSpeed1" GroupName="VisitorSpeed" Content="Steady"/>
             <RadioButton x:Name="VisitorSpeed2" GroupName="VisitorSpeed" Content="Brisk"/>
           </UniformGrid></Border>
         </DockPanel>
-        <WrapPanel Margin="1,5,0,0">
-          <Button x:Name="PloughButton" Content="Snowplough" Margin="2" Padding="8,5"/>
-          <Button x:Name="SnowmenButton" Content="Send snowmen" Margin="2" Padding="8,5"/>
-          <Button x:Name="YetiButton" Content="Send Yeti" Margin="2" Padding="8,5"/>
-          <Button x:Name="SantaButton" Content="Send Santa" Margin="2" Padding="8,5"/>
-        </WrapPanel>
-        <Expander x:Name="VisitorSizeOptions" Header="Visitor sizes" Margin="3,9,3,1" Foreground="#D3DFD9">
+        <Expander x:Name="VisitorSizeOptions" Header="Visitor sizes" Margin="3,9,3,1" Foreground="#264A62">
           <Grid Margin="18,6,3,1">
             <Grid.ColumnDefinitions><ColumnDefinition Width="116"/><ColumnDefinition/><ColumnDefinition Width="50"/></Grid.ColumnDefinitions>
             <Grid.RowDefinitions><RowDefinition Height="29"/><RowDefinition Height="29"/><RowDefinition Height="29"/><RowDefinition Height="29"/><RowDefinition Height="29"/></Grid.RowDefinitions>
@@ -189,30 +202,40 @@
             <TextBlock x:Name="SizeSnowmenLabel" Grid.Row="4" Grid.Column="2" TextAlignment="Right" VerticalAlignment="Center"/>
           </Grid>
         </Expander>
+        </StackPanel></Border>
+        <Expander Header="Desktop interaction" Margin="3,10,3,1" Foreground="#264A62">
+          <StackPanel Margin="18,3,0,0">
+            <CheckBox x:Name="GrabOption" Margin="0,4" Foreground="#264A62" Content="Grab, roll and throw snow directly on my desktop"/>
+            <CheckBox x:Name="PuffOption" Margin="0,4" Foreground="#264A62" Content="Puff flakes on click" ToolTip="Click a falling flake while using your apps. The flake lets your click through."/>
+            <CheckBox x:Name="RememberOption" Margin="0,4" Foreground="#264A62" Content="Remember decorations and snowmen" ToolTip="Restore decorations and completed snowmen when Jake Frost opens again."/>
+          </StackPanel>
+        </Expander>
       </StackPanel>
       <StackPanel x:Name="WeatherPane" Visibility="Collapsed" Margin="18,12,18,0">
-        <TextBlock Text="Desktop effect" Style="{StaticResource Label}" Margin="0,0,0,5"/>
-        <Border Background="#102024" CornerRadius="7" Padding="3"><UniformGrid Columns="4">
+        <TextBlock Text="Desktop weather" Style="{StaticResource SectionHeading}"/>
+        <Border Background="#EFF6FB" CornerRadius="7" Padding="3"><UniformGrid Columns="4">
           <RadioButton x:Name="ModeSnow" GroupName="WeatherMode" Content="Snow"/><RadioButton x:Name="ModeHeavySnow" GroupName="WeatherMode" Content="Heavy snow"/>
           <RadioButton x:Name="ModeRain" GroupName="WeatherMode" Content="Rain"/><RadioButton x:Name="ModeSakura" GroupName="WeatherMode" Content="Sakura"/>
           <RadioButton x:Name="ModeLeaves" GroupName="WeatherMode" Content="Leaves"/><RadioButton x:Name="ModeFireflies" GroupName="WeatherMode" Content="Fireflies"/>
           <RadioButton x:Name="ModeStarfall" GroupName="WeatherMode" Content="Starfall"/><RadioButton x:Name="ModeOff" GroupName="WeatherMode" Content="Off"/>
         </UniformGrid></Border>
+        <CheckBox x:Name="LightningOption" Margin="0,8,0,2" Foreground="#264A62" Content="Show lightning during rain" ToolTip="Show occasional branching lightning when Rain is active."/>
+        <Border x:Name="WallpaperHost" Margin="0,8,0,0"/>
         <DockPanel Margin="0,9,0,6">
           <TextBlock Text="Follow" Style="{StaticResource Label}" Margin="0,0,12,0" VerticalAlignment="Center"/>
-          <Border Background="#102024" CornerRadius="7" Padding="2"><UniformGrid Columns="4">
+          <Border Background="#EFF6FB" CornerRadius="7" Padding="2"><UniformGrid Columns="4">
              <RadioButton x:Name="ScheduleManual" GroupName="Schedule" Content="Manual"/><RadioButton x:Name="ScheduleRandom" GroupName="Schedule" Content="Random"/>
              <RadioButton x:Name="ScheduleSeason" GroupName="Schedule" Content="Season"/><RadioButton x:Name="ScheduleLocal" GroupName="Schedule" Content="My weather"/>
           </UniformGrid></Border>
         </DockPanel>
         <StackPanel x:Name="LocalWeatherBox" Visibility="Collapsed">
-          <TextBlock Text="City or coordinates for Open-Meteo" Foreground="#BBD0C6" Margin="0,0,0,4"/>
+          <TextBlock Text="City or coordinates for Open-Meteo" Foreground="#496779" Margin="0,0,0,4"/>
           <DockPanel><Button x:Name="WeatherLookup" DockPanel.Dock="Right" Content="Match weather" Padding="10,4" Margin="7,0,0,0"/><TextBox x:Name="WeatherCity" MaxLength="100" Padding="6,4" AutomationProperties.Name="City or coordinates"/></DockPanel>
         </StackPanel>
-        <TextBlock x:Name="ScheduleStatus" Margin="0,3,0,6" TextWrapping="Wrap" Foreground="#BBD0C6" FontSize="12"/>
+        <TextBlock x:Name="ScheduleStatus" Margin="0,3,0,6" TextWrapping="Wrap" Foreground="#496779" FontSize="12"/>
         <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="238"/></Grid.ColumnDefinitions>
           <TextBlock Text="Snowfall" Style="{StaticResource Label}" VerticalAlignment="Center"/>
-          <Border Grid.Column="1" Padding="3" Background="#102024" CornerRadius="7">
+          <Border Grid.Column="1" Padding="3" Background="#EFF6FB" CornerRadius="7">
             <UniformGrid Columns="3"><RadioButton x:Name="Light" Content="Light"/><RadioButton x:Name="Steady" Content="Steady"/><RadioButton x:Name="Flurry" Content="Flurry"/></UniformGrid>
           </Border>
         </Grid>
@@ -221,49 +244,83 @@
           <Grid.RowDefinitions><RowDefinition Height="33"/><RowDefinition Height="33"/><RowDefinition Height="33"/></Grid.RowDefinitions>
           <TextBlock Text="Snow volume" Style="{StaticResource Label}" VerticalAlignment="Center"/>
           <Slider x:Name="Volume" Grid.Column="1" Minimum="0" Maximum="400" TickFrequency="25" SmallChange="25" LargeChange="100" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Snow volume" ToolTip="Amount of new snowfall. 100% is the original rate."/>
-          <TextBlock x:Name="VolumeLabel" Grid.Column="2" TextAlignment="Right" Foreground="#C1D4C8" VerticalAlignment="Center"/>
+          <TextBlock x:Name="VolumeLabel" Grid.Column="2" TextAlignment="Right" Foreground="#32536B" VerticalAlignment="Center"/>
           <TextBlock Grid.Row="1" Text="Drift depth" Style="{StaticResource Label}" VerticalAlignment="Center"/>
           <Slider x:Name="Depth" Grid.Row="1" Grid.Column="1" Minimum="24" Maximum="140" TickFrequency="4" SmallChange="4" LargeChange="20" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Maximum drift depth" ToolTip="Maximum height for accumulated and hand-piled snow."/>
-          <TextBlock x:Name="DepthLabel" Grid.Row="1" Grid.Column="2" TextAlignment="Right" Foreground="#C1D4C8" VerticalAlignment="Center"/>
+          <TextBlock x:Name="DepthLabel" Grid.Row="1" Grid.Column="2" TextAlignment="Right" Foreground="#32536B" VerticalAlignment="Center"/>
           <TextBlock Grid.Row="2" Text="Wind" Style="{StaticResource Label}" VerticalAlignment="Center"/>
           <Slider x:Name="Wind" Grid.Row="2" Grid.Column="1" Minimum="-80" Maximum="80" TickFrequency="10" SmallChange="10" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Wind direction and strength"/>
-          <TextBlock x:Name="WindLabel" Grid.Row="2" Grid.Column="2" TextAlignment="Right" Foreground="#C1D4C8" VerticalAlignment="Center"/>
+          <TextBlock x:Name="WindLabel" Grid.Row="2" Grid.Column="2" TextAlignment="Right" Foreground="#32536B" VerticalAlignment="Center"/>
         </Grid>
         <Grid Margin="0,7,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="99"/><ColumnDefinition/></Grid.ColumnDefinitions>
           <TextBlock Text="Window ice" Style="{StaticResource Label}" VerticalAlignment="Center"/>
-          <Border Grid.Column="1" Padding="3" Background="#102024" CornerRadius="7">
+          <Border Grid.Column="1" Padding="3" Background="#EFF6FB" CornerRadius="7">
             <UniformGrid Columns="4"><RadioButton x:Name="IceOff" Content="Off"/><RadioButton x:Name="IceFrost" Content="Frost"/><RadioButton x:Name="IceIcicles" Content="Icicles"/><RadioButton x:Name="IceDeep" Content="Deep ice"/></UniformGrid>
           </Border>
         </Grid>
-        <CheckBox x:Name="FullscreenOption" Margin="0,14,0,2" Foreground="#D3DFD9" Cursor="Hand" Content="Pause over fullscreen apps"/>
-        <WrapPanel><CheckBox x:Name="LightningOption" Margin="0,7,14,2" Foreground="#D3DFD9" Content="Lightning in rain"/><CheckBox x:Name="BatteryOption" Margin="0,7,0,2" Foreground="#D3DFD9" Content="Save power on battery"/></WrapPanel>
-        <Expander x:Name="DisplayOptions" Header="Display and seasonal options" Foreground="#D3DFD9" Margin="0,9,0,0">
+        <CheckBox x:Name="FullscreenOption" Margin="0,14,0,2" Foreground="#264A62" Cursor="Hand" Content="Pause over fullscreen apps"/>
+        <CheckBox x:Name="BatteryOption" Margin="0,7,0,2" Foreground="#264A62" Content="Save power on battery"/>
+        <Expander x:Name="DisplayOptions" Header="Display and seasonal options" Foreground="#264A62" Margin="0,9,0,0">
           <StackPanel Margin="18,5,0,2">
-            <CheckBox x:Name="BehindOption" Content="Show effects behind app windows" Margin="0,3" Foreground="#D3DFD9"/>
-            <CheckBox x:Name="BanksOption" Content="Let snow settle on window edges" Margin="0,3" Foreground="#D3DFD9"/>
-            <CheckBox x:Name="VisitsOption" Content="Occasional Santa and snowplough visits" Margin="0,3" Foreground="#D3DFD9"/>
-            <CheckBox x:Name="HemisphereOption" Content="Use southern hemisphere seasons" Margin="0,3" Foreground="#D3DFD9"/>
+            <CheckBox x:Name="BehindOption" Content="Show effects behind app windows" Margin="0,3" Foreground="#264A62"/>
+            <CheckBox x:Name="BanksOption" Content="Let snow settle on window edges" Margin="0,3" Foreground="#264A62"/>
+            <CheckBox x:Name="VisitsOption" Content="Occasional Santa and snowplough visits" Margin="0,3" Foreground="#264A62"/>
+            <CheckBox x:Name="HemisphereOption" Content="Use southern hemisphere seasons" Margin="0,3" Foreground="#264A62"/>
             <TextBlock Text="Show effects on" Margin="0,8,0,3" FontWeight="SemiBold"/>
             <WrapPanel x:Name="ScreenOptions"/>
           </StackPanel>
         </Expander>
       </StackPanel>
-      <Border x:Name="DecorPane" Visibility="Collapsed" Margin="16,12,16,0"/>
+      <StackPanel x:Name="DecorPane" Visibility="Collapsed" Margin="17,12,17,1">
+        <TextBlock Style="{StaticResource SectionHeading}" Text="Decorations"/>
+        <TextBlock Text="Choose a piece to place it. Use Arrange to move, resize, or turn it later." Foreground="#476479" TextWrapping="Wrap" Margin="0,0,0,7"/>
+        <Border x:Name="DecorGalleryHost"/>
+        <Expander Header="Tree design" Margin="1,8,1,0" FontWeight="SemiBold">
+          <Border Style="{StaticResource SectionCard}" Margin="0,4,0,0"><Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="82"/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <Border Background="#EBF6FD" CornerRadius="8" Padding="8" Margin="0,0,10,0">
+              <Image x:Name="TreePreview" Height="87" Stretch="Uniform" AutomationProperties.Name="Tree design preview"/>
+            </Border>
+            <StackPanel Grid.Column="1">
+              <DockPanel><TextBlock Text="Tree colors" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox x:Name="TreePalette" AutomationProperties.Name="Tree colors"><ComboBoxItem Content="Candlelight"/><ComboBoxItem Content="Festive"/><ComboBoxItem Content="Aurora"/></ComboBox>
+              </DockPanel>
+              <WrapPanel Margin="0,7,0,4"><CheckBox x:Name="TreeBaubles" FontWeight="Normal" Content="Baubles" Margin="0,0,8,3"/>
+                <CheckBox x:Name="TreeLights" FontWeight="Normal" Content="Lights" Margin="0,0,8,3"/>
+                <CheckBox x:Name="TreeTwinkle" FontWeight="Normal" Content="Twinkle" IsEnabled="{Binding IsChecked,ElementName=TreeLights}" Margin="0,0,0,3"/>
+              </WrapPanel>
+              <WrapPanel><Button x:Name="PlantTreeButton" Content="Plant a tree" Padding="8,5" Margin="0,0,5,3"/>
+                <Button x:Name="RestyleTreeButton" Content="Apply to a tree" Padding="8,5" Margin="0,0,0,3" ToolTip="Click a planted tree on your desktop to apply this design."/>
+              </WrapPanel>
+            </StackPanel>
+          </Grid></Border>
+        </Expander>
+        <Border Style="{StaticResource SectionCard}" Margin="0,8,0,0"><StackPanel>
+          <TextBlock Text="String lights" Style="{StaticResource SectionHeading}"/>
+          <TextBlock Text="Drag the ends to stretch or tilt a string. Use + or − on the string to resize its bulbs." TextWrapping="Wrap" Foreground="#476479" Margin="0,0,0,7"/>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="111"/><ColumnDefinition/><ColumnDefinition Width="45"/></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="30"/></Grid.RowDefinitions>
+            <TextBlock Text="New string colors" VerticalAlignment="Center"/>
+            <Border Grid.Column="1" Grid.ColumnSpan="2" Background="#EFF6FB" CornerRadius="7" Padding="2">
+              <UniformGrid Columns="3"><RadioButton x:Name="Warm" Content="Candlelight" GroupName="Colors"/><RadioButton x:Name="Festive" Content="Festive" GroupName="Colors"/><RadioButton x:Name="Aurora" Content="Aurora" GroupName="Colors"/></UniformGrid>
+            </Border>
+            <TextBlock Grid.Row="1" Text="New bulb size" VerticalAlignment="Center"/>
+            <Slider x:Name="BulbSize" Grid.Row="1" Grid.Column="1" Minimum="50" Maximum="500" TickFrequency="25" SmallChange="25" LargeChange="100" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="New bulb size"/>
+            <TextBlock x:Name="BulbSizeLabel" Grid.Row="1" Grid.Column="2" VerticalAlignment="Center" TextAlignment="Right"/>
+          </Grid>
+          <CheckBox x:Name="TwinkleLightsOption" Content="Twinkle string lights" Foreground="#264A62" Margin="0,3,0,2"/>
+        </StackPanel></Border>
+      </StackPanel>
       <Border x:Name="FriendsHost" Visibility="Collapsed" Margin="16,12,16,0"/>
-      <Grid Margin="20,16,20,16">
-        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-          <Button x:Name="ClearButton" Background="Transparent" Foreground="#AEC2BD" Padding="6,5" Content="Clear scene"/>
-          <Button x:Name="QuitButton" Background="Transparent" Foreground="#AEC2BD" Padding="6,5" Margin="5,0,0,0" Content="Quit"/>
-        </StackPanel>
-      </Grid>
        </StackPanel>
       </ScrollViewer>
     </DockPanel>
     <DockPanel x:Name="CompactPanel" Visibility="Collapsed" Background="Transparent" Margin="8,5">
-      <Button x:Name="DoneButton" DockPanel.Dock="Right" Content="Done" Background="#BDDCCB" Foreground="#18352C" Padding="9,4" Margin="4,0,0,0"/>
-      <Button x:Name="RestoreButton" DockPanel.Dock="Right" Content="Restore" Padding="9,4" ToolTip="Open the full panel here"/>
-      <TextBlock x:Name="CompactTitle" Text="Jake Frost" FontWeight="SemiBold" Foreground="#CEE4DA" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="4,0,8,0"/>
+      <Button x:Name="DoneButton" DockPanel.Dock="Right" Content="Done" Background="#D0EBFC" Foreground="#12466D" Padding="9,4" Margin="4,0,0,0"/>
+      <Button x:Name="RestoreButton" DockPanel.Dock="Right" Content="Restore" Padding="7,3" ToolTip="Open the full panel here"/>
+      <Path DockPanel.Dock="Left" Data="{StaticResource Snowflake}" Stroke="#287BA7" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center"/>
+      <TextBlock x:Name="CompactTitle" Text="Jake Frost" FontWeight="SemiBold" Foreground="#1F4259" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="4,0,8,0"/>
     </DockPanel>
    </Grid>
   </Border>

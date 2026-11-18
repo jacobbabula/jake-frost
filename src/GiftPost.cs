@@ -53,7 +53,7 @@ namespace Frostpane
             var g=new GiftPayload { Id=l[1],SenderId=l[2],RecipientId=l[3],Sender=Name(Decode(l[4],32)),
                 Kind=kind,Note=Plain(Decode(l[6],280),280),Style=style,Size=ReadNumber(l[8],3,160),
                 Mid=ReadNumber(l[9],1,64),Head=ReadNumber(l[10],1,64),Facing=ReadNumber(l[11],-1,1),Dress=Decode(l[12],8192) };
-            if(g.Kind==GiftType.Snowman && (g.Size>50||g.Mid>g.Size||g.Head>g.Mid))throw new InvalidDataException("Invalid snowman proportions.");
+            if(g.Kind==GiftType.Snowman && (g.Size>50||g.Mid>50||g.Head>50))throw new InvalidDataException("Invalid snowman proportions.");
             return g;
         }
         internal static string ReadSmall(string path,int maximum) {
@@ -163,6 +163,9 @@ namespace Frostpane
         }
         internal void Import(string path) {
             lock(gate) {Accept(GiftPayload.DecodeGift(GiftPayload.ReadSmall(path,20000)));}
+        }
+        internal void ReceiveOnline(GiftPayload gift) {
+            lock(gate) {Accept(gift);}
         }
         internal List<GiftPayload> Receive() {
             lock(gate) {

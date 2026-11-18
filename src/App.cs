@@ -18,7 +18,7 @@ using Forms = System.Windows.Forms;
 [assembly: AssemblyTitle("Jake Frost")]
 [assembly: AssemblyDescription("Interactive desktop snowfall")]
 [assembly: AssemblyProduct("Jake Frost")]
-[assembly: AssemblyVersion("3.4.1.0")]
+[assembly: AssemblyVersion("4.0.0.0")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8")]
 
 namespace Frostpane
@@ -26,6 +26,10 @@ namespace Frostpane
     internal sealed class Preferences
     {
         internal int Intensity=2,Wind=0,Volume=100,Depth=72,Ice=1,Palette=1,VisitorSpeed=0;
+        internal int BulbSize=100;
+        internal bool TwinkleLights=true;
+        internal TreeTrim TreeTrimOptions=TreeTrim.All;
+        internal int TreePalette=1;
         // In saved-file order: snowplow, Yeti, Santa, elf train, visiting snowmen.
         internal readonly int[] VisitorSizes={100,100,100,100,100};
         internal bool PauseFullscreen=true,ClickPuffs=true,RememberDecorations=true,DirectGrab=true,Lightning=false,SaveBattery=true;
@@ -72,6 +76,10 @@ namespace Frostpane
                 if(values.Length>21 && bool.TryParse(values[21],out flag)) Southern=flag;
                 VisitorSpeed=Number(values,22,VisitorSpeed,0,2);
                 for (int i=0;i<VisitorSizes.Length;i++) VisitorSizes[i]=Number(values,23+i,100,50,250);
+                BulbSize=Number(values,28,100,50,500);
+                if(values.Length>29 && bool.TryParse(values[29],out flag)) TwinkleLights=flag;
+                TreeTrimOptions=(TreeTrim)Number(values,30,(int)TreeTrim.All,0,7);
+                TreePalette=Number(values,31,Palette,0,2);
             } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
         private static T Choice<T>(string[] values,int index,T fallback) where T:struct
@@ -96,7 +104,9 @@ namespace Frostpane
                     DirectGrab.ToString(),Weather.ToString(),Schedule.ToString(),City,Lightning.ToString(),SaveBattery.ToString(),Decoration.ToString(),
                     AutoVisitors.ToString(),BehindWindows.ToString(),WindowBanks.ToString(),String.Join("|",HiddenScreens),Southern.ToString(),
                     VisitorSpeed.ToString(CultureInfo.InvariantCulture)}.Concat(
-                    VisitorSizes.Select(size=>size.ToString(CultureInfo.InvariantCulture))));
+                    VisitorSizes.Select(size=>size.ToString(CultureInfo.InvariantCulture))).Concat(
+                    new[]{BulbSize.ToString(CultureInfo.InvariantCulture),TwinkleLights.ToString(),
+                        ((int)TreeTrimOptions).ToString(CultureInfo.InvariantCulture),TreePalette.ToString(CultureInfo.InvariantCulture)}));
                 if (File.Exists(path)) File.Replace(temp,path,null); else File.Move(temp,path);
             } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
@@ -182,6 +192,7 @@ namespace Frostpane
             panel.StateChanged += delegate { ScheduleFrames(); };
             SetupStudio();
             ConnectControls();
+            ConnectScenes();
             ApplyPreferences();
             // Give the settings window its first layout before creating the full-screen windows.
             if (!openedGift) OpenPanel();
@@ -195,7 +206,7 @@ namespace Frostpane
             save.Tick += delegate { save.Stop(); prefs.Save(); };
             poll.Interval=TimeSpan.FromMilliseconds(250);
             poll.Tick += delegate {
-                if (++scans%8==0) { SyncMonitors(); weather.Tick(); friends.Poll(); CheckPower(); }
+                if (++scans%8==0) { SyncMonitors(); weather.Tick(); friends.Poll(); CheckPower(); UpdateWallpaper(); }
                 foreach (Overlay overlay in overlays) {
                     PollOverlay(overlay);
                     if (scans%40==0) SaveDecorations(overlay);
@@ -241,6 +252,9 @@ namespace Frostpane
             SetUpChoices(new[]{"Light","Steady","Flurry"},prefs.Intensity-1,delegate(int n){ prefs.Intensity=n+1; });
             SetUpChoices(new[]{"IceOff","IceFrost","IceIcicles","IceDeep"},prefs.Ice,delegate(int n){ prefs.Ice=n; });
             SetUpChoices(new[]{"Warm","Festive","Aurora"},prefs.Palette,delegate(int n){ prefs.Palette=n; });
+            SetUpSlider("BulbSize",prefs.BulbSize,delegate(int n){prefs.BulbSize=n;},"%");
+            SetupOption("TwinkleLightsOption",prefs.TwinkleLights,delegate(bool v){prefs.TwinkleLights=v;ApplyPreferences();});
+            ConnectTreeDesigner();
             SetUpChoices(new[]{"VisitorSpeed0","VisitorSpeed1","VisitorSpeed2"},prefs.VisitorSpeed,delegate(int n){ prefs.VisitorSpeed=n; });
             foreach (VisitorSizeTarget target in Enum.GetValues(typeof(VisitorSizeTarget))) {
                 int index=(int)target;
@@ -307,6 +321,8 @@ namespace Frostpane
         {
             scene.Tool=prefs.Tool; scene.SnowVolume=prefs.Volume; scene.DriftDepth=prefs.Depth;
             scene.IceLevel=prefs.Ice; scene.LightPalette=prefs.Palette; scene.Weather=prefs.Weather;
+            scene.NewBulbScale=prefs.BulbSize/100.0; scene.TwinkleLights=prefs.TwinkleLights;
+            scene.NewTreeTrim=prefs.TreeTrimOptions;scene.NewTreePalette=prefs.TreePalette;
             scene.LightningEnabled=prefs.Lightning; scene.SelectedDecoration=prefs.Decoration;
             scene.WindowSnowEnabled=prefs.WindowBanks;
             scene.VisitorSpeed=prefs.VisitorSpeed;
@@ -492,6 +508,7 @@ namespace Frostpane
         {
             if (quitting) return;
             quitting=true; poll.Stop(); animation.Stop();
+            if (wallpaper!=null) wallpaper.Dispose();
             CloseStudio();
             foreach (Overlay overlay in overlays) SaveDecorations(overlay);
             if (escapeRegistered) UnregisterHotKey(panelHandle,ExitBuildKey);

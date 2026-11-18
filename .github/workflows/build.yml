@@ -31,6 +31,17 @@ jobs:
           .\Build.ps1 -OutputDirectory .\dist\Jake-Frost
           .\BuildSetup.ps1 -AppDirectory .\dist\Jake-Frost -OutputDirectory .\dist\public
           Compress-Archive -LiteralPath .\dist\Jake-Frost -DestinationPath .\dist\public\Jake-Frost-Windows.zip
+      - name: Exercise wallpaper on Explorer, verify lights and validate the Store identity preview
+        shell: powershell
+        run: |
+          .\tests\WindowsWallpaper.ps1 -AppDirectory .\dist\Jake-Frost
+          .\tests\WindowsLighting.ps1
+          .\installer\store\BuildStore.ps1 -Preview -AppDirectory .\dist\Jake-Frost -OutputDirectory .\dist\store
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: store-identity-preview
+          path: dist/store/
+          if-no-files-found: error
       - name: Measure time until the settings panel and snow overlay are responsive
         shell: powershell
         run: |

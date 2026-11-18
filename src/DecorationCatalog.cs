@@ -116,7 +116,7 @@ namespace Frostpane
         {
             for(int i=Decorations.Count-1;i>=0;i--) {
                 var d=Decorations[i];
-                if(d==draggedDecoration) continue;
+                if(d==draggedDecoration || IsLeaving(d)) continue;
                 if(d.Tree!=null) {
                     if(!Trees.Contains(d.Tree)) { Decorations.RemoveAt(i); continue; }
                     d.Hidden=d.Tree.Hidden;
@@ -165,7 +165,17 @@ namespace Frostpane
             // Older receivers read the base ornaments and skip the optional appearance records.
             if(sizes.Count>0) parts.Add("scale,"+string.Join(",",sizes.ToArray()));
             if(lastAngle>0) parts.Add("angles,"+string.Join(",",angles.GetRange(0,lastAngle).ToArray()));
+            if(tree.Palette>=0 || tree.Trim!=TreeTrim.All)
+                parts.Add("trim,"+((int)tree.Trim).ToString(CultureInfo.InvariantCulture)+","+tree.Palette.ToString(CultureInfo.InvariantCulture));
             return string.Join(";",parts.ToArray());
+        }
+
+        private static void ReadTreeTrim(WinterTree tree,string flags,string palette)
+        {
+            int trim,colors;
+            if(!int.TryParse(flags,out trim) || trim<0 || trim>(int)TreeTrim.All ||
+                !int.TryParse(palette,out colors) || colors< -1 || colors>2) return;
+            tree.Trim=(TreeTrim)trim;tree.Palette=colors;
         }
 
         internal void ImportTreeDress(WinterTree tree,string data)
@@ -173,9 +183,10 @@ namespace Frostpane
             if(tree==null || !Trees.Contains(tree) || data==null || data.Length>8192) return;
             Decorations.RemoveAll(delegate(PlacedDecoration d){return d.Tree==tree;});
             var decoded=new List<PlacedDecoration>();
-            tree.Angle=0;
+            tree.Angle=0;tree.Trim=TreeTrim.All;tree.Palette=-1;
             foreach(string item in data.Split(';')) {
                 string[] a=item.Split(',');
+                if(a[0]=="trim" && a.Length==3) {ReadTreeTrim(tree,a[1],a[2]);continue;}
                 if(a[0]=="angles") {
                     double angle;
                     if(a.Length>=2 && ReadLayoutNumber(a[1],out angle)) tree.Angle=SignedAngle(angle);
@@ -248,13 +259,14 @@ namespace Frostpane
         internal bool LightControlsVisible {get{return ShowDecorationHandles && (Tool==PlayTool.Lights || Tool==PlayTool.Arrange ||
             (Tool==PlayTool.Decorate && SelectedDecoration==DecorationKind.Lights));}}
 
-        internal Point StrandButton(LightString s,bool palette)
+        internal Point StrandButton(LightString s,int index)
         {
             double middleX=(s.X1+s.X2)*.5,middleY=(s.Y1+s.Y2)*.5;
-            // On nearly vertical strings, place the two buttons beside the wire.
-            double offset=Math.Abs(s.X2-s.X1)<55 ? (middleX+55<width?24:-48) : 0;
-            double left=Limit(middleX+offset,9,Math.Max(9,width-31));
-            return new Point(left+(palette?21:0),Limit(middleY-14,9,Math.Max(9,height-9)));
+            // Beside steep cables, keep editing buttons clear of the bend grip.
+            double left=Math.Abs(s.X2-s.X1)<55 ? (middleX+95<width?middleX+23:middleX-86) : middleX-31.5;
+            left=Limit(left,10,Math.Max(10,width-73));
+            double y=middleY-20>=10 ? middleY-20 : s.CurveY(.5)+21;
+            return new Point(left+21*index,Limit(y,10,Math.Max(10,height-10)));
         }
 
         private bool SelectedFrame(out Rect frame,out Point pivot,out double angle)
@@ -395,7 +407,7 @@ namespace Frostpane
             double factor=Math.Pow(1.16,Limit(steps,-8,8));
             ClearPropSelection();
             selectedItem=item;selectedTree=tree;selectedStrand=strand;
-            if(strand!=null) strand.BulbScale=Limit(strand.BulbScale*factor,.55,2.8);
+            if(strand!=null) strand.BulbScale=Limit(strand.BulbScale*factor,LightString.MinimumBulbScale,LightString.MaximumBulbScale);
             else SetSelectedSize((tree!=null?tree.Size:item.Magnification)*factor);
             return true;
         }
@@ -404,13 +416,20 @@ namespace Frostpane
         {
             LightString selected=EditedLights;
             if(selected!=null && LightControlsVisible) {
-                Point trash=StrandButton(selected,false),color=StrandButton(selected,true);
+                Point trash=StrandButton(selected,0),color=StrandButton(selected,1);
                 if(LightHit(x,y,trash.X,trash.Y,8)) {
                     Lights.Remove(selected); ClearPropSelection(); suppressLightUp=true; return true;
                 }
                 if(LightHit(x,y,color.X,color.Y,8)) {
                     int palette=selected.Palette<0 ? LightPalette : selected.Palette;
                     selected.Palette=(palette+1)%3;
+                    suppressLightUp=true;return true;
+                }
+                for(int i=2;i<4;i++) {
+                    Point button=StrandButton(selected,i);
+                    if(!LightHit(x,y,button.X,button.Y,9)) continue;
+                    double size=selected.BulbScale*(i==3?1.25:.8);
+                    selected.BulbScale=Limit(size,LightString.MinimumBulbScale,LightString.MaximumBulbScale);
                     suppressLightUp=true;return true;
                 }
             }
@@ -489,7 +508,7 @@ namespace Frostpane
                 dc.DrawEllipse(DecorationArt.Grip,DecorationArt.Edge,bend,6.5,6.5);
                 dc.DrawLine(DecorationArt.Cross,new Point(bend.X-2.7,bend.Y),new Point(bend.X,bend.Y+2.5));
                 dc.DrawLine(DecorationArt.Cross,new Point(bend.X,bend.Y+2.5),new Point(bend.X+2.7,bend.Y));
-                Point trash=scene.StrandButton(s,false),palette=scene.StrandButton(s,true);
+                Point trash=scene.StrandButton(s,0),palette=scene.StrandButton(s,1);
                 double x=trash.X,y=trash.Y;
                 dc.DrawEllipse(DecorationArt.Remove,DecorationArt.Edge,trash,7,7);
                 dc.DrawLine(DecorationArt.Cross,new Point(x-2.5,y-2.5),new Point(x+2.5,y+2.5));
@@ -498,6 +517,12 @@ namespace Frostpane
                 dc.DrawEllipse(Brushes.Gold,null,new Point(palette.X-2,palette.Y-1),2,2);
                 dc.DrawEllipse(Brushes.DeepPink,null,new Point(palette.X+2,palette.Y-1),2,2);
                 dc.DrawEllipse(Brushes.Turquoise,null,new Point(palette.X,palette.Y+2.1),2,2);
+                for(int i=2;i<4;i++) {
+                    Point button=scene.StrandButton(s,i);
+                    dc.DrawEllipse(DecorationArt.Grip,DecorationArt.Edge,button,8,8);
+                    dc.DrawLine(DecorationArt.Cross,new Point(button.X-3,button.Y),new Point(button.X+3,button.Y));
+                    if(i==3) dc.DrawLine(DecorationArt.Cross,new Point(button.X,button.Y-3),new Point(button.X,button.Y+3));
+                }
             }
         }
     }

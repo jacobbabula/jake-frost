@@ -52,7 +52,8 @@ namespace Frostpane
             done.Content = escapeRegistered ? "Done · Esc" : "Done";
             var title = Control<TextBlock>("CompactTitle");
             title.Text = !building ? "Jake Frost" : prefs.Tool == PlayTool.Decorate ?
-                DecorationPicker.NameOf(prefs.Decoration) : prefs.Tool == PlayTool.Erase ? "Remove" : prefs.Tool.ToString();
+                DecorationPicker.NameOf(prefs.Decoration) : prefs.Tool == PlayTool.Erase ? "Remove" :
+                prefs.Tool==PlayTool.StyleTree ? "Style a tree" : prefs.Tool.ToString();
             title.ToolTip = building ? PlayPalette.Hint(prefs.Tool) : "Drag to move, or double-click to restore";
         }
     }

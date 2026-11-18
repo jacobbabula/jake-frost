@@ -18,6 +18,14 @@ namespace Frostpane
         private readonly Action<GiftPayload> deliver;
         private readonly Func<string,bool> inTransit;
         private readonly GiftPost post;
+        private readonly OnlinePost online;
+        private readonly ComboBox onlineFriends=new ComboBox();
+        private readonly TextBox invitation=new TextBox {MaxLength=64};
+        private readonly TextBlock onlineStatus=new TextBlock {TextWrapping=TextWrapping.Wrap,FontSize=12,Margin=new Thickness(0,4,0,3)};
+        private Button sendOnline,removeOnline;
+        private DateTime nextOnline;
+        private bool syncing,onlineAction;
+        private int offlineMinutes;
         private readonly ComboBox types=new ComboBox(), friends=new ComboBox();
         private readonly TextBox displayName=new TextBox(), note=new TextBox();
         private readonly TextBlock status=new TextBlock(), connection=new TextBlock(), lastGift=new TextBlock();
@@ -32,23 +40,27 @@ namespace Frostpane
             Func<string,bool> giftInTransit,string localSettingsDirectory)
         {
             source=sourceScene;deliver=deliverGift;inTransit=giftInTransit;post=new GiftPost(localSettingsDirectory);
+            online=new OnlinePost(localSettingsDirectory);
             AddHeading("Send a gift");
             Row(this,"Your name",displayName);displayName.MaxLength=32;displayName.Text=post.DisplayName;
             foreach(GiftType t in Enum.GetValues(typeof(GiftType)))types.Items.Add(t);
             types.SelectedIndex=0;Row(this,"Gift",types);
             Row(this,"Note",note);note.MaxLength=280;note.AcceptsReturn=false;
-            var gifts=new WrapPanel();Children.Add(gifts);
+            AddOnlineControls();
+            var exchange=new StackPanel();
+            Children.Add(new Expander {Header="Gift files and attachments",Content=exchange,Margin=new Thickness(0,8,0,0)});
+            var gifts=new WrapPanel();exchange.Children.Add(gifts);
             gifts.Children.Add(ActionButton("Copy gift to send",CopyGift));
             gifts.Children.Add(ActionButton("Save gift file…",Export));gifts.Children.Add(ActionButton("Open gift file…",Import));
-            Children.Add(new TextBlock{Text="Paste the copied file into a chat or email. Your friend opens the attachment in Jake Frost.",
+            exchange.Children.Add(new TextBlock{Text="Paste the copied file into a chat or email. Your friend opens the attachment in Jake Frost.",
                 TextWrapping=TextWrapping.Wrap,FontSize=12,Margin=new Thickness(0,3,0,6)});
             lastGift.TextWrapping=TextWrapping.Wrap;lastGift.FontSize=12;lastGift.Margin=new Thickness(0,6,0,0);Children.Add(lastGift);
             replay=ActionButton("Replay last delivery",delegate { if(recent!=null)deliver(recent); });
             replay.HorizontalAlignment=HorizontalAlignment.Left;replay.Visibility=Visibility.Collapsed;Children.Add(replay);
-            status.TextWrapping=TextWrapping.Wrap;status.FontSize=12;status.Foreground=new SolidColorBrush(Color.FromRgb(193,214,201));
+            status.TextWrapping=TextWrapping.Wrap;status.FontSize=12;
             status.Margin=new Thickness(0,6,0,0);Children.Add(status);
             var shared=new StackPanel();
-            Children.Add(new Expander {Header="Shared-folder delivery",Content=shared,IsExpanded=!string.IsNullOrEmpty(post.Folder),Margin=new Thickness(0,8,0,0),Foreground=Brushes.White});
+            Children.Add(new Expander {Header="Shared-folder delivery",Content=shared,IsExpanded=!string.IsNullOrEmpty(post.Folder),Margin=new Thickness(0,8,0,0)});
             connection.TextWrapping=TextWrapping.Wrap;connection.FontSize=12;connection.Margin=new Thickness(0,2,0,6);shared.Children.Add(connection);
             var links=new WrapPanel();shared.Children.Add(links);
             links.Children.Add(ActionButton("Connect shared folder…",Connect));
@@ -66,6 +78,106 @@ namespace Frostpane
         }
         private void AddHeading(string text) {
             Children.Add(new TextBlock {Text=text,FontSize=14,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,9,0,3)});
+        }
+        private void AddOnlineControls()
+        {
+            Row(this,"Friend",onlineFriends);
+            var actions=new WrapPanel();Children.Add(actions);
+            sendOnline=ActionButton("Send gift",delegate {
+                var friend=onlineFriends.SelectedItem as OnlineContact;
+                if(friend==null || friend.status!="active")return;
+                var gift=Compose();
+                OnlineWork(delegate {online.Send(friend.id,gift);return "Sent to "+friend.name+". Their train will arrive when Jake Frost is open.";},
+                    delegate{note.Clear();});
+            });
+            actions.Children.Add(sendOnline);
+            actions.Children.Add(ActionButton("Check deliveries",delegate{PollOnline(true);}));
+            var add=new StackPanel();
+            Children.Add(new Expander {Header="Add or manage friends",Content=add,IsExpanded=true,Margin=new Thickness(0,6,0,0)});
+            add.Children.Add(new TextBlock {Text="Copy a private invitation into your chat, or paste one you received. It works once and expires in 7 days.",
+                FontSize=12,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,2,0,4)});
+            Row(add,"Invite code",invitation);
+            var manage=new WrapPanel();add.Children.Add(manage);
+            manage.Children.Add(ActionButton("Copy my invite",delegate {
+                string name=displayName.Text,code=null;
+                OnlineWork(delegate { code=online.Invite(name);return "Invitation ready to share privately.";},delegate {
+                    invitation.Text=code;invitation.SelectAll();
+                    try {Clipboard.SetText(code);onlineStatus.Text="Invitation copied. Send it privately to one friend.";}
+                    catch(System.Runtime.InteropServices.ExternalException){invitation.Focus();onlineStatus.Text="Select and copy your invitation code.";}
+                });
+            }));
+            manage.Children.Add(ActionButton("Accept invite",delegate {
+                string name=displayName.Text,code=invitation.Text;
+                OnlineWork(delegate {return "Connected with "+online.Accept(code,name)+".";},delegate{invitation.Clear();});
+            }));
+            removeOnline=ActionButton("Remove",delegate {
+                var c=onlineFriends.SelectedItem as OnlineContact;
+                if(c==null)return;
+                if(MessageBox.Show(Window.GetWindow(this),"Remove this connection and clear its undelivered gifts?",
+                    "Jake Frost",MessageBoxButton.YesNo,MessageBoxImage.Question)!=MessageBoxResult.Yes)return;
+                OnlineWork(delegate {online.Remove(c.id);return "Connection removed.";},delegate{invitation.Clear();});
+            });
+            manage.Children.Add(removeOnline);
+            var privacy=new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run("Privacy"))
+                {NavigateUri=new Uri("https://jake-frost-mail.netlify.app/privacy.html")};
+            privacy.Click+=delegate{System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(privacy.NavigateUri.AbsoluteUri){UseShellExecute=true});};
+            var privacyText=new TextBlock {FontSize=12,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,3)};
+            privacyText.Inlines.Add("Online gifts use Jake Frost’s encrypted delivery service. ");privacyText.Inlines.Add(privacy);add.Children.Add(privacyText);
+            Children.Add(onlineStatus);
+            onlineFriends.SelectionChanged+=delegate{UpdateOnlineButtons();};UpdateOnlineButtons();
+        }
+        private void UpdateOnlineButtons()
+        {
+            var c=onlineFriends.SelectedItem as OnlineContact;
+            sendOnline.IsEnabled=!onlineAction && c!=null && c.status=="active";
+            removeOnline.IsEnabled=!onlineAction && c!=null;
+        }
+        private void ShowOnline(List<OnlineContact> rows)
+        {
+            var selected=onlineFriends.SelectedItem as OnlineContact;
+            onlineFriends.Items.Clear();
+            foreach(var c in rows) {
+                onlineFriends.Items.Add(c);
+                if(selected!=null && selected.id==c.id)onlineFriends.SelectedItem=c;
+                if(displayName.Text.Length==0 && !displayName.IsKeyboardFocused)displayName.Text=c.ownName;
+            }
+            if(onlineFriends.SelectedIndex<0 && rows.Count>0)onlineFriends.SelectedIndex=0;
+            UpdateOnlineButtons();
+        }
+        private void OnlineWork(Func<string> action,Action finish)
+        {
+            if(onlineAction)return;
+            onlineAction=true;UpdateOnlineButtons();onlineStatus.Text="Connecting…";
+            ThreadPool.QueueUserWorkItem(delegate {
+                string message;List<OnlineContact> rows=null;bool ok=false;
+                try {message=action();rows=online.List();ok=true;}
+                catch(Exception e){message=e.Message;}
+                if(Dispatcher.HasShutdownStarted)return;
+                Dispatcher.BeginInvoke(new Action(delegate {
+                    if(closed)return;
+                    onlineAction=false;onlineStatus.Text=message;
+                    if(rows!=null)ShowOnline(rows);else UpdateOnlineButtons();
+                    if(ok){finish();nextOnline=DateTime.MinValue;PollOnline(false);}
+                }));
+            });
+        }
+        private void PollOnline(bool manual)
+        {
+            if(closed || syncing || onlineAction || (!manual && nextOnline>DateTime.UtcNow))return;
+            syncing=true;
+            ThreadPool.QueueUserWorkItem(delegate {
+                List<OnlineContact> rows=null;string warning=null;
+                try {rows=online.List();if(rows.Count>0){online.Poll(post.ReceiveOnline);rows=online.List();}}
+                catch(Exception e){warning=e.Message;}
+                if(Dispatcher.HasShutdownStarted)return;
+                Dispatcher.BeginInvoke(new Action(delegate {
+                    if(closed)return;syncing=false;
+                    offlineMinutes=warning==null?0:Math.Min(10,Math.Max(1,offlineMinutes*2));
+                    nextOnline=DateTime.UtcNow.AddSeconds(warning==null?90:offlineMinutes*60);
+                    if(!onlineAction && rows!=null)ShowOnline(rows);
+                    if(manual || warning!=null)onlineStatus.Text=warning??(rows.Count==0?"Copy an invitation or accept one to connect.":"Deliveries checked.");
+                }));
+            });
         }
         private void Row(Panel parent,string label,Control input) {
             var row=new DockPanel { Margin=new Thickness(0,2,0,3) };
@@ -150,6 +262,7 @@ namespace Frostpane
             });
         }
         internal void Poll() {
+            PollOnline(false);
             if(closed||busy)return;busy=true;
             ThreadPool.QueueUserWorkItem(delegate {
                 List<PostFriend> peers=null;List<GiftPayload> inbox=null;GiftPayload latest=null;string warning=null;

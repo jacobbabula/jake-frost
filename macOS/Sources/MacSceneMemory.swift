@@ -51,7 +51,7 @@ struct SavedSnowman: Codable {
     }
     var valid: Bool {
         (0...1).contains(x) && (0...1).contains(foot) && (0...1).contains(fraction)
-            && (3...50).contains(base) && middle >= 1 && middle <= base && head >= 1 && head <= middle
+            && (3...50).contains(base) && (1...50).contains(middle) && (1...50).contains(head)
             && (0...63).contains(style) && (-1...1).contains(facing)
     }
 }

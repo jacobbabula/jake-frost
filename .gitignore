@@ -7,3 +7,6 @@
 /macOS/dist/
 /Jake-Frost-Setup.exe
 .DS_Store
+
+# Local Netlify folder
+.netlify

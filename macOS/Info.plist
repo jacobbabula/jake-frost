@@ -7,8 +7,8 @@
   <key>CFBundleDisplayName</key><string>Jake Frost</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleShortVersionString</key><string>3.4.1</string>
-  <key>CFBundleVersion</key><string>341</string>
+  <key>CFBundleShortVersionString</key><string>4.0.0</string>
+  <key>CFBundleVersion</key><string>400</string>
   <key>CFBundleIconFile</key><string>JakeFrost.icns</string>
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>LSUIElement</key><true/>

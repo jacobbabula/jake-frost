@@ -78,23 +78,108 @@ internal static class WindowsPloughChecks
         var overheadWire=new LightString{X1=x(280),X2=x(345),Y1=80,Y2=82,Bend=3};scene.Lights.Add(overheadWire);
         scene.DailyPresent=new WinterPresent{X=x(700),Y=Height};
         scene.SendSnowplough();
-        for (int i=0;i<1100 && scene.Plough!=null;i++) scene.Step(1.0/60,0,0);
+        for (int i=0;i<1200;i++) scene.Step(1.0/60,0,0);
         Check(scene.Plough==null,"vehicle completes its pass with loose objects on the ground");
         Check(scene.Balls.Contains(ball) && dir*(ball.X-x(170))>12,"loose snowball moves in blade direction");
         Check(scene.Snowmen.Contains(figure) && dir*(figure.X-x(255))>12,"built snowman is pushed and survives");
         Check(scene.Sleds.Contains(sled) && dir*(sled.X-x(330))>12,"sled is pushed and survives");
-        Check(scene.Trees.Contains(tree) && dir*(tree.X-x(402))>12 && ornament.Tree==tree &&
-              Math.Abs(ornament.X-tree.X)<tree.Size,"tree moves with its attached bauble");
-        Check(scene.Decorations.Contains(gift) && dir*(gift.X-x(480))>12,"a loose decoration moves ahead of the blade");
-        Check(dir*(strand.X1-Math.Min(x(565),x(605)))>8 && dir*(strand.X2-Math.Max(x(565),x(605)))>8,"a low free light strand moves with the blade");
+        Check(!scene.Trees.Contains(tree) && !scene.Decorations.Contains(ornament) && dir*(tree.X-x(402))>12,
+              "a contacted tree and its ornaments leave the desktop together");
+        Check(!scene.Decorations.Contains(gift) && dir*(gift.X-x(480))>12,"a loose decoration clears the screen");
+        Check(!scene.Lights.Contains(strand) && (dir>0 ? Math.Min(strand.X1,strand.X2)>Width : Math.Max(strand.X1,strand.X2)<0),
+              "both ends of a low light strand move fully offscreen");
         Check(scene.DailyPresent!=null && dir*(scene.DailyPresent.X-x(700))>8,"Santa's unopened present is pushed intact");
-        Check(Math.Abs(overhead.X-x(380))<0.1 && Math.Abs(overheadWire.X1-Math.Min(x(280),x(345)))<0.1 &&
+        Check(scene.Trees.Contains(overhead) && scene.Lights.Contains(overheadWire) &&
+              Math.Abs(overhead.X-x(380))<0.1 && Math.Abs(overheadWire.X1-Math.Min(x(280),x(345)))<0.1 &&
               Math.Abs(overheadWire.X2-Math.Max(x(280),x(345)))<0.1,"a ledge tree and overhead lights stay in place");
-        Check(new[]{ball.X,figure.X,sled.X,tree.X,gift.X,scene.DailyPresent.X}.All(p=>p>=0 && p<=Width),"pushed pieces remain accessible at the edge");
+        Check(new[]{ball.X,figure.X,sled.X,scene.DailyPresent.X}.All(p=>p>=0 && p<=Width),"pushed pieces remain accessible at the edge");
+    }
+
+    private static void SnowPhysics()
+    {
+        var scene=Scene(1,100);
+        var bottom=new SnowBall{X=400,Y=Height-13,Radius=13};
+        scene.Balls.Add(bottom);
+        foreach(double r in new[]{23.0,17.0}) {
+            var ball=new SnowBall{X=200,Y=180,Radius=r};
+            scene.Balls.Add(ball);
+            scene.PointerDown(ball.X,ball.Y);
+            scene.PointerUp(bottom.X,bottom.Y-25);
+        }
+        var man=scene.Snowmen.Single();
+        Check(scene.Balls.Count==0 && man.BaseRadius==13 && man.MidRadius==23 && man.HeadRadius==17,
+              "stacking preserves all three placed radii and their order");
+        var restored=Scene(1,100);
+        restored.ImportDecorations(scene.ExportDecorations());
+        var saved=restored.Snowmen.Single();
+        Check(saved.BaseRadius==13 && saved.MidRadius==23 && saved.HeadRadius==17,"hand-built proportions round-trip through scene storage");
+        var received=GiftPayload.DecodeGift(new GiftPayload{Kind=GiftType.Snowman,Size=13,Mid=23,Head=17}.Encode());
+        Check(received.Size==13 && received.Mid==23 && received.Head==17,"gift decoding accepts independently sized snowman balls");
+
+        double midY=man.Y-man.BaseRadius-.78*(man.BaseRadius+man.MidRadius);
+        scene.Balls.Add(new SnowBall{X=man.X-65,Y=midY,Radius=9,Vx=760,InFlight=true});
+        for(int i=0;i<10 && scene.Snowmen.Count>0;i++)scene.Step(.017,0,0);
+        Check(scene.Snowmen.Count==0 && scene.Balls.Count==0 && scene.Flakes.Any(f=>f.Powder) &&
+              scene.Flakes.Any(f=>f.Clump && !f.Powder && f.ThrowX>50),
+              "a thrown ball knocks apart a snowman with powder and directional fragments");
+
+        scene=Scene(1,100);
+        man=new Snowman{X=200,Y=Height-8,BaseRadius=14,MidRadius=12,HeadRadius=10};scene.Snowmen.Add(man);
+        for(int i=0;i<60;i++)scene.Step(.017,0,0);
+        Check(scene.Snowmen.Contains(man),"a short placement survives");
+        scene.PointerDown(man.X,man.Y-man.BaseRadius);scene.PointerUp(man.X,130);
+        for(int i=0;i<120 && scene.Snowmen.Count>0;i++)scene.Step(.017,0,0);
+        Check(scene.Snowmen.Count==0 && scene.Flakes.Any(f=>f.Powder),"a dropped figure crumbles on landing");
+
+        scene=Scene(1,100);
+        scene.SetLedges(new[]{new Ledge("window",80,180,170)});
+        scene.Clear();
+        var rolling=new SnowBall{X=223,Y=168,Radius=12};scene.Balls.Add(rolling);
+        Check(scene.DirectDown(223,168),"desktop pointer picks up the ball on the window");
+        scene.DirectMove(239,168);scene.DirectUp(246,168);
+        Check(!rolling.InFlight && rolling.Vx>40,"a horizontal release on the ledge keeps rolling momentum");
+        bool fell=false;
+        for(int i=0;i<150 && scene.Balls.Contains(rolling);i++) {
+            scene.Step(.017,0,0);
+            fell|=rolling.X>250 && rolling.Y>210;
+        }
+        Check(fell && !scene.Balls.Contains(rolling) && scene.Flakes.Any(f=>f.Powder),
+              "a ball rolls off a real window ledge and crumbles on floor impact");
+    }
+
+    private static void YetiVisit()
+    {
+        var scene=Scene(1,100);
+        var ground=scene.Banks.First(b=>b.IsFloor);
+        scene.SetLedges(new[]{new Ledge("shelf",30,150,260)});
+        var ledge=scene.Banks.First(b=>!b.IsFloor);
+        var timber=new WinterTree{X=230,Y=Height,Size=80,Support=ground};scene.Trees.Add(timber);
+        var second=new WinterTree{X=490,Y=Height,Size=80,Support=ground};scene.Trees.Add(second);
+        var shelf=new WinterTree{X=90,Y=150,Size=55,Support=ledge,Anchor=(90-ledge.X)/ledge.Width};scene.Trees.Add(shelf);
+        var ornament=new PlacedDecoration{Kind=DecorationKind.Bells,Tree=timber,LocalX=.18,LocalY=-.3};
+        scene.Decorations.Add(ornament);
+        scene.SendVisitors(VisitorKind.Yeti);
+        var yeti=scene.Visitors.Single(v=>v.Kind==VisitorKind.Yeti);
+        bool sawFirst=false,sawSecond=false;
+        for(int i=0;i<1200 && scene.Visitors.Contains(yeti);i++) {
+            scene.Step(.035,0,0);
+            if(yeti.Chops==1 && scene.Trees.Contains(timber))sawFirst=true;
+            if(yeti.Chops==2 && scene.Trees.Contains(timber))sawSecond=true;
+        }
+        Check(sawFirst && sawSecond && yeti.CarryingLog && !scene.Visitors.Contains(yeti),"Yeti approaches, makes three timed woodcutting strokes and carries a log away");
+        Check(!scene.Trees.Contains(timber) && !scene.Decorations.Contains(ornament) &&
+              scene.Trees.Contains(second) && scene.Trees.Contains(shelf),"Yeti clears only the nearest floor tree and its attached ornaments");
+        scene=Scene(1,100);
+        var man=new Snowman{X=235,Y=Height,BaseRadius=16,MidRadius=12,HeadRadius=9};scene.Snowmen.Add(man);
+        scene.SendVisitors(VisitorKind.Yeti);yeti=scene.Visitors.Single();
+        for(int i=0;i<500 && !yeti.Met;i++)scene.Step(.035,0,0);
+        Check(yeti.Met && yeti.Friend==man && !yeti.CarryingLog && scene.Snowmen.Contains(man),"Yeti greets a snowman when there is no floor tree");
     }
 
     internal static void Run()
     {
+        SnowPhysics();
+        YetiVisit();
         foreach (int direction in new[]{1,-1}) {
             foreach (int scale in new[]{50,100,250}) Terrain(direction,scale);
             Objects(direction);

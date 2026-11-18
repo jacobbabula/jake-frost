@@ -12,6 +12,9 @@ namespace Frostpane
         internal double X,Y,Age,Facing=1,Wait,TargetX,Dwell,Travel,Scale=1,Incline;
         internal bool Met;
         internal Snowman Friend;
+        internal WinterTree Timber;
+        internal int Chops;
+        internal bool CarryingLog;
         internal GiftPayload Gift;
         internal string Caption;
     }
@@ -146,13 +149,14 @@ namespace Frostpane
         }
         private void WinterGames(double dt)
         {
+            StepFight(dt);
             if(FortuneTime>0)FortuneTime-=dt;
             if(DailyPresent!=null) {
                 DailyPresent.Vy=Math.Min(150,DailyPresent.Vy+125*dt);
                 DailyPresent.Y=Math.Min(VisitorGround(DailyPresent.X),DailyPresent.Y+DailyPresent.Vy*dt);
             }
             if(Snowmen.Count<2)nextToss=Math.Min(nextToss,13);
-            else if ((nextToss-=dt)<=0) {
+            else if (Fight==null && (nextToss-=dt)<=0) {
                 nextToss=Between(19,36);
                 var from=Snowmen[random.Next(Snowmen.Count)];Snowman to=null;double nearest=double.MaxValue;
                 foreach(Snowman man in Snowmen) {
@@ -209,31 +213,7 @@ namespace Frostpane
                         PowderBurst(v.X,v.Y,20,0,.9); Visitors.RemoveAt(i);
                     }
                 } else if(v.Kind==VisitorKind.Yeti) {
-                    if (!v.Met) {
-                        if (v.Friend==null || !Snowmen.Contains(v.Friend) || v.Friend.Held) {
-                            v.Friend=null;double best=double.MaxValue;
-                            foreach(Snowman m in Snowmen) {
-                                double distance=Math.Abs(v.X-m.X)+Math.Abs(v.Y-m.Y)*.17;
-                                if(!m.Held && distance<best) {best=distance;v.Friend=m;}
-                            }
-                        }
-                        double tx=v.Friend==null?v.TargetX:v.Friend.X-v.Friend.BaseRadius-8*v.Scale;
-                        double ty=v.Friend==null?VisitorGround(v.X):v.Friend.Y;
-                        double dx=tx-v.X;v.Facing=dx<0?-1:1;
-                        double step=Limit(dx,-42*pacedDt,42*pacedDt);
-                        v.X+=step;v.Travel+=Math.Abs(step);
-                        if(v.Friend==null || Math.Abs(v.Friend.Y-VisitorGround(v.Friend.X))<3)
-                            v.Y=VisitorGround(v.X);
-                        else v.Y+=Limit(ty-v.Y,-62*pacedDt,62*pacedDt);
-                        if (Math.Abs(v.X-tx)<2 && Math.Abs(v.Y-ty)<3) {
-                            v.Met=true;
-                            if (v.Friend!=null) { v.Friend.Facing=v.X<v.Friend.X?-1:1;PowderBurst(v.Friend.X,v.Friend.Y-v.Friend.Height*.6,12,0,.55); }
-                        }
-                    } else if ((v.Wait+=dt)>v.Dwell) {
-                        v.Facing=1;v.X+=42*pacedDt;v.Travel+=42*pacedDt;
-                        v.Y+=Limit(VisitorGround(v.X)-v.Y,-62*pacedDt,62*pacedDt);
-                        if(v.X>width+55*v.Scale) Visitors.RemoveAt(i);
-                    }
+                    if (StepYeti(v,dt,pacedDt)) Visitors.RemoveAt(i);
                 } else {
                     double previousX=v.X;
                     if (!v.Met) {
@@ -261,6 +241,7 @@ namespace Frostpane
         }
         private void ClearVisitors()
         {
+            Fight=null;
             if(DailyPresent!=null)presentDay="";
             Visitors.Clear();arrivingGifts.Clear();FriendlyShots.Clear();DailyPresent=null;FortuneTime=0;selectedGiftTree=null;selectedGiftMan=null;
         }

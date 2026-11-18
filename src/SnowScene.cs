@@ -340,15 +340,17 @@ namespace Frostpane
             PropsStep(dt);
             StepSnowplough(dt);
             UpdateVisitors(dt);
-            foreach (Snowman m in Snowmen)
+            for (int i = Snowmen.Count - 1; i >= 0; i--)
             {
+                Snowman m = Snowmen[i];
                 if (m.Held) continue;
                 m.Vy = Math.Min(620, m.Vy + 400 * dt);
                 double sy;
                 if (FindSupport(m.X, m.Y, m.Y + m.Vy * dt, 5, out sy) != null || m.Y >= height)
                 {
                     m.Y = Math.Min(height, sy);
-                    m.Vy = 0;
+                    if (m.Vy >= 155) CrumbleFigure(m, 0, m.Vy);
+                    else m.Vy = 0;
                 }
                 else m.Y += m.Vy * dt;
             }
@@ -443,11 +445,23 @@ namespace Frostpane
                 double next = foot + b.Vy * dt;
                 double sy;
                 SnowBank bank = FindSupport(b.X, foot, next, 5, out sy);
-                if (b.Vy > 0 && TryStack(b, foot, bank == null ? next : Math.Min(next, sy), false)) continue;
+                if ((b.Vy >= 175 || Math.Abs(b.Vx) >= 100) && HitFigure(b)) { BreakBall(b, null); continue; }
+                if (b.Vy > 0 && b.Vy < 175 && TryStack(b, foot, bank == null ? next : Math.Min(next, sy), false)) continue;
                 if (bank != null || next >= height)
                 {
                     b.Y = Math.Min(height, sy) - b.Radius;
-                    b.Vx *= Math.Max(0, 1 - dt * 6);
+                    if (b.Vy >= 175) { BreakBall(b, bank); continue; }
+                    if (bank != null && !HasBallAbove(b))
+                    {
+                        double span = Math.Max(4, b.Radius * .55);
+                        double grade = (bank.HeightAt(b.X - span) - bank.HeightAt(b.X + span)) / (2 * span);
+                        // Static friction holds a hand-placed ball on shallow irregularities.
+                        if (Math.Abs(grade) > .14 || Math.Abs(b.Vx) > 2)
+                            b.Vx += Limit(grade, -1, 1) * 255 * dt;
+                    }
+                    double friction = (14 + .58 * Math.Abs(b.Vx)) * dt;
+                    b.Vx = Math.Sign(b.Vx) * Math.Max(0, Math.Abs(b.Vx) - friction);
+                    if ((b.X <= b.Radius && b.Vx < 0) || (b.X >= width - b.Radius && b.Vx > 0)) b.Vx = 0;
                     b.Vy = 0;
                 }
                 else b.Y = next - b.Radius;
@@ -508,10 +522,9 @@ namespace Frostpane
 
         private void BuildSnowman(SnowBall bottom, SnowBall middle, SnowBall top)
         {
-            double r = Limit(Math.Max(14, Math.Max(bottom.Radius, Math.Max(middle.Radius, top.Radius))), 14, 31);
             Snowmen.Add(new Snowman { X = bottom.X, Y = bottom.Y + bottom.Radius,
-                BaseRadius = r, MidRadius = Limit(middle.Radius, .66 * r, .8 * r),
-                HeadRadius = Limit(top.Radius, .46 * r, .59 * r), Facing = random.Next(2) == 0 ? -1 : 1,
+                BaseRadius = bottom.Radius, MidRadius = middle.Radius,
+                HeadRadius = top.Radius, Facing = random.Next(2) == 0 ? -1 : 1,
                 Style = random.Next(3) });
             Balls.Remove(bottom);
             Balls.Remove(middle);
@@ -561,7 +574,7 @@ namespace Frostpane
                 for (int i = Snowmen.Count - 1; i >= 0; i--)
                 {
                     Snowman man = Snowmen[i];
-                    if (Math.Abs(x - man.X) > man.BaseRadius + 3 || y < man.Y - man.Height - 4 || y > man.Y + 2) continue;
+                    if (!TouchesFigure(man,x,y,3)) continue;
                     heldMan = man;
                     man.Held = true;
                     grabX = x - man.X; grabY = y - man.Y;
@@ -627,7 +640,12 @@ namespace Frostpane
             SnowBall b = heldBall;
             b.Held = false;
             heldBall = null;
-            TryStack(b, b.Y + b.Radius, b.Y + b.Radius, true);
+            if (!TryStack(b, b.Y + b.Radius, b.Y + b.Radius, true) && motion.Count >= 2)
+            {
+                double vx, vy;
+                ReleaseVelocity(out vx, out vy);
+                if (Math.Abs(vx) > 34) b.Vx = Limit(vx * .63, -410, 410);
+            }
         }
 
         public void Clear()

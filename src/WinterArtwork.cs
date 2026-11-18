@@ -10,8 +10,14 @@ namespace Frostpane
         internal static Drawing TreeBodyDrawing()
         {
             var group=new DrawingGroup();
-            using(var g=group.Open()) WinterArt.PaintTree(g,0,0);
+            using(var g=group.Open()) WinterArt.PaintTree(g,0);
             group.Freeze();return group;
+        }
+        internal static ImageSource TreePreview(TreeTrim trim,int palette)
+        {
+            var group=new DrawingGroup();
+            using(var dc=group.Open()) WinterArt.DrawTree(dc,0,0,1,palette,0,trim,0);
+            var image=new DrawingImage(group);image.Freeze();return image;
         }
         private static class WinterArt
         {
@@ -24,9 +30,15 @@ namespace Frostpane
 
             private sealed class StringArt
             {
-                internal double Width, Rise, Sag, BulbScale;
+                internal double Width, Rise, Sag, BulbScale, Phase;
                 internal int Palette;
-                internal Sprite Drawing;
+                internal Sprite Cable;
+                internal readonly Sprite[] Lamps=new Sprite[4];
+            }
+            private struct Lamp
+            {
+                internal Point Wire,Socket;
+                internal int Color;
             }
 
             private static readonly ConditionalWeakTable<SnowBank, IceArt> IceCache =
@@ -69,7 +81,10 @@ namespace Frostpane
                 {"#FFDEF3","#FF5BAE","#B32175","#C9FF48AE"}
             };
             private static readonly Lazy<Sprite[]> Bulbs = new Lazy<Sprite[]>(BuildBulbs);
-            private static readonly Sprite[,] Trees = new Sprite[3,3];
+            private static readonly Sprite[] Trees = new Sprite[3];
+            private static readonly Sprite[] Garlands=new Sprite[3];
+            private static readonly Sprite[,] Baubles=new Sprite[3,3];
+            private static readonly Sprite[,,] TreeLamps=new Sprite[3,3,3];
             private static readonly Lazy<Sprite> SledRight=new Lazy<Sprite>(delegate {return new Sprite(PaintSled);});
             private static readonly Lazy<Sprite> SledLeft=new Lazy<Sprite>(delegate {return new Sprite(PaintSled,true);});
 
@@ -120,10 +135,12 @@ namespace Frostpane
                 foreach (WinterTree tree in scene.Trees) {
                     if(tree.Hidden) continue;
                     if(tree.Angle!=0) dc.PushTransform(new RotateTransform(tree.Angle,tree.X,tree.Y));
-                    TreeSprite(palette,Math.Abs(tree.Style%3)).Draw(dc,tree.X,tree.Y,tree.DisplaySize/96);
+                    DrawTree(dc,tree.X,tree.Y,tree.DisplaySize/96,tree.Palette<0?palette:tree.Palette,
+                        Math.Abs(tree.Style%3),tree.Trim,scene.Time);
                     if(tree.Angle!=0) dc.Pop();
                 }
-                foreach (LightString strand in scene.Lights) if(!strand.Hidden) DrawString(dc,strand,palette);
+                foreach (LightString strand in scene.Lights)
+                    if(!strand.Hidden) DrawString(dc,strand,palette,scene.Time,scene.TwinkleLights);
                 foreach (WinterSled sled in scene.Sleds)
                 {
                     double y=sled.DisplayY;
@@ -166,23 +183,43 @@ namespace Frostpane
                 return result;
             }
 
-            private static void DrawString(DrawingContext dc, LightString strand, int palette)
+            private static void DrawString(DrawingContext dc, LightString strand, int palette,double time,bool twinkle)
             {
                 double dx=strand.X2-strand.X1, dy=strand.Y2-strand.Y1;
                 if (Math.Abs(dx)+Math.Abs(dy)<4) return;
                 double sag=strand.Sag,scale=strand.BulbScale;
                 if(strand.Palette>=0) palette=strand.Palette;
                 StringArt art=StringCache.GetOrCreateValue(strand);
-                if (art.Drawing==null || Math.Abs(dx-art.Width)>.24 || Math.Abs(dy-art.Rise)>.24 ||
+                if (art.Cable==null) art.Phase=(strand.X1*.013+strand.Y1*.022)%(2*Math.PI);
+                if (art.Cable==null || Math.Abs(dx-art.Width)>.24 || Math.Abs(dy-art.Rise)>.24 ||
                     Math.Abs(sag-art.Sag)>.24 || scale!=art.BulbScale || art.Palette!=palette)
                 {
                     art.Width=dx; art.Rise=dy; art.Palette=palette;art.Sag=sag;art.BulbScale=scale;
-                    art.Drawing=new Sprite(delegate(DrawingContext draw) { PaintStrand(draw,dx,dy,sag,scale,palette); });
+                    Lamp[] lamps=SpaceBulbs(dx,dy,sag,scale,palette);
+                    art.Cable=new Sprite(delegate(DrawingContext draw) { PaintWire(draw,dx,dy,sag,lamps); });
+                    for(int i=0;i<art.Lamps.Length;i++) {
+                        int offset=i;
+                        art.Lamps[i]=new Sprite(delegate(DrawingContext draw) {
+                            for(int j=offset;j<lamps.Length;j+=art.Lamps.Length) {
+                                Lamp lamp=lamps[j];
+                                Bulbs.Value[lamp.Color].Draw(draw,lamp.Socket.X,lamp.Socket.Y,1.1*scale);
+                            }
+                        });
+                    }
                 }
-                art.Drawing.Draw(dc,strand.X1,strand.Y1,1);
+                art.Cable.Draw(dc,strand.X1,strand.Y1,1);
+                // Animate four interleaved circuits. Bulbs and wire remain frozen between edits.
+                for(int i=0;i<art.Lamps.Length;i++) {
+                    if(twinkle) {
+                        double wave=.5+.5*Math.Sin(time*(1.52+i*.21)+i*2.40+art.Phase);
+                        dc.PushOpacity(.41+.59*wave*wave);
+                    }
+                    art.Lamps[i].Draw(dc,strand.X1,strand.Y1,1);
+                    if(twinkle) dc.Pop();
+                }
             }
 
-            private static void PaintStrand(DrawingContext dc,double dx,double dy,double sag,double scale,int palette)
+            private static void PaintWire(DrawingContext dc,double dx,double dy,double sag,Lamp[] lamps)
             {
                 StreamGeometry cable=new StreamGeometry();
                 using (StreamGeometryContext line=cable.Open())
@@ -193,6 +230,13 @@ namespace Frostpane
                 cable.Freeze();
                 dc.DrawGeometry(null,CableShadow,cable);
                 dc.DrawGeometry(null,Cable,cable);
+                foreach(Lamp lamp in lamps) dc.DrawLine(PendantWire,lamp.Wire,lamp.Socket);
+                Dot(dc,Clamp,0,0,2.15,1.75); Dot(dc,ClampGlint,-.35,-.45,.68,.49);
+                Dot(dc,Clamp,dx,dy,2.15,1.75); Dot(dc,ClampGlint,dx-.35,dy-.45,.68,.49);
+            }
+
+            private static Lamp[] SpaceBulbs(double dx,double dy,double sag,double scale,int palette)
+            {
                 // Space bulbs by distance along the wire, even on steep, deeply bowed strands.
                 const int sections=24;
                 double[] distances=new double[sections+1];
@@ -203,6 +247,7 @@ namespace Frostpane
                 }
                 double length=distances[sections];
                 int lamps=Math.Max(1,Math.Min(240,(int)Math.Round(length/(21*Math.Sqrt(scale)))));
+                var layout=new Lamp[lamps];
                 int[] sequence=Palettes[palette];
                 int section=1;
                 for (int i=0;i<lamps;i++) {
@@ -211,11 +256,9 @@ namespace Frostpane
                     double t=(section-1+(pos-distances[section-1])/Math.Max(.001,distances[section]-distances[section-1]))/sections;
                     double x=dx*t, y=dy*t+4*sag*t*(1-t);
                     double drop=(i%3==1 ? 5.4 : 3.1)*scale;
-                    dc.DrawLine(PendantWire,new Point(x,y),new Point(x,y+drop));
-                    Bulbs.Value[sequence[i%sequence.Length]].Draw(dc,x,y+drop,1.1*scale);
+                    layout[i]=new Lamp {Wire=new Point(x,y),Socket=new Point(x,y+drop),Color=sequence[i%sequence.Length]};
                 }
-                Dot(dc,Clamp,0,0,2.15,1.75); Dot(dc,ClampGlint,-.35,-.45,.68,.49);
-                Dot(dc,Clamp,dx,dy,2.15,1.75); Dot(dc,ClampGlint,dx-.35,dy-.45,.68,.49);
+                return layout;
             }
 
             private static uint SeedFor(string id)
@@ -294,17 +337,45 @@ namespace Frostpane
                 }
             }
 
-            private static Sprite TreeSprite(int palette,int style)
+            internal static void DrawTree(DrawingContext dc,double x,double y,double size,int palette,int style,TreeTrim trim,double time)
             {
-                var tree=Trees[palette,style];
-                if(tree==null) {
-                    tree=new Sprite(delegate(DrawingContext dc){PaintTree(dc,palette,style);});
-                    Trees[palette,style]=tree;
+                if(Trees[style]==null) Trees[style]=new Sprite(delegate(DrawingContext g){PaintTree(g,style);});
+                Trees[style].Draw(dc,x,y,size);
+                if((trim&TreeTrim.Lights)!=0) {
+                    if(Garlands[style]==null) Garlands[style]=new Sprite(delegate(DrawingContext g){
+                        Path(g,null,Stroke("#947E6B49",.9),"M -8,-63 Q -1,-60 8,-66 M -14.5,-47 Q -3,-42 14,-51 M -21,-29 Q -3,-22 20,-33");
+                    });
+                    Garlands[style].Draw(dc,x,y,size);
+                    bool twinkle=(trim&TreeTrim.Twinkle)!=0;
+                    for(int i=0;i<3;i++) {
+                        int group=i;
+                        if(TreeLamps[palette,style,i]==null) TreeLamps[palette,style,i]=new Sprite(delegate(DrawingContext g){
+                            PaintTreeLamps(g,palette,style,group);
+                        });
+                        if(twinkle) dc.PushOpacity(.65+.34*Math.Sin(time*(1.6+i*.23)+i*2.39+style));
+                        TreeLamps[palette,style,i].Draw(dc,x,y,size);
+                        if(twinkle) dc.Pop();
+                    }
                 }
-                return tree;
+                if((trim&TreeTrim.Baubles)!=0) {
+                    if(Baubles[palette,style]==null) Baubles[palette,style]=new Sprite(delegate(DrawingContext g){
+                        double[] spots={-4,-70,6,-57,-11,-54,2,-40,15,-34,-19,-22,-6,-19,9,-19};
+                        int[] colors=Palettes[palette];
+                        var cap=Ink("#DCBC85");
+                        for(int i=0;i<spots.Length;i+=2) {
+                            int color=colors[(i/2+style)%colors.Length];
+                            double px=spots[i],py=spots[i+1];
+                            g.DrawLine(BulbRib,new Point(px,py-2),new Point(px,py));
+                            g.DrawRoundedRectangle(cap,null,new Rect(px-.8,py-.75,1.6,1.3),.3,.3);
+                            Dot(g,Vertical(Glass[color,0],Glass[color,1],Glass[color,2]),px,py+2.3,2.45,2.5);
+                            Dot(g,Ink("#F5FFF8"),px-.85,py+1.4,.48,.48);
+                        }
+                    });
+                    Baubles[palette,style].Draw(dc,x,y,size);
+                }
             }
 
-            internal static void PaintTree(DrawingContext dc,int palette,int style)
+            internal static void PaintTree(DrawingContext dc,int style)
             {
                 // The foot and star lie at 0 and -96 DIP. The boughs overlap to show a conical crown.
                 Path(dc,Vertical("#A47C59","#76523C","#513F35"),null,"M -3.2,-17 L 3.7,-17 3.2,-1 Q .3,1 -3.4,-.5 Z");
@@ -321,11 +392,16 @@ namespace Frostpane
                 Path(dc,cap,null,"M -23,-39 Q -15,-42 -11,-48 L -12,-45 Q -6,-45 -2,-49 Q -3,-44 -8,-42 Q -13,-37 -19,-37 Z M 5,-41 Q 10,-42 13,-46 Q 17,-41 22,-40 Q 19,-37 15,-38 Q 10,-37 5,-41 Z");
                 Path(dc,branch,null,"M .3,-86 Q -3,-78 -7,-73 L -5,-74 Q -8,-67 -14,-62 L -11,-62 Q -15,-56 -18,-55 Q -12,-52 -7,-56 L -8,-53 Q -3,-52 2,-56 L 2,-54 Q 9,-52 17,-56 Q 11,-61 8,-67 L 10,-67 Q 4,-74 .3,-86 Z");
                 Path(dc,cap,null,"M -15,-58 Q -8,-62 -4,-70 Q -4,-66 -2,-67 Q -4,-61 -8,-59 L -6,-59 Q -12,-54 -15,-58 Z M 0,-80 Q 1,-76 4,-74 L 6,-71 Q 2,-71 1,-73 Q -1,-72 -3,-72 Z");
-                Pen stringPen=Stroke("#E3BC73",.86);
-                Path(dc,null,stringPen,"M -8,-63 Q -1,-60 8,-66 M -14.5,-47 Q -3,-42 14,-51 M -21,-29 Q -3,-22 20,-33");
+                Path(dc,Vertical("#FFF0AC","#F6C467","#C88D46"),Stroke("#9E874A",.55),
+                    "M .1,-95.6 L 2.05,-91.05 6.9,-90.5 3.2,-87.35 4.3,-82.6 .1,-85 -4.1,-82.6 -3.15,-87.35 -6.9,-90.5 -2,-91.05 Z");
+                Path(dc,Ink("#FFF9C9"),null,"M .1,-94.4 L .6,-89.55 -4.6,-90.2 -1.5,-90.55 Z");
+            }
+
+            private static void PaintTreeLamps(DrawingContext dc,int palette,int style,int group)
+            {
                 double[] spots={-6,-63,3,-63.4,-9,-46.2,.8,-45.8,10,-48.4,-17,-28.3,-9,-26.5,1,-26.8,13,-29,-2,-74};
                 int[] seq=Palettes[palette];
-                for(int i=0;i<spots.Length;i+=2) {
+                for(int i=group*2;i<spots.Length;i+=6) {
                     int color=seq[(i/2+style)%seq.Length];
                     double x=spots[i],y=spots[i+1];
                     Dot(dc,Ink(Glass[color,3]),x,y+1.45,3.4,3.4);
@@ -333,9 +409,6 @@ namespace Frostpane
                     Dot(dc,Ink(Glass[color,1]),x-.13,y+1.15,1.35,1.5);
                     Dot(dc,Ink(Glass[color,0]),x-.45,y+.63,.53,.55);
                 }
-                Path(dc,Vertical("#FFF0AC","#F6C467","#C88D46"),Stroke("#9E874A",.55),
-                    "M .1,-95.6 L 2.05,-91.05 6.9,-90.5 3.2,-87.35 4.3,-82.6 .1,-85 -4.1,-82.6 -3.15,-87.35 -6.9,-90.5 -2,-91.05 Z");
-                Path(dc,Ink("#FFF9C9"),null,"M .1,-94.4 L .6,-89.55 -4.6,-90.2 -1.5,-90.55 Z");
             }
 
             private static void PaintSled(DrawingContext dc)
