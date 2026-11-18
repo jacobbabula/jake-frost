@@ -44,6 +44,14 @@ jobs:
       - name: Send a tree from the Windows release
         shell: powershell
         run: .\tests\ExportWindowsGift.ps1 -AppDirectory .\dist\Jake-Frost -OutputPath .\dist\gifts\windows-tree.fpgift
+      - name: Send an addressed tree through a Windows shared folder
+        shell: powershell
+        run: .\tests\WindowsSharedGifts.ps1 -Mode Send -AppDirectory .\dist\Jake-Frost -ProfileDirectory .\dist\windows-shared\profile -ShareDirectory .\dist\windows-shared\share
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-shared-gifts
+          path: dist/windows-shared/
+          if-no-files-found: error
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-gift
@@ -66,6 +74,8 @@ jobs:
           mkdir -p dist
           swiftc -swift-version 5 macOS/Sources/FrostGift.swift macOS/Tests/CodecProbe.swift -o "$RUNNER_TEMP/check-gifts"
           "$RUNNER_TEMP/check-gifts" macOS/Tests/Fixtures/windows-tree.fpgift dist/mac-tree.fpgift
+      - name: Check shared-folder contacts and delivery on Apple Silicon
+        run: bash macOS/test-shared.sh
       - name: Make the drag-to-Applications disk image
         run: |
           mkdir "$RUNNER_TEMP/dmg"
@@ -119,9 +129,20 @@ jobs:
           "$app/Contents/MacOS/JakeFrost" --scene-self-test
           "$app/Contents/MacOS/JakeFrost" --app-smoke-test
           bash macOS/test-open.sh "$app" dist/gifts/mac-tree.fpgift dist/gifts/windows-tree.fpgift
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-shared-gifts
+          path: dist/windows-shared
+      - name: Receive the Windows tree and send an addressed Mac snowman
+        run: bash macOS/test-shared.sh dist/windows-shared/share dist/mac-shared
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mac-shared-gifts
+          path: dist/mac-shared/
+          if-no-files-found: error
 
   verify-windows:
-    needs: [windows, mac]
+    needs: [windows, mac, intel-mac]
     runs-on: windows-2025
     timeout-minutes: 15
     steps:
@@ -139,3 +160,14 @@ jobs:
         run: |
           Expand-Archive .\dist\public\Jake-Frost-Windows.zip .\dist
           .\tests\WindowsSetup.ps1 -SetupPath .\dist\public\Jake-Frost-Setup.exe -AppDirectory .\dist\Jake-Frost -GiftPath .\dist\gifts\mac-tree.fpgift
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-shared-gifts
+          path: dist/windows-shared
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mac-shared-gifts
+          path: dist/mac-shared
+      - name: Receive Intel Mac's shared-folder snowman with the original Windows identity
+        shell: powershell
+        run: .\tests\WindowsSharedGifts.ps1 -Mode Receive -AppDirectory .\dist\Jake-Frost -ProfileDirectory .\dist\windows-shared\profile -ShareDirectory .\dist\mac-shared

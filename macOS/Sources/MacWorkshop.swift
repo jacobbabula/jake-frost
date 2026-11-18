@@ -1,5 +1,31 @@
 import AppKit
 
+extension WorkshopKind {
+    // Catalog order is part of the Windows and Mac gift-file format.
+    private static let giftOrnaments: [WorkshopKind] = [
+        .candle, .bauble, .goldBauble, .star, .wreath, .stocking, .candy, .present,
+        .bells, .gingerbread, .holly, .santaHat, .snowGlobe, .cocoa, .boat
+    ]
+    var giftOrnamentID: Int? { Self.giftOrnaments.firstIndex(of: self).map { $0 + 2 } }
+    init?(giftOrnamentID id: Int) {
+        guard (2...16).contains(id) else { return nil }
+        self = Self.giftOrnaments[id - 2]
+    }
+}
+
+struct TreeAttachment: Codable {
+    let tree: UUID
+    let anchor: CGPoint  // Fractions of the tree height, measured from the trunk's foot.
+    var magnification: CGFloat
+    var angle: CGFloat
+
+    static let ornamentScale: CGFloat = 0.4
+    var isValid: Bool {
+        (-0.35...0.35).contains(anchor.x) && (-1.02 ... -0.08).contains(anchor.y)
+            && (0.4...3.5).contains(magnification) && abs(angle) <= .pi
+    }
+}
+
 struct WorkshopPiece: Codable {
     var id = UUID()
     var kind: WorkshopKind
@@ -10,6 +36,7 @@ struct WorkshopPiece: Codable {
     var sag: CGFloat = 22
     var palette: Int = 0
     var onFloor = false
+    var attachment: TreeAttachment?
 
     func wirePoint(_ t: CGFloat) -> CGPoint {
         let u = (t - 0.5) * span
@@ -28,6 +55,7 @@ struct WorkshopPiece: Codable {
         let action: Action
         let piece: WorkshopPiece
         let origin: CGPoint
+        var isPlacement = false
     }
     private var settings: UserDefaults?, key = ""
     private weak var world: SnowWorld?
@@ -37,7 +65,8 @@ struct WorkshopPiece: Codable {
     private struct Paint {let path:CGPath;let color:CGColor}
     private var wires: [UUID: [Paint]] = [:]
     private var pending: WorkshopKind?, gesture: Gesture?
-    private enum PlayTool {case pile, sled, push}
+    private enum PlayTool {case pile, puff, sled, push}
+    private var scrollTarget: UUID?, scrollRotating=false, scrollCarry:CGFloat=0, lastScroll:TimeInterval=0
     private var playTool:PlayTool?, brushPoint:CGPoint?
     private var puffClock:TimeInterval=0
     private let sleds=MacSledField()
@@ -48,6 +77,7 @@ struct WorkshopPiece: Codable {
         didSet { if editing || oldValue {onEditingChanged?()} }
     }
     private(set) var selected: UUID?
+    private var lastTree: UUID?
     private var index: Int? { pieces.firstIndex { $0.id == selected } }
     var isDragging: Bool { gesture != nil || brushPoint != nil || sleds.isDragging }
     var hasMotion: Bool { brushPoint != nil || sleds.hasMotion }
@@ -64,26 +94,38 @@ struct WorkshopPiece: Codable {
         let name="workshop.v1.\(displayID)"
         guard self.settings !== settings || key != name else { return }
         self.settings=settings; key=name
-        pieces=[];size = .zero;selected=nil;mounts.removeAll();extents.removeAll();wires.removeAll()
-        if let data=settings.data(forKey:name),data.count<=120_000,
+        pieces=[];size = .zero;selected=nil;lastTree=nil;mounts.removeAll();extents.removeAll();wires.removeAll()
+        if MacSceneMemory.remembers(settings),let data=settings.data(forKey:name),data.count<=120_000,
            let saved=try? JSONDecoder().decode(Saved.self,from:data),
            saved.size.width>0,saved.size.height>0 {
             size=saved.size
             var seen=Set<UUID>()
             for p in saved.pieces.prefix(Self.limit) where seen.insert(p.id).inserted {
-                guard (0.4...3.5).contains(p.scale),(26...3200).contains(p.span),(-220...340).contains(p.sag),
+                guard p.scale.isFinite,(p.attachment != nil || (0.4...3.5).contains(p.scale)),
+                      (26...3200).contains(p.span),(-220...340).contains(p.sag),
                       Self.bulbs.indices.contains(p.palette),abs(p.angle)<=2 * .pi,
                       p.center.x.isFinite,p.center.y.isFinite else {continue}
                 pieces.append(p)
+            }
+            let trees = Dictionary(uniqueKeysWithValues: pieces.filter { $0.kind == .tree }.map { ($0.id, $0) })
+            for i in pieces.indices {
+                guard let a = pieces[i].attachment else { continue }
+                if pieces[i].kind.giftOrnamentID != nil, a.isValid, let tree = trees[a.tree] {
+                    fit(i, attachment: a, to: tree)
+                } else {
+                    pieces[i].attachment = nil
+                    pieces[i].scale = max(0.4, min(3.5, pieces[i].scale))
+                }
             }
         }
         invalidate?()
     }
     private func save() {
-        guard let settings=settings,!key.isEmpty,size.width>0,size.height>0 else{return}
+        guard let settings=settings,MacSceneMemory.remembers(settings),!key.isEmpty,size.width>0,size.height>0 else{return}
         if pieces.isEmpty {settings.removeObject(forKey:key);return}
         if let data=try? JSONEncoder().encode(Saved(size:size,pieces:pieces)) {settings.set(data,forKey:key)}
     }
+    func rememberLayoutNow() { save() }
     private func extent(_ p:WorkshopPiece)->CGRect {
         if let b=extents[p.id] {return b}
         let b=WorkshopSymbol.forKind(p.kind).rotatedBounds(scale:p.scale,angle:p.angle)
@@ -92,11 +134,90 @@ struct WorkshopPiece: Codable {
     private func position(_ p:inout WorkshopPiece, at contact:CGPoint) {
         p.center=CGPoint(x:contact.x,y:contact.y-extent(p).maxY)
     }
+    private func rotate(_ offset: CGPoint, by angle: CGFloat) -> CGPoint {
+        CGPoint(x: offset.x*cos(angle) - offset.y*sin(angle), y: offset.x*sin(angle) + offset.y*cos(angle))
+    }
+    private func signed(_ angle: CGFloat) -> CGFloat { atan2(sin(angle), cos(angle)) }
+    private func fit(_ i: Int, attachment: TreeAttachment, to tree: WorkshopPiece) {
+        let bounds = WorkshopSymbol.forKind(.tree).bounds
+        let offset = CGPoint(x: attachment.anchor.x * bounds.height,
+                             y: bounds.maxY + attachment.anchor.y * bounds.height)
+        let arm = rotate(offset, by: tree.angle)
+        pieces[i].center = CGPoint(x: tree.center.x + arm.x * tree.scale, y: tree.center.y + arm.y * tree.scale)
+        let scale = attachment.magnification * TreeAttachment.ornamentScale * tree.scale
+        let angle = signed(tree.angle + attachment.angle)
+        if pieces[i].scale != scale || pieces[i].angle != angle { extents.removeValue(forKey: pieces[i].id) }
+        pieces[i].scale = scale; pieces[i].angle = angle; pieces[i].attachment = attachment
+        pieces[i].onFloor = false
+    }
+    private func moveOrnaments(on tree: WorkshopPiece) {
+        guard tree.kind == .tree else { return }
+        for i in pieces.indices {
+            if let a = pieces[i].attachment, a.tree == tree.id { fit(i, attachment: a, to: tree) }
+        }
+    }
+    private func releaseOrnament(_ i: Int, at point: CGPoint, magnification: CGFloat) -> Bool {
+        guard pieces[i].kind.giftOrnamentID != nil,
+              let ti = pieces.indices.reversed().first(where: { pieces[$0].kind == .tree && body(pieces[$0], hits: point) })
+        else { return false }
+        let tree = pieces[ti], bounds = WorkshopSymbol.forKind(.tree).bounds
+        let offset = CGPoint(x: (point.x-tree.center.x)/tree.scale, y: (point.y-tree.center.y)/tree.scale)
+        let local = rotate(offset, by: -tree.angle)
+        let anchor = CGPoint(x: max(-0.35, min(0.35, local.x/bounds.height)),
+                             y: max(-1.02, min(-0.08, (local.y-bounds.maxY)/bounds.height)))
+        let a = TreeAttachment(tree: tree.id, anchor: anchor, magnification: magnification,
+                               angle: signed(pieces[i].angle-tree.angle))
+        mounts.removeValue(forKey: pieces[i].id)
+        fit(i, attachment: a, to: tree)
+        // A piece created before the tree must draw and take clicks above its new branches.
+        if i < ti { let piece = pieces.remove(at: i); pieces.append(piece) }
+        lastTree = tree.id
+        return true
+    }
+    private func detach(_ i: Int, magnification: CGFloat) {
+        pieces[i].attachment = nil
+        pieces[i].scale = magnification
+        extents.removeValue(forKey: pieces[i].id)
+    }
+    private func settle(_ i: Int, _ g: Gesture, at point: CGPoint) {
+        guard g.action == .move, mounts[pieces[i].id] == nil, pieces[i].attachment == nil else { return }
+        let magnification = g.piece.attachment?.magnification ?? pieces[i].scale
+        if releaseOrnament(i, at: g.isPlacement ? point : pieces[i].center, magnification: magnification) { return }
+        if g.piece.attachment != nil { detach(i, magnification: magnification) }
+        snap(i)
+        moveOrnaments(on: pieces[i])
+    }
+
+    func treeGiftTemplate() -> FrostGift? {
+        let chosen = index.map { pieces[$0] }
+        let wanted = chosen?.kind == .tree ? chosen?.id : (chosen?.attachment?.tree ?? lastTree)
+        guard let tree = pieces.first(where: { $0.kind == .tree && $0.id == wanted }) ?? pieces.last(where: { $0.kind == .tree })
+        else { return nil }
+
+        // Four decimal places keep a full desktop's ornaments inside the 8 KiB dress field.
+        let locale = Locale(identifier: "en_US_POSIX")
+        func number(_ value: CGFloat) -> String { String(format: "%.4f", locale: locale, Double(value)) }
+        var ornaments: [String] = [], scales: [String] = [], angles = [number(tree.angle * 180 / .pi)]
+        for piece in pieces {
+            guard let a = piece.attachment, a.tree == tree.id, let kind = piece.kind.giftOrnamentID else { continue }
+            if a.magnification != 1 { scales.append(contentsOf: [String(ornaments.count), number(a.magnification)]) }
+            angles.append(number(a.angle * 180 / .pi))
+            ornaments.append("\(kind),\(number(a.anchor.x)),\(number(a.anchor.y))")
+        }
+        if !scales.isEmpty { ornaments.append("scale," + scales.joined(separator: ",")) }
+        ornaments.append("angles," + angles.joined(separator: ","))
+        var result = FrostGift()
+        result.kind = .tree
+        result.size = Double(min(160, WorkshopSymbol.forKind(.tree).bounds.height * tree.scale))
+        result.dress = ornaments.joined(separator: ";")
+        return result
+    }
     @discardableResult func sync(world:SnowWorld)->Bool {
         self.world=world
         let next=world.size
         guard next.width>0,next.height>0 else{return false}
         var changed=false
+        var movedTrees: [UUID:WorkshopPiece] = [:]
         if size != next {
             if size.width>0,size.height>0 {
                 for i in pieces.indices {
@@ -105,6 +226,7 @@ struct WorkshopPiece: Codable {
                 }
             }
             size=next;changed=true
+            for p in pieces where p.kind == .tree { movedTrees[p.id] = p }
             for i in pieces.indices where pieces[i].onFloor {
                 mounts[pieces[i].id]=Mount(id:0,fraction:pieces[i].center.x/size.width)
             }
@@ -124,10 +246,19 @@ struct WorkshopPiece: Codable {
                 let y=bank.surface(x)-extent(p).maxY
                 if abs(p.center.x-x)>0.04 || abs(p.center.y-y)>0.04 {
                     pieces[i].center=CGPoint(x:x,y:y);changed=true
+                    if p.kind == .tree { movedTrees[p.id] = pieces[i] }
                 }
             }
         }
-        if changed {invalidate?()};return changed
+        if changed {
+            if !movedTrees.isEmpty {
+                for i in pieces.indices {
+                    if let a = pieces[i].attachment, let tree = movedTrees[a.tree] { fit(i, attachment: a, to: tree) }
+                }
+            }
+            invalidate?()
+        }
+        return changed
     }
     private func snap(_ i:Int) {
         let p=pieces[i]
@@ -147,16 +278,23 @@ struct WorkshopPiece: Codable {
     func arrange() {resetTools();editing=true;invalidate?()}
     func finishEditing() {resetTools();editing=false;invalidate?()}
     @objc func beginPiling() {resetTools();playTool = .pile;editing=true;invalidate?()}
+    @objc func beginPuffing() {resetTools();playTool = .puff;editing=true;invalidate?()}
     @objc func placeSled() {resetTools();playTool = .sled;editing=true;invalidate?()}
     @objc private func pushSleds() {resetTools();playTool = .push;editing=true;invalidate?()}
     func clear() {
-        pending=nil;gesture=nil;editing=false;selected=nil;playTool=nil;brushPoint=nil;sleds.clear()
+        pending=nil;gesture=nil;editing=false;selected=nil;lastTree=nil;playTool=nil;brushPoint=nil;sleds.clear()
         pieces.removeAll();mounts.removeAll();extents.removeAll();wires.removeAll()
         save();invalidate?()
     }
     private func removeSelected() {
         guard let i=index else{return}
-        let id=pieces.remove(at:i).id
+        let removed = pieces.remove(at:i), id = removed.id
+        if removed.kind == .tree {
+            for j in pieces.indices {
+                if let a = pieces[j].attachment, a.tree == id { detach(j, magnification: a.magnification) }
+            }
+            if lastTree == id { lastTree = nil }
+        }
         mounts.removeValue(forKey:id);extents.removeValue(forKey:id);wires.removeValue(forKey:id)
         selected=nil;gesture=nil;save();invalidate?()
     }
@@ -211,6 +349,7 @@ struct WorkshopPiece: Codable {
             case .sled: _=sleds.add(at:point,world:w);playTool = .push
             case .push: return sleds.down(point,time:ProcessInfo.processInfo.systemUptime)
             case .pile: brushPoint=point;puffClock=0;pile(at:point,amount:3.4,world:w)
+            case .puff: brushPoint=point;w.puff(at:point,brush:true)
             }
             invalidate?();return true
         }
@@ -221,9 +360,12 @@ struct WorkshopPiece: Codable {
             var p=WorkshopPiece(kind:kind,center:point)
             if kind != .lights {position(&p,at:point)}
             selected=p.id;pieces.append(p)
-            gesture=Gesture(action:kind == .lights ? .newWire : .move,piece:p,origin:point)
+            if kind == .tree { lastTree = p.id }
+            gesture=Gesture(action:kind == .lights ? .newWire : .move,piece:p,origin:point,isPlacement:true)
         } else if let (i,action)=action(at:point) {
             selected=pieces[i].id
+            if pieces[i].kind == .tree { lastTree = selected }
+            else if let a = pieces[i].attachment { lastTree = a.tree }
             if action == .remove {removeSelected();return true}
             gesture=Gesture(action:action,piece:pieces[i],origin:point)
         } else {return false}
@@ -233,11 +375,14 @@ struct WorkshopPiece: Codable {
         if sleds.isDragging {sleds.drag(point,time:ProcessInfo.processInfo.systemUptime);invalidate?();return}
         if let previous=brushPoint,let w=world {
             let distance=hypot(point.x-previous.x,point.y-previous.y)
-            let count=min(40,Int(distance/5))
+            let puffing = playTool == .puff
+            let count=min(puffing ? 12 : 40,Int(distance/(puffing ? 14 : 5)))
+            if puffing && count==0 {return}
             if count>0 {
                 for j in 1...count {
                     let f=CGFloat(j)/CGFloat(count)
-                    pile(at:CGPoint(x:previous.x+(point.x-previous.x)*f,y:previous.y+(point.y-previous.y)*f),amount:0.8,world:w)
+                    let stamp=CGPoint(x:previous.x+(point.x-previous.x)*f,y:previous.y+(point.y-previous.y)*f)
+                    if puffing {w.puff(at:stamp,brush:true)} else {pile(at:stamp,amount:0.8,world:w)}
                 }
                 invalidate?()
             }
@@ -248,6 +393,7 @@ struct WorkshopPiece: Codable {
         var p=pieces[i]
         switch g.action {
         case .move:
+            p.attachment = nil
             p.center=CGPoint(x:old.center.x+point.x-g.origin.x,y:old.center.y+point.y-g.origin.y)
             if p.kind != .lights {
                 p.center.x=min(size.width,max(0,p.center.x))
@@ -257,11 +403,14 @@ struct WorkshopPiece: Codable {
             mounts.removeValue(forKey:p.id);p.onFloor=false
         case .size:
             let r=distance(old.center,g.origin)
-            p.scale=max(0.4,min(3.5,old.scale*distance(old.center,point)/max(1,r)))
+            let factor = distance(old.center,point)/max(1,r)
+            if let a = old.attachment { p.attachment?.magnification = max(0.4, min(3.5, a.magnification*factor)) }
+            else { p.scale=max(0.4,min(3.5,old.scale*factor)) }
             extents.removeValue(forKey:p.id)
         case .rotate:
             let delta=atan2(point.y-old.center.y,point.x-old.center.x)-atan2(g.origin.y-old.center.y,g.origin.x-old.center.x)
             p.angle=atan2(sin(old.angle+delta),cos(old.angle+delta))
+            if let a = old.attachment { p.attachment?.angle = signed(a.angle + delta) }
             extents.removeValue(forKey:p.id)
         case .newWire, .start, .end:
             if g.action == .newWire && distance(point,g.origin)<6 {return}
@@ -276,22 +425,29 @@ struct WorkshopPiece: Codable {
             p.sag=max(-220,min(340,point.y-old.center.y));wires.removeValue(forKey:p.id)
         case .remove: return
         }
-        pieces[i]=p;invalidate?()
+        pieces[i]=p
+        if let a = p.attachment, let tree = pieces.first(where: { $0.id == a.tree }) { fit(i, attachment: a, to: tree) }
+        moveOrnaments(on: p);invalidate?()
     }
     func up(_ point:CGPoint) {
         if sleds.isDragging,let w=world {sleds.up(point,time:ProcessInfo.processInfo.systemUptime,world:w);invalidate?();return}
         if brushPoint != nil {drag(point);brushPoint=nil;invalidate?();return}
         guard let g=gesture,let i=index else{return}
         // A click on an existing mounted piece selects it without detaching it.
-        if distance(g.origin,point)>0.1 {drag(point)}
-        if g.action == .move && mounts[g.piece.id]==nil {snap(i)}
+        let moved = distance(g.origin,point)>0.1
+        if moved { drag(point) }
+        if g.isPlacement || moved { settle(i, g, at: point) }
         if let w=world {_=sync(world:w)}
         gesture=nil;save();invalidate?()
     }
     func cancelGesture() {
         brushPoint=nil;sleds.cancel()
         guard gesture != nil else{return}
-        if let i=index,let g=gesture,g.action == .move,mounts[g.piece.id]==nil {snap(i)}
+        if let i=index,let g=gesture, g.isPlacement || distance(pieces[i].center, g.piece.center)>0.1 {
+            let p = pieces[i]
+            let point = g.isPlacement ? CGPoint(x: p.center.x, y: p.center.y + extent(p).maxY) : p.center
+            settle(i, g, at: point)
+        }
         gesture=nil;save();invalidate?()
     }
     private func pile(at point:CGPoint,amount:CGFloat,world:SnowWorld) {
@@ -309,7 +465,7 @@ struct WorkshopPiece: Codable {
     }
     func step(_ dt:TimeInterval) {
         guard let w=world else{return}
-        if let p=brushPoint {
+        if let p=brushPoint, playTool == .pile {
             let elapsed=min(0.1,max(0,dt));puffClock-=elapsed
             pile(at:p,amount:CGFloat(elapsed)*36,world:w);invalidate?()
         }
@@ -408,8 +564,10 @@ struct WorkshopPiece: Codable {
             }
             for (title,k) in [("Make larger",1),("Make smaller",-1)] {
                 let sz=item(title,#selector(resizeSelected(_:)));sz.tag=k
-                sz.isEnabled=k>0 ? p.scale<3.5 : p.scale>0.4
+                let adjustable = p.attachment?.magnification ?? p.scale
+                sz.isEnabled=k>0 ? adjustable<3.5 : adjustable>0.4
             }
+            if p.attachment != nil { _=item("Detach from tree",#selector(detachSelected)) }
             _=item("Remove selected decoration",#selector(removeCurrent))
         }
         let done=item("Done arranging",#selector(endArranging));done.isEnabled=editing
@@ -417,6 +575,8 @@ struct WorkshopPiece: Codable {
         let tools=NSMenu(title:"Play on the snow");tools.autoenablesItems=false;playRoot.submenu=tools;menu.addItem(playRoot)
         let pile=NSMenuItem(title:"Pile snow",action:#selector(beginPiling),keyEquivalent:"")
         pile.target=self;pile.state=playTool == .pile ? .on : .off;tools.addItem(pile)
+        let puff=NSMenuItem(title:"Puff snow",action:#selector(beginPuffing),keyEquivalent:"")
+        puff.target=self;puff.state=playTool == .puff ? .on : .off;tools.addItem(puff)
         let sled=NSMenuItem(title:"Place a sled",action:#selector(placeSled),keyEquivalent:"")
         sled.target=self;sled.state=playTool == .sled ? .on : .off;tools.addItem(sled)
         let push=NSMenuItem(title:"Push existing sleds",action:#selector(pushSleds),keyEquivalent:"")
@@ -430,14 +590,55 @@ struct WorkshopPiece: Codable {
     @objc private func startArranging(){arrange()}
     @objc private func endArranging(){finishEditing()}
     @objc private func removeCurrent(){removeSelected()}
+    @objc private func detachSelected() {
+        guard let i=index, let a=pieces[i].attachment else { return }
+        detach(i, magnification: a.magnification);save();invalidate?()
+    }
     @objc private func setPalette(_ sender:NSMenuItem) {
         guard let i=index,pieces[i].kind == .lights,Self.bulbs.indices.contains(sender.tag) else{return}
         pieces[i].palette=sender.tag;wires.removeValue(forKey:pieces[i].id);save();invalidate?()
     }
     @objc private func resizeSelected(_ sender:NSMenuItem) {
         guard let i=index else{return}
-        pieces[i].scale=max(0.4,min(3.5,pieces[i].scale*(sender.tag>0 ? 1.2:1/1.2)))
+        let factor: CGFloat = sender.tag>0 ? 1.2 : 1/1.2
+        resize(i,by:factor)
+        finishAdjustment(i)
+    }
+    private func resize(_ i:Int,by factor:CGFloat) {
+        if var a = pieces[i].attachment, let tree = pieces.first(where: { $0.id == a.tree }) {
+            a.magnification = max(0.4,min(3.5,a.magnification*factor))
+            fit(i, attachment: a, to: tree)
+        } else {
+            pieces[i].scale=max(0.4,min(3.5,pieces[i].scale*factor))
+            moveOrnaments(on: pieces[i])
+        }
+    }
+    private func finishAdjustment(_ i:Int) {
         extents.removeValue(forKey:pieces[i].id);wires.removeValue(forKey:pieces[i].id)
         if let w=world {_=sync(world:w)};save();invalidate?()
+    }
+    @discardableResult func scroll(at point:CGPoint,delta:CGFloat,precise:Bool,rotating:Bool)->Bool {
+        guard editing, pending==nil, playTool==nil, !isDragging,delta.isFinite,delta != 0,
+              let (i,_) = action(at:point) else {return false}
+        let id=pieces[i].id,now=ProcessInfo.processInfo.systemUptime
+        if scrollTarget != id || scrollRotating != rotating || now-lastScroll>0.35 {scrollCarry=0}
+        scrollTarget=id;scrollRotating=rotating;lastScroll=now
+        var steps:CGFloat = delta>0 ? 1 : -1
+        if precise {
+            scrollCarry += delta/22
+            steps=scrollCarry.rounded(.towardZero);scrollCarry-=steps
+            if steps==0 {return true}
+            steps=max(-5,min(5,steps))
+        }
+        selected=id
+        if rotating {
+            let radians=steps * .pi/12
+            if var a=pieces[i].attachment,let tree=pieces.first(where:{$0.id==a.tree}) {
+                a.angle=signed(a.angle+radians);fit(i,attachment:a,to:tree)
+            } else {
+                pieces[i].angle=signed(pieces[i].angle+radians);moveOrnaments(on:pieces[i])
+            }
+        } else {resize(i,by:pow(1.16,steps))}
+        finishAdjustment(i);return true
     }
 }

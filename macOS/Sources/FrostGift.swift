@@ -22,7 +22,7 @@ struct FrostGift {
     var style = 0
     var size = 18.0, mid = 13.0, head = 9.0, facing = 1.0
 
-    private static func sanitized(_ s: String) -> String {
+    static func sanitized(_ s: String) -> String {
         var result = ""
         for c in s.unicodeScalars {
             switch c.value {
@@ -103,10 +103,12 @@ struct FrostGift {
 final class GiftMailbox {
     enum ImportResult { case added, pending, delivered }
     let senderID: String
+    let root: URL
     private let pending: URL, received: URL
     private let files = FileManager.default
 
     init(root: URL) throws {
+        self.root = root
         pending = root.appendingPathComponent("Pending", isDirectory: true)
         received = root.appendingPathComponent("Received", isDirectory: true)
         for folder in [pending, received] {
@@ -126,7 +128,11 @@ final class GiftMailbox {
     private func url(_ id: String, in folder: URL) -> URL { folder.appendingPathComponent(id + ".fpgift") }
 
     func accept(_ source: URL) throws -> (ImportResult, FrostGift) {
-        let gift = try FrostGift.read(source)
+        try accept(FrostGift.read(source))
+    }
+
+    func accept(_ gift: FrostGift) throws -> (ImportResult, FrostGift) {
+        guard FrostGift.validID(gift.id) else { throw GiftProblem.message("Invalid gift identity.") }
         guard gift.recipientID.isEmpty || gift.recipientID == senderID else {
             throw GiftProblem.message("This gift is addressed to someone else. Ask the sender to save a gift file for sharing.")
         }

@@ -179,14 +179,13 @@ import AppKit
             polygon(c,pine,[point(0,t),point(width,b-0.04),point(width*0.68,b-0.055),point(width*0.45,b),point(0,b-0.035),point(-width*0.50,b),point(-width,b-0.04)])
             polygon(c,0xD2E6DD,[point(0,t),point(width*0.44,t+(b-t)*0.52),point(width*0.16,t+(b-t)*0.43),point(-width*0.23,t+(b-t)*0.57),point(-width*0.46,t+(b-t)*0.53)])
         }
-        // These symbols mirror the Windows catalog indices (Candle through Boat).
-        let icons=["🕯️","🔴","🟡","⭐","🎄","🧦","🍬","🎁","🔔","🍪","🌿","🎅","🔮","☕","⛵"]
+        let localTreeHeight = WorkshopSymbol.forKind(.tree).bounds.height
         for ornament in parcel.ornaments {
+            guard let kind = WorkshopKind(giftOrnamentID: ornament.kind) else { continue }
             c.saveGState(); c.translateBy(x:ornament.x,y:ornament.y); c.rotate(by:ornament.angle * .pi/180)
-            let unit = 0.14 * ornament.scale
-            c.scaleBy(x:unit/16,y:unit/16)
-            let sym=icons[ornament.kind-2] as NSString
-            sym.draw(in:CGRect(x:-10,y:-9,width:22,height:22),withAttributes:[.font:NSFont.systemFont(ofSize:15)])
+            let unit = TreeAttachment.ornamentScale * ornament.scale / localTreeHeight
+            c.scaleBy(x:unit,y:unit)
+            WorkshopSymbol.forKind(kind).draw()
             c.restoreGState()
         }
     }

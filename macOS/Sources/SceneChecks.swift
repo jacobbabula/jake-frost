@@ -84,8 +84,89 @@ import AppKit
         _=train.clear()
         check(!train.hasActivity,"clearing removes delivered scenery")
     } else { check(false,"portable dressed tree creation") }
+    let snowmenOK=runBuiltSnowmanChecks()
     let visitorsOK=runMacVisitorChecks()
     let workshopOK=runWorkshopChecks()
     let panelsOK=runAnchoredPanelChecks()
-    return failures==0 && visitorsOK && workshopOK && panelsOK
+    let weatherOK=runMacWeatherChecks()
+    let windowsOK=runMacWindowChecks()
+    let dressingOK=runMacTreeDressingChecks()
+    let memoryOK=runMacSceneMemoryChecks()
+    return failures==0 && snowmenOK && visitorsOK && workshopOK && panelsOK && weatherOK && windowsOK && dressingOK && memoryOK
+}
+
+@MainActor private func runBuiltSnowmanChecks() -> Bool {
+    let size=CGSize(width:510,height:320)
+    let canvas=SnowCanvas(frame:CGRect(origin:.zero,size:size)), center:CGFloat=225
+    let world=canvas.world
+    var edge=SnowEdge(id:19,x:160,y:170,width:170,visible:[160...330])
+    world.setDesktop(size:size,edges:[edge]);world.clear();world.paused=true
+    guard let ground=world.banks.first else {return false}
+    var failures=0
+    func check(_ value:Bool,_ name:String) {
+        print((value ? "PASS: " : "FAIL: ")+name);if !value {failures+=1}
+    }
+    // Use the same down/drag/up entry points used by the desktop view.
+    func roll(until target:(PackedBall)->CGPoint,time:TimeInterval) -> PackedBall? {
+        ground.add(at:50,amount:16,spread:3)
+        let start=CGPoint(x:50,y:ground.surface(50)+1)
+        guard world.down(start,at:time) else {return nil}
+        world.drag(CGPoint(x:61,y:ground.surface(61)),at:time+0.08)
+        guard let ball=world.balls.last else {return nil}
+        let aim=target(ball)
+        world.drag(aim,at:time+0.5);world.up(aim,at:time+0.8)
+        return ball
+    }
+    guard let bottom=roll(until:{ CGPoint(x:center,y:edge.y-$0.radius+6) },time:1) else {return false}
+    check(bottom.support==edge.id,"rolled snowball rests on a window ledge")
+    guard let middle=roll(until:{ _ in CGPoint(x:center,y:bottom.y) },time:3) else {return false}
+    check(middle.below === bottom && bottom.above === middle && !world.hasMotion,"gentle drop makes a stable two-ball stack while paused")
+    let grip=CGPoint(x:middle.x,y:middle.y)
+    check(world.down(grip,at:4) && middle.below == nil && bottom.above == nil,"picking up a stacked ball detaches it")
+    world.up(grip,at:4.4)
+    edge.x+=25;edge.y+=9;edge.visible=[185...355]
+    world.setDesktop(size:size,edges:[edge]);world.step(1.0/30)
+    check(abs(middle.x-center-25)<0.1 && middle.x==bottom.x,"both stacked balls follow a moved window")
+    guard roll(until:{ _ in CGPoint(x:bottom.x,y:middle.y-middle.radius-63) },time:5) != nil else {return false}
+    for _ in 0..<70 {world.step(1.0/30)}
+    guard let figure=world.snowmen.first else {check(false,"third falling ball completes a snowman");return false}
+    check(world.balls.isEmpty && world.snowmen.count==1 && figure.base>=figure.middle && figure.middle>=figure.head,
+          "a third falling ball makes one proportioned snowman")
+    check(world.hit(CGPoint(x:figure.x,y:figure.foot-figure.base)) && !world.hit(CGPoint(x:figure.x+figure.base+3,y:figure.foot-figure.base)),
+          "only the visible snowman catches desktop clicks")
+    let artwork=NSImage(size:size,flipped:true) { _ in canvas.draw(canvas.bounds);return true }
+    var hatPixels=0
+    if let tiff=artwork.tiffRepresentation,let image=NSBitmapImageRep(data:tiff) {
+        for y in 0..<image.pixelsHigh {
+            if let p=image.colorAt(x:Int(figure.x),y:y)?.usingColorSpace(.deviceRGB),p.alphaComponent>0.9,p.redComponent<0.35 {
+                hatPixels+=1
+            }
+        }
+    }
+    check(hatPixels>=4,"the complete snowman is drawn with its hat on the desktop")
+    if let template=world.latestSnowmanGift,
+       let gift=try? FrostGift.make(.snowman,sender:"Builder",note:"For you",senderID:FrostGift.newID(),template:template),
+       let data=try? gift.encoded(),let decoded=try? FrostGift.decode(data) {
+        check(decoded.id != template.id && decoded.style==figure.style && decoded.facing==Double(figure.facing) &&
+              abs(decoded.size-Double(figure.base))<0.0001 && abs(decoded.mid-Double(figure.middle))<0.0001 &&
+              abs(decoded.head-Double(figure.head))<0.0001,"gift preserves the local snowman’s proportions, facing and scarf")
+    } else {check(false,"local snowman gift roundtrip")}
+    // Flick a new ball across the snowman's torso above the ledge. It must burst there.
+    let torsoY=figure.foot-figure.base-0.78*(figure.base+figure.middle)
+    guard let shot=roll(until:{_ in CGPoint(x:figure.x-100,y:torsoY+6)},time:7) else {return false}
+    let from=CGPoint(x:shot.x,y:shot.y)
+    _=world.down(from,at:8);world.up(CGPoint(x:from.x+40,y:from.y),at:8.05)
+    check(shot.thrown,"flicking still throws a snowball with a completed snowman nearby")
+    for _ in 0..<15 {world.step(1.0/60);if world.balls.isEmpty {break}}
+    check(world.balls.isEmpty && world.snowmen.count==1 && world.particles.contains { $0.powder && abs($0.x-figure.x)<35 && $0.y<edge.y-8 },
+          "a fast throw poofs on the snowman before hitting the ledge")
+    let foot=figure.foot
+    _=world.down(CGPoint(x:figure.x,y:foot-figure.base),at:9)
+    world.up(CGPoint(x:400,y:230),at:9.5)
+    for _ in 0..<90 {world.step(1.0/30)}
+    check(abs(figure.x-400)<0.1 && figure.support==0 && abs(figure.foot-ground.surface(400))<0.1,
+          "a finished snowman can be moved and settles on the new drift")
+    world.clear()
+    check(world.snowmen.isEmpty && world.latestSnowmanGift==nil && !world.hasMotion,"clear removes local snowmen and their gift template")
+    return failures==0
 }

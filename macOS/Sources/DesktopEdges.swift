@@ -21,6 +21,10 @@ struct SnowEdge: Equatable {
 }
 
 enum DesktopEdges {
+    static func isFullscreen(_ windows:[WindowFrame],on screen:CGRect) -> Bool {
+        let interior=screen.insetBy(dx:1,dy:1)
+        return windows.contains { $0.rect.contains(interior) }
+    }
     static func windows() -> [WindowFrame] {
         let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
         guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else { return [] }

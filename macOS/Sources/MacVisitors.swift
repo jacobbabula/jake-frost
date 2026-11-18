@@ -32,6 +32,18 @@ enum MacVisitorKind: String, CaseIterable {
     private let summon: (MacVisitorKind) -> Void
     private let onChange: () -> Void
     private var visitorItem: NSMenuItem?
+    private var nextPlow = Date().addingTimeInterval(15*60)
+    private var nextSanta = Date().addingTimeInterval(2*60*60)
+    func scheduledVisits(now:Date = Date(),allow:Bool) {
+        guard allow,settings.bool(forKey:"automaticVisits") else {return}
+        if now >= nextPlow {nextPlow=now.addingTimeInterval(20*60);summon(.snowplow)}
+        if now >= nextSanta {nextSanta=now.addingTimeInterval(3*60*60);summon(.santa)}
+    }
+    @objc private func toggleVisits(_ sender:NSMenuItem) {
+        let enabled = !settings.bool(forKey:"automaticVisits")
+        settings.set(enabled,forKey:"automaticVisits");sender.state=enabled ? .on:.off
+        nextPlow=Date().addingTimeInterval(15*60);nextSanta=Date().addingTimeInterval(2*60*60)
+    }
 
     init(settings: UserDefaults, summon: @escaping (MacVisitorKind) -> Void, onChange: @escaping () -> Void) {
         self.settings = settings; self.summon = summon; self.onChange = onChange
@@ -68,6 +80,9 @@ enum MacVisitorKind: String, CaseIterable {
             item.target = self; item.representedObject = kind; visitors.addItem(item)
         }
         visitors.addItem(.separator())
+        let automatic=NSMenuItem(title:"Occasional snowplow and Santa visits",action:#selector(toggleVisits(_:)),keyEquivalent:"")
+        automatic.target=self;automatic.state=settings.bool(forKey:"automaticVisits") ? .on:.off
+        visitors.addItem(automatic)
         for setting in ["size","speed"] {
             let section = submenu(setting == "size" ? "Visitor sizes" : "Visitor speeds", in:visitors)
             for kind in MacVisitorKind.allCases {

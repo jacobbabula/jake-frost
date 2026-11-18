@@ -15,6 +15,8 @@ final class SnowCanvas: NSView {
     private static let snowColor = NSColor(calibratedRed:0.88,green:0.94,blue:0.99,alpha:0.98)
     private static let ballGradient = NSGradient(starting:.white,ending:NSColor(calibratedRed:0.65,green:0.79,blue:0.91,alpha:1))
     var allowTouch = true
+    var puffFallingSnow = true
+    private var leftWasDown = false
     private(set) var draggingSnow = false
     override var isFlipped: Bool { true }
     override var isOpaque: Bool { false }
@@ -41,8 +43,12 @@ final class SnowCanvas: NSView {
             let inside=win.frame.contains(cursor)
             let local=convert(win.convertPoint(fromScreen:cursor),from:nil)
             pointer = inside ? local : nil
-            // This reads the pointer position without monitoring or intercepting other apps' events.
-            let accept = draggingSnow || workshop.isDragging || (inside && NSEvent.pressedMouseButtons == 0 &&
+            // Read the normal pointer state. Falling flakes never make the window catch input.
+            let buttons=NSEvent.pressedMouseButtons
+            sampleFlakeClick(at:pointer,down:buttons & 1 != 0,passThrough:win.ignoresMouseEvents) {
+                NSApp.windows.contains { $0 !== win && $0.canBecomeKey && $0.isVisible && $0.frame.contains(cursor) }
+            }
+            let accept = draggingSnow || workshop.isDragging || (inside && buttons == 0 &&
                 (workshop.captures(local) || (allowTouch && world.hit(local))))
             if win.ignoresMouseEvents == accept { win.ignoresMouseEvents = !accept }
         }
@@ -50,6 +56,7 @@ final class SnowCanvas: NSView {
         if redraw { needsDisplay=true }
     }
     override func mouseDown(with event:NSEvent) {
+        leftWasDown=true
         let point=convert(event.locationInWindow,from:nil)
         if workshop.down(point) { return }
         draggingSnow = allowTouch && world.down(point,at:event.timestamp)
@@ -63,6 +70,19 @@ final class SnowCanvas: NSView {
         if workshop.isDragging { workshop.up(convert(event.locationInWindow,from:nil));return }
         if draggingSnow {world.up(convert(event.locationInWindow,from:nil),at:event.timestamp)}
         draggingSnow=false;needsDisplay=true
+    }
+    func sampleFlakeClick(at point:CGPoint?,down:Bool,passThrough:Bool,overControls:()->Bool) {
+        defer {leftWasDown=down}
+        guard down,!leftWasDown,puffFallingSnow,passThrough,world.snowEnabled,!world.paused,!workshop.editing,!draggingSnow,
+              let p=point,!(allowTouch && world.hit(p)),!overControls() else {return}
+        if world.puff(at:p,brush:false) {needsDisplay=true}
+    }
+    override func scrollWheel(with event:NSEvent) {
+        let rotate=event.modifierFlags.contains(.shift)
+        let delta=rotate && event.scrollingDeltaY==0 ? event.scrollingDeltaX : event.scrollingDeltaY
+        if event.momentumPhase.isEmpty,workshop.scroll(at:convert(event.locationInWindow,from:nil),
+                                                       delta:delta,precise:event.hasPreciseScrollingDeltas,rotating:rotate) {return}
+        super.scrollWheel(with:event)
     }
     func releasePointer() {
         world.cancel();draggingSnow=false;window?.ignoresMouseEvents=true

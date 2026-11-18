@@ -90,6 +90,12 @@ final class BuiltSnowman {
     var support: UInt32?, supportFraction: CGFloat
     var vy: CGFloat = 0
 
+    init(saved: SavedSnowman, desktop: CGSize) {
+        x = saved.x*desktop.width; foot = saved.foot*desktop.height
+        base = saved.base; middle = saved.middle; head = saved.head
+        style = saved.style; facing = saved.facing; supportFraction = saved.fraction
+    }
+
     init(bottom: PackedBall, middleBall: PackedBall, headBall: PackedBall) {
         x = bottom.x; foot = bottom.y + bottom.radius
         support = bottom.support; supportFraction = bottom.supportFraction
@@ -123,6 +129,7 @@ final class SnowWorld {
     private(set) var particles = [SnowParticle]()
     private(set) var balls = [PackedBall]()
     private(set) var snowmen = [BuiltSnowman]()
+    private var snowmanStore: SnowmanStore?
     private weak var heldSnowman: BuiltSnowman?
     private var spawnBudget: CGFloat = 0
     private var random = SnowRandom(state:UInt64.random(in:1...UInt64.max))
@@ -149,6 +156,14 @@ final class SnowWorld {
     private var initialBank: Drift?, held: PackedBall?, ballOffset = CGPoint.zero
     private var samples = [(CGPoint,TimeInterval)]()
 
+    func configureSnowmanStorage(settings: UserDefaults, displayID: UInt32) {
+        if let store=snowmanStore, store.settings === settings, store.key == "snowmen.v1.\(displayID)" { return }
+        let store = SnowmanStore(settings:settings,displayID:displayID)
+        snowmanStore = store
+        if size.width > 1 { snowmen = store.restore(in:size,banks:banks) }
+    }
+    func rememberSnowmenNow() { snowmanStore?.save(snowmen,size:size) }
+
     func setDesktop(size newSize: CGSize, edges: [SnowEdge]) {
         guard newSize.width > 1 && newSize.height > 1 else { return }
         let first = size == .zero
@@ -165,6 +180,7 @@ final class SnowWorld {
             }
         }
         byID=next; banks=([floor]+edges).compactMap { next[$0.id] }
+        if let store = snowmanStore, !store.loaded { snowmen = store.restore(in:size,banks:banks) }
         rebuildRows()
         if first && snowEnabled && amount>0 {
             for _ in 0..<min(280,Int(size.width*0.08)) { spawn(randomHeight:true) }
@@ -194,6 +210,32 @@ final class SnowWorld {
                 vy:random.between(-112,-23)*strength,radius:random.between(1,2.7),
                 phase:0,powder:true,life:random.between(0.45,0.85)))
         }
+    }
+
+    // Falling flakes are visual-only. A normal click can disturb them without making
+    // the overlay handle that event; a selected brush also disturbs nearby banks.
+    @discardableResult func puff(at point:CGPoint,brush:Bool)->Bool {
+        let reach:CGFloat=brush ? 26 : 7
+        var hits=0
+        for i in particles.indices where !particles[i].powder {
+            let flake=particles[i],dx=flake.x-point.x,dy=flake.y-point.y,r=reach+flake.radius
+            if dx*dx+dy*dy>r*r {continue}
+            particles[i].powder=true;particles[i].life = .random(in:0.45...0.85)
+            particles[i].vx=dx*4 + .random(in:-52...52);particles[i].vy = .random(in:-155 ... -65)
+            hits+=1
+        }
+        powderCount+=hits
+        var origin=point, removed:CGFloat=0
+        if brush,let bank=banks.filter({$0.edge.contains(point.x) && $0.height(point.x)>0.45 &&
+            point.y >= $0.surface(point.x)-26 && point.y <= $0.edge.y+6})
+            .min(by:{abs($0.surface(point.x)-point.y)<abs($1.surface(point.x)-point.y)}) {
+            origin.y=bank.surface(point.x)
+            removed = -bank.add(at:point.x,amount:-6,spread:3)
+        }
+        guard brush || hits>0 else {return false}
+        let hit = hits>0 || removed>0
+        burst(origin,count:hit ? min(31,11+Int(removed)) : 7,strength:hit ? 1 : 0.53)
+        return true
     }
 
     private func row(_ y: CGFloat) -> Int {
@@ -243,6 +285,7 @@ final class SnowWorld {
             }
             positionUpperBall(on:b)
         }
+        var landed = false
         for figure in snowmen where figure !== heldSnowman {
             if let id=figure.support,let bank=byID[id] {
                 let x=bank.edge.x+figure.supportFraction*bank.edge.width
@@ -252,9 +295,10 @@ final class SnowWorld {
             let old=figure.foot
             figure.vy += 340*dt;figure.foot += figure.vy*dt
             if let bank = intercept(x:figure.x,previous:old,next:figure.foot) ?? (figure.foot >= size.height ? byID[0] : nil) {
-                settle(figure,on:bank)
+                settle(figure,on:bank); landed = true
             }
         }
+        if landed { rememberSnowmenNow() }
     }
     private func stepParticles(_ dt:CGFloat) {
         let wind=self.wind, paused=self.paused, bottom=size.height+6, right=size.width+15
@@ -316,6 +360,7 @@ final class SnowWorld {
         if let bottom=middle.below {
             snowmen.append(BuiltSnowman(bottom:bottom,middleBall:middle,headBall:b))
             balls.removeAll { $0 === bottom || $0 === middle || $0 === b }
+            rememberSnowmenNow()
         } else {
             middle.above=b;b.below=middle;b.vx=0;b.vy=0;b.support=nil
             positionUpperBall(on:middle)
@@ -414,9 +459,13 @@ final class SnowWorld {
         }
         cancel()
     }
-    func cancel(){ start=nil;held=nil;heldSnowman=nil;initialBank=nil;samples.removeAll() }
+    func cancel(){
+        if heldSnowman != nil { rememberSnowmenNow() }
+        start=nil;held=nil;heldSnowman=nil;initialBank=nil;samples.removeAll()
+    }
     func clear() {
         cancel();particles.removeAll();balls.removeAll();snowmen.removeAll();spawnBudget=0;powderCount=0
+        snowmanStore?.clear()
         for d in banks {d.clear()}
     }
 }

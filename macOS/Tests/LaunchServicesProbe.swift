@@ -62,6 +62,18 @@ import CoreServices
         }
         try require(path(handler) == path(appURL), "Default .fpgift handler was \(handler?.path ?? "missing"), expected \(appURL.path)")
 
+        let scratch = mailbox.deletingLastPathComponent()
+        let shared = scratch.appendingPathComponent("Friends share", isDirectory:true)
+        try FileManager.default.createDirectory(at:shared, withIntermediateDirectories:true)
+        let receivingBox = try GiftMailbox(root:mailbox)
+        let recipient = try SharedGiftPost(mailbox:receivingBox)
+        try await recipient.connect(shared, as:"Installed Mac")
+        let sendingBox = try GiftMailbox(root:scratch.appendingPathComponent("Sender"))
+        let sender = try SharedGiftPost(mailbox:sendingBox)
+        try await sender.connect(shared, as:"Other desktop")
+        guard let friend = try await sender.friends().first(where:{ $0.id == receivingBox.senderID }) else {
+            throw GiftProblem.message("Could not discover installed Mac in the test share")
+        }
         let config = NSWorkspace.OpenConfiguration()
         config.environment = ["JAKE_FROST_TEST_MAILBOX":mailbox.path]
         let cold = try await workspace.open(coldURL, configuration:config)
@@ -74,6 +86,12 @@ import CoreServices
                         "Warm open used a different process or bundle")
             try await receipt(for:warmGift, in:mailbox, app:warm)
             print("PASS: a second document opened in the same running app and its gift reached the desktop")
+            var sharedGift = try FrostGift.make(.snowman,sender:"Other desktop",note:"A shared delivery",senderID:sendingBox.senderID,template:nil)
+            try await sender.send(sharedGift,to:friend)
+            sharedGift.recipientID = receivingBox.senderID
+            try await receipt(for:sharedGift,in:mailbox,app:warm)
+            try require(try await recipient.incoming().isEmpty, "Installed Mac left a delivered envelope behind on the share")
+            print("PASS: the installed Mac app picked up a new shared-folder gift and its train delivered it without opening a file")
         } catch {
             _ = await stop(cold)
             throw error
