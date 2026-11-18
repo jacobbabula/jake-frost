@@ -35,13 +35,18 @@ internal static class WindowsPloughChecks
         ground.Revision++;
         scene.SendSnowplough();
         Check(scene.Plough != null && scene.Plough.Facing == direction, "requested plough direction " + direction);
-        double maxPitch=0, maxUnderTruck=0;
+        double maxPitch=0, maxUnderTruck=0, maxToeExcess=0;
         bool crossedRidge=false;
         for (int frame=0; scene.Plough!=null && frame<1300; frame++) {
             scene.Step(frame%4==0 ? 0.08 : 1.0/60,0,0);
             var p=scene.Plough;
             if (p==null || p.X<100 || p.X>Width-100) continue;
             maxPitch=Math.Max(maxPitch,Math.Abs(p.Incline));
+            double angle=p.Incline*Math.PI/180,tipX=p.X+direction*37*p.Scale*Math.Cos(angle);
+            double tipDepth=ground.Y-(p.Y+direction*37*p.Scale*Math.Sin(angle));
+            int ahead=direction>0 ? (int)Math.Floor(tipX/spacing)+1 : (int)Math.Ceiling(tipX/spacing)-1;
+            if (ahead>=0 && ahead<ground.Heights.Length)
+                maxToeExcess=Math.Max(maxToeExcess,ground.Heights[ahead]-tipDepth-0.45*Math.Abs(ahead*spacing-tipX));
             if (p.X>=320 && p.X<=470) {
                 crossedRidge=true;
                 for (double dx=-17;dx<=12;dx+=3)
@@ -50,6 +55,7 @@ internal static class WindowsPloughChecks
         }
         Check(scene.Plough==null && crossedRidge && maxPitch<=8.1 && maxUnderTruck<5,
             String.Format("plough clears a tall squared ridge at {0}% size in direction {1} (maximum pitch {2:F2} degrees, snow under chassis {3:F2} px)",size,direction,maxPitch,maxUnderTruck));
+        Check(maxToeExcess<1.2,"the first snow ahead of the steel lip forms a sloping mound rather than a cliff");
         Check(ground.HeightAt(180)<4 && ground.HeightAt(405)<4 && ground.HeightAt(625)<4,
               "an entire pass clears both a flat snow blanket and the piled ridge");
     }

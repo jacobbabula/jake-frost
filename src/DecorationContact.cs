@@ -127,12 +127,13 @@ namespace Frostpane
 
         internal double BottomOffset(double scale) { return bottomY*scale; }
 
-        internal bool Slice(double top,double baseY,out double left,out double right)
+        internal bool Slice(double top,double baseY,out double left,out double right,out double high,out double low)
         {
-            left=double.PositiveInfinity;right=double.NegativeInfinity;
+            left=high=double.PositiveInfinity;right=low=double.NegativeInfinity;
             for(int i=0;i<bottom.Length;i++) {
                 if(bottom[i].Y<top || tops[i]>baseY)continue;
                 left=Math.Min(left,bottom[i].X);right=Math.Max(right,bottom[i].X);
+                high=Math.Min(high,Math.Max(top,tops[i]));low=Math.Max(low,Math.Min(baseY,bottom[i].Y));
             }
             return right>=left;
         }

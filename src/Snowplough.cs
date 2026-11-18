@@ -103,7 +103,7 @@ namespace Frostpane
         private struct PloughContact
         {
             internal object Item;
-            internal double Near,Far,Advance;
+            internal double Near,Far,High,Low,Advance;
             internal bool InQueue;
         }
         private readonly List<PloughContact> bladeContacts=new List<PloughContact>();
@@ -112,23 +112,31 @@ namespace Frostpane
             return order!=0?order:a.Far.CompareTo(b.Far);
         };
 
-        private void AddContact(object item,double left,double right,int facing)
+        private void AddContact(object item,double left,double right,double high,double low,int facing)
         {
-            bladeContacts.Add(new PloughContact {Item=item,Near=facing>0?left:-right,Far=facing>0?right:-left});
+            bladeContacts.Add(new PloughContact {Item=item,Near=facing>0?left:-right,Far=facing>0?right:-left,High=high,Low=low});
         }
         private void ContactCircle(object item,double x,double y,double radius,double top,double bottom,int facing)
         {
             double dy=Limit(y,top,bottom)-y;
             if(Math.Abs(dy)>radius)return;
             double half=Math.Sqrt(Math.Max(0,radius*radius-dy*dy));
-            AddContact(item,x-half,x+half,facing);
+            AddContact(item,x-half,x+half,Math.Max(top,y-radius),Math.Min(bottom,y+radius),facing);
         }
         private void ContactArt(object item,DecorationKind kind,double x,double y,double angle,double scale,double top,double bottom,int facing)
         {
             if(y+110*scale<top || y-110*scale>bottom)return;
-            double left,right;
-            if(DecorationFootprint.For(item,kind,angle).Slice((top-y)/scale,(bottom-y)/scale,out left,out right))
-                AddContact(item,x+left*scale,x+right*scale,facing);
+            double left,right,high,low;
+            if(DecorationFootprint.For(item,kind,angle).Slice((top-y)/scale,(bottom-y)/scale,out left,out right,out high,out low))
+                AddContact(item,x+left*scale,x+right*scale,y+high*scale,y+low*scale,facing);
+        }
+        private static double BladeReach(Point a,Point b,double y0,double y1,int facing)
+        {
+            double dy=b.Y-a.Y;
+            if(Math.Max(a.Y,b.Y)<y0 || Math.Min(a.Y,b.Y)>y1)return double.NegativeInfinity;
+            if(Math.Abs(dy)<.0001)return Math.Max(a.X*facing,b.X*facing);
+            double t0=Limit((y0-a.Y)/dy,0,1),t1=Limit((y1-a.Y)/dy,0,1);
+            return Math.Max(facing*(a.X+t0*(b.X-a.X)),facing*(a.X+t1*(b.X-a.X)));
         }
         private bool OnWindow(double x,double foot)
         {
@@ -145,7 +153,7 @@ namespace Frostpane
             double high=Math.Min(oldTop.Y,top.Y)-p.Scale,low=Math.Max(oldLip.Y,lip.Y)+p.Scale;
             double loadTop=Math.Min(high,snowTop);
             double back=Math.Min(Math.Min(oldTop.X*f,top.X*f),Math.Min(oldLip.X*f,lip.X*f))-4*p.Scale;
-            double front=Math.Max(top.X*f,lip.X*f)+2*p.Scale;
+            Point bend=TruckPoint(p,32.75,-11.25),nose=TruckPoint(p,39,-3);
             bladeContacts.Clear();
             foreach(SnowBall b in Balls) {
                 if(b.Held || b.InFlight || b.Below!=null || OnWindow(b.X,b.Y+b.Radius))continue;
@@ -168,29 +176,36 @@ namespace Frostpane
             foreach(WinterSled s in Sleds) {
                 if(s==draggedSled || (s.Support!=null && !s.Support.IsFloor))continue;
                 double left,right;
-                if(s.BladeSlice(s.Support==floor?loadTop:high,low,out left,out right))AddContact(s,left,right,f);
+                double upper=s.Support==floor?loadTop:high;
+                if(s.BladeSlice(upper,low,out left,out right))AddContact(s,left,right,upper,Math.Min(low,s.DisplayY+2),f);
             }
             if(DailyPresent!=null && DailyPresent.Y>=(Math.Abs(VisitorGround(DailyPresent.X)-DailyPresent.Y)<6?loadTop:high) && DailyPresent.Y-25<=low)
-                AddContact(DailyPresent,DailyPresent.X-12,DailyPresent.X+12,f);
+                AddContact(DailyPresent,DailyPresent.X-12,DailyPresent.X+12,DailyPresent.Y-25,DailyPresent.Y,f);
             foreach(LightString l in Lights) {
                 if(l.Hidden || l==draggedLights || (l.Left.Support!=null && !l.Left.Support.IsFloor) ||
                     (l.Right.Support!=null && !l.Right.Support.IsFloor))continue;
-                double left=double.PositiveInfinity,right=double.NegativeInfinity;
+                double left=double.PositiveInfinity,right=double.NegativeInfinity,minY=double.PositiveInfinity,maxY=double.NegativeInfinity;
                 int samples=Math.Max(8,Math.Min(200,(int)Math.Ceiling((l.Length+2*l.Sag)/6)));
                 for(int i=0;i<=samples;i++) {
                     double t=(double)i/samples,y=l.CurveY(t);
                     if(y+8*l.BulbScale<high || y-1>low)continue;
                     double x=l.X1+(l.X2-l.X1)*t;
                     left=Math.Min(left,x-2*l.BulbScale);right=Math.Max(right,x+2*l.BulbScale);
+                    minY=Math.Min(minY,y-1);maxY=Math.Max(maxY,y+8*l.BulbScale);
                 }
-                if(left<=right)AddContact(l,left,right,f);
+                if(left<=right)AddContact(l,left,right,minY,maxY,f);
             }
             bladeContacts.Sort(bladeOrder);
-            double leader=front;
+            double leader=double.NegativeInfinity;
             for(int i=0;i<bladeContacts.Count;i++) {
                 PloughContact c=bladeContacts[i];
-                if(c.Far<back || c.Near>leader)continue;
-                c.InQueue=true;c.Advance=Math.Max(0,leader-c.Near);
+                if(c.Far<back)continue;
+                double lo=c.High-p.Scale*.5,hi=c.Low+p.Scale*.5;
+                double edge=Math.Max(BladeReach(top,bend,lo,hi,f),Math.Max(BladeReach(bend,nose,lo,hi,f),BladeReach(nose,lip,lo,hi,f)));
+                if(c.Low<high && c.Low>=loadTop)edge=lip.X*f;
+                double contact=Math.Max(leader,edge);
+                if(c.Near>contact)continue;
+                c.InQueue=true;c.Advance=Math.Max(0,contact-c.Near);
                 leader=c.Far+c.Advance+.6;bladeContacts[i]=c;
             }
             // Once the front object reaches the display edge, park its followers in
@@ -199,7 +214,7 @@ namespace Frostpane
             for(int i=bladeContacts.Count-1;i>=0;i--) {
                 PloughContact c=bladeContacts[i];if(!c.InQueue)continue;
                 double shift=Math.Max(0,Math.Min(c.Advance,boundary-c.Far));
-                boundary=Math.Min(boundary,c.Far+shift-(c.Far-c.Near));
+                boundary=Math.Min(boundary,c.Near+shift);
                 if(shift>0)MoveWithBlade(c.Item,shift*f,speed*f);
             }
             foreach(SnowBall b in Balls)if(b.Below!=null) {
@@ -250,13 +265,21 @@ namespace Frostpane
 
         private bool SpreadPloughedSnow(WinterPlough p,Point lip,double cell)
         {
-            if(p.Carry<.001)return false;
             // Start shallow at the lip and taper back to the unworked blanket.
             // A full bank carries its excess forward until there is room or the plow exits.
             int first=p.Facing>0 ? (int)Math.Floor((lip.X-floor.X)/cell)+1 : (int)Math.Ceiling((lip.X-floor.X)/cell)-1;
+            bool changed=false;
+            for(int j=first;j>=0 && j<floor.Heights.Length;j+=p.Facing) {
+                double distance=(j*cell+floor.X-lip.X)*p.Facing;
+                double cap=Math.Max(0,floor.Y-lip.Y+.43*distance);
+                if(floor.Heights[j]<=cap)break;
+                // The face of an existing solid bank sloughs into the blade. Limit
+                // only the connected rise, leaving separate hills ahead untouched.
+                p.Carry+=floor.Heights[j]-cap;floor.Heights[j]=cap;changed=true;
+            }
+            if(p.Carry<.001)return changed;
             double reach=Math.Max(cell*9,76*p.Scale), load=p.Carry;
             int count=(int)Math.Ceiling(reach/cell);
-            bool changed=false;
             for(int n=0;n<count;n++) {
                 int index=first+n*p.Facing;
                 if(index<0 || index>=floor.Heights.Length)continue;

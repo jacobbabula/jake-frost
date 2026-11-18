@@ -11,7 +11,7 @@ $app.ShutdownMode='OnExplicitShutdown'
 $wake=New-Object Threading.AutoResetEvent($false)
 $gift=New-Object Threading.AutoResetEvent($false)
 try {
-    $type.GetMethod('Start',$flags).Invoke($app,@($wake,$gift,$false))
+    $type.GetMethod('Start',$flags).Invoke($app,@($wake.PSObject.BaseObject,$gift.PSObject.BaseObject,$false))
     $panel=$app.MainWindow
     $panel.Left=48;$panel.Top=24
     $panel.UpdateLayout()
