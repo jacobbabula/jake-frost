@@ -19,7 +19,7 @@ using Forms = System.Windows.Forms;
 [assembly: AssemblyTitle("Jake Frost")]
 [assembly: AssemblyDescription("Interactive desktop snowfall")]
 [assembly: AssemblyProduct("Jake Frost")]
-[assembly: AssemblyVersion("3.1.0.0")]
+[assembly: AssemblyVersion("3.2.0.0")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8")]
 
 namespace Frostpane
@@ -106,6 +106,7 @@ namespace Frostpane
     internal sealed partial class FrostApp : Application
     {
         private const string InstanceName=@"Local\JakeFrost.Desktop.v3", WakeName=@"Local\JakeFrost.Open.v3";
+        private const string GiftWakeName=@"Local\JakeFrost.OpenGift.v3";
         [DllImport("user32.dll")] private static extern bool RegisterHotKey(IntPtr hwnd,int id,uint modifiers,uint key);
         [DllImport("user32.dll")] private static extern bool UnregisterHotKey(IntPtr hwnd,int id);
         [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
@@ -123,30 +124,45 @@ namespace Frostpane
         private Forms.ContextMenuStrip menu;
         private System.Drawing.Icon appIcon;
         private Forms.ToolStripMenuItem trayPause, trayBuild;
-        private RegisteredWaitHandle wakeHandler;
+        private RegisteredWaitHandle wakeHandler,giftWakeHandler;
         private bool building, paused, quitting, loading=true, escapeRegistered, measurePending;
         private IntPtr panelHandle;
         private double lastFrame;
         private int scans;
 
         [STAThread]
-        internal static int Main()
+        internal static int Main(string[] args)
         {
+            bool openedGift=args.Length>0;
+            if(openedGift) {
+                try {
+                    var inbox=new GiftPost(Preferences.DirectoryName);
+                    foreach(string path in args) {
+                        if(!String.Equals(Path.GetExtension(path),".fpgift",StringComparison.OrdinalIgnoreCase))
+                            throw new InvalidDataException("Choose a Jake Frost gift file (.fpgift).");
+                        inbox.Import(Path.GetFullPath(path));
+                    }
+                } catch(Exception ex) {
+                    MessageBox.Show(ex.Message,"Open Jake Frost gift",MessageBoxButton.OK,MessageBoxImage.Information);
+                    return 1;
+                }
+            }
             bool first;
             using (var mutex=new Mutex(true,InstanceName,out first))
-            using (var wake=new EventWaitHandle(false,EventResetMode.AutoReset,WakeName)) {
-                if (!first) { wake.Set(); return 0; }
+            using (var wake=new EventWaitHandle(false,EventResetMode.AutoReset,WakeName))
+            using (var giftWake=new EventWaitHandle(false,EventResetMode.AutoReset,GiftWakeName)) {
+                if (!first) { if(openedGift) giftWake.Set(); else wake.Set(); return 0; }
                 try {
                     var app=new FrostApp();
                     app.ShutdownMode=ShutdownMode.OnExplicitShutdown;
-                    app.Startup += delegate { app.Start(wake); };
+                    app.Startup += delegate { app.Start(wake,giftWake,openedGift); };
                     return app.Run();
                 } finally { mutex.ReleaseMutex(); }
             }
         }
         private T Control<T>(string name) where T : FrameworkElement { return (T)panel.FindName(name); }
 
-        private void Start(EventWaitHandle wake)
+        private void Start(EventWaitHandle wake,EventWaitHandle giftWake,bool openedGift)
         {
             prefs.Load();
             using (var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream("JakeFrost.Panel"))
@@ -171,6 +187,9 @@ namespace Frostpane
             MakeTray();
             SyncMonitors();
             wakeHandler=ThreadPool.RegisterWaitForSingleObject(wake,delegate { Dispatcher.BeginInvoke(new Action(OpenPanel)); },null,-1,false);
+            giftWakeHandler=ThreadPool.RegisterWaitForSingleObject(giftWake,delegate {
+                Dispatcher.BeginInvoke(new Action(delegate {if(!quitting){OpenPage("Friends");friends.Poll();}}));
+            },null,-1,false);
             save.Interval=TimeSpan.FromMilliseconds(300);
             save.Tick += delegate { save.Stop(); prefs.Save(); };
             poll.Interval=TimeSpan.FromMilliseconds(250);
@@ -186,7 +205,7 @@ namespace Frostpane
             animation.Tick += delegate { Frame(); };
             watch.Start(); poll.Start(); loading=false;
             weather.Configure(prefs.Schedule,prefs.City);
-            OpenPanel();
+            if(openedGift) OpenPage("Friends"); else OpenPanel();
             foreach (Overlay overlay in overlays) PollOverlay(overlay);
             SessionEnding+=delegate {
                 foreach (Overlay overlay in overlays) SaveDecorations(overlay);
@@ -466,6 +485,7 @@ namespace Frostpane
             if (escapeRegistered) UnregisterHotKey(panelHandle,ExitBuildKey);
             if (save.IsEnabled) { save.Stop(); prefs.Save(); }
             if (wakeHandler!=null) wakeHandler.Unregister(null);
+            if (giftWakeHandler!=null) giftWakeHandler.Unregister(null);
             if (tray!=null) { tray.Visible=false; tray.Dispose(); }
             if (menu!=null) menu.Dispose();
             if (appIcon!=null) appIcon.Dispose();

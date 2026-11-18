@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>io.github.jacobbabula.jake-frost</string>
+  <key>CFBundleExecutable</key><string>JakeFrost</string>
+  <key>CFBundleName</key><string>Jake Frost</string>
+  <key>CFBundleDisplayName</key><string>Jake Frost</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>CFBundleShortVersionString</key><string>3.2.0</string>
+  <key>CFBundleVersion</key><string>320</string>
+  <key>CFBundleIconFile</key><string>JakeFrost.icns</string>
+  <key>LSMinimumSystemVersion</key><string>12.0</string>
+  <key>LSUIElement</key><true/>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>CFBundleDocumentTypes</key><array><dict>
+    <key>CFBundleTypeName</key><string>Jake Frost gift</string>
+    <key>CFBundleTypeRole</key><string>Viewer</string>
+    <key>LSHandlerRank</key><string>Owner</string>
+    <key>LSItemContentTypes</key><array><string>io.github.jacobbabula.jake-frost.gift</string></array>
+  </dict></array>
+  <key>UTExportedTypeDeclarations</key><array><dict>
+    <key>UTTypeIdentifier</key><string>io.github.jacobbabula.jake-frost.gift</string>
+    <key>UTTypeDescription</key><string>Jake Frost gift</string>
+    <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+    <key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>fpgift</string></array></dict>
+  </dict></array>
+</dict></plist>

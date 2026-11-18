@@ -178,8 +178,11 @@ namespace Frostpane
                 } } catch(IOException) { /* Local and portable deliveries still work while the share is offline. */ }
                 catch(UnauthorizedAccessException) { }
                 var result=new List<GiftPayload>();
-                if(Directory.Exists(Pending)) foreach(string path in Directory.EnumerateFiles(Pending,"*.fpgift").Take(5))
+                if(Directory.Exists(Pending)) foreach(string path in Directory.EnumerateFiles(Pending,"*.fpgift").Take(5)) {
+                    // A shell-open on another process may race the moment the first copy gets archived.
+                    if(File.Exists(Path.Combine(Archive,Path.GetFileName(path)))) {File.Delete(path);continue;}
                     result.Add(GiftPayload.DecodeGift(GiftPayload.ReadSmall(path,20000)));
+                }
                 return result;
             }
         }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.IO;
 using System.Threading;
 using System.Windows;
@@ -31,43 +32,46 @@ namespace Frostpane
             Func<string,bool> giftInTransit,string localSettingsDirectory)
         {
             source=sourceScene;deliver=deliverGift;inTransit=giftInTransit;post=new GiftPost(localSettingsDirectory);
-            AddHeading("Visitors");
-            var visitors=new WrapPanel();Children.Add(visitors);
-            foreach(VisitorKind v in Enum.GetValues(typeof(VisitorKind))) {
-                VisitorKind kind=v;
-                string label=v==VisitorKind.Snowmen?"Send snowmen":v==VisitorKind.Train?"Elf train":v.ToString();
-                Button b=ActionButton(label,delegate { summon(kind);Message(label+" is on the desktop."); });
-                visitors.Children.Add(b);
-            }
-            AddHeading("Friends");
-            connection.TextWrapping=TextWrapping.Wrap;connection.FontSize=12;connection.Margin=new Thickness(0,2,0,6);Children.Add(connection);
-            Row("Your name",displayName);displayName.MaxLength=32;displayName.Text=post.DisplayName;
-            var links=new WrapPanel();Children.Add(links);
-            links.Children.Add(ActionButton("Connect shared folder…",Connect));
-            detach=ActionButton("Disconnect",delegate { Work(delegate {post.Disconnect();},delegate {Message("Disconnected."); UpdateConnection();Poll();}); });links.Children.Add(detach);
-            AddHeading("Gift train");
-            Row("Send to",friends);friends.MinWidth=160;
+            AddHeading("Send a gift");
+            Row(this,"Your name",displayName);displayName.MaxLength=32;displayName.Text=post.DisplayName;
             foreach(GiftType t in Enum.GetValues(typeof(GiftType)))types.Items.Add(t);
-            types.SelectedIndex=0;Row("Gift",types);
-            Row("Note",note);note.MaxLength=280;note.AcceptsReturn=false;
+            types.SelectedIndex=0;Row(this,"Gift",types);
+            Row(this,"Note",note);note.MaxLength=280;note.AcceptsReturn=false;
             var gifts=new WrapPanel();Children.Add(gifts);
-            send=ActionButton("Send to friend",Send);gifts.Children.Add(send);
+            gifts.Children.Add(ActionButton("Copy gift to send",CopyGift));
             gifts.Children.Add(ActionButton("Save gift file…",Export));gifts.Children.Add(ActionButton("Open gift file…",Import));
+            Children.Add(new TextBlock{Text="Paste the copied file into a chat or email. Your friend opens the attachment in Jake Frost.",
+                TextWrapping=TextWrapping.Wrap,FontSize=12,Margin=new Thickness(0,3,0,6)});
             lastGift.TextWrapping=TextWrapping.Wrap;lastGift.FontSize=12;lastGift.Margin=new Thickness(0,6,0,0);Children.Add(lastGift);
             replay=ActionButton("Replay last delivery",delegate { if(recent!=null)deliver(recent); });
             replay.HorizontalAlignment=HorizontalAlignment.Left;replay.Visibility=Visibility.Collapsed;Children.Add(replay);
             status.TextWrapping=TextWrapping.Wrap;status.FontSize=12;status.Foreground=new SolidColorBrush(Color.FromRgb(193,214,201));
             status.Margin=new Thickness(0,6,0,0);Children.Add(status);
+            var shared=new StackPanel();
+            Children.Add(new Expander {Header="Shared-folder delivery",Content=shared,IsExpanded=!string.IsNullOrEmpty(post.Folder),Margin=new Thickness(0,8,0,0),Foreground=Brushes.White});
+            connection.TextWrapping=TextWrapping.Wrap;connection.FontSize=12;connection.Margin=new Thickness(0,2,0,6);shared.Children.Add(connection);
+            var links=new WrapPanel();shared.Children.Add(links);
+            links.Children.Add(ActionButton("Connect shared folder…",Connect));
+            detach=ActionButton("Disconnect",delegate { Work(delegate {post.Disconnect();},delegate {Message("Disconnected."); UpdateConnection();Poll();}); });links.Children.Add(detach);
+            Row(shared,"Send to",friends);friends.MinWidth=160;
+            send=ActionButton("Send to friend",Send);send.HorizontalAlignment=HorizontalAlignment.Left;shared.Children.Add(send);
+            AddHeading("Visitors");
+            var visitors=new WrapPanel();Children.Add(visitors);
+            foreach(VisitorKind v in Enum.GetValues(typeof(VisitorKind))) {
+                VisitorKind kind=v;
+                string label=v==VisitorKind.Snowmen?"Send snowmen":v==VisitorKind.Train?"Elf train":v.ToString();
+                visitors.Children.Add(ActionButton(label,delegate { summon(kind); }));
+            }
             UpdateConnection();Poll();
         }
         private void AddHeading(string text) {
             Children.Add(new TextBlock {Text=text,FontSize=14,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,9,0,3)});
         }
-        private void Row(string label,Control input) {
+        private void Row(Panel parent,string label,Control input) {
             var row=new DockPanel { Margin=new Thickness(0,2,0,3) };
             var name=new TextBlock {Text=label,Width=75,VerticalAlignment=VerticalAlignment.Center};
             DockPanel.SetDock(name,Dock.Left);row.Children.Add(name);
-            input.Padding=new Thickness(5,2,5,2);AutomationProperties.SetName(input,label);row.Children.Add(input);Children.Add(row);
+            input.Padding=new Thickness(5,2,5,2);AutomationProperties.SetName(input,label);row.Children.Add(input);parent.Children.Add(row);
         }
         private Button ActionButton(string text,Action action) {
             var b=new Button {Content=text,Padding=new Thickness(9,4,9,4),Margin=new Thickness(0,3,5,0)};
@@ -90,6 +94,7 @@ namespace Frostpane
         private GiftPayload Compose() {
             GiftType type=types.SelectedItem==null?GiftType.Note:(GiftType)types.SelectedItem;
             if(type==GiftType.Note && string.IsNullOrWhiteSpace(note.Text))throw new InvalidOperationException("Write a note for your friend.");
+            if(type==GiftType.Note)return new GiftPayload{Kind=GiftType.Note,Note=note.Text};
             SnowScene scene=source();
             if(scene==null)throw new InvalidOperationException("Open a desktop snow scene first.");
             return scene.CaptureGift(type,note.Text);
@@ -115,6 +120,20 @@ namespace Frostpane
             if(picker.ShowDialog()!=true)return;
             string path=picker.FileName,name=displayName.Text;
             Work(delegate{post.Export(path,gift,name);},delegate{Message("Gift file saved. Share it with your friend.");});
+        }
+        private void CopyGift() {
+            GiftPayload gift=Compose();
+            string folder=Path.Combine(Path.GetTempPath(),"Jake Frost gifts");
+            string path=Path.Combine(folder,gift.Kind+"-"+gift.Id+".fpgift");
+            string name=displayName.Text;
+            Work(delegate{Directory.CreateDirectory(folder);post.Export(path,gift,name);},delegate {
+                try {
+                    var files=new StringCollection();files.Add(path);Clipboard.SetFileDropList(files);
+                    Message("Gift copied. Paste it into a chat or email that accepts file attachments.");
+                } catch(System.Runtime.InteropServices.ExternalException) {
+                    Message("The clipboard is busy. Try again or choose Save gift file.");
+                }
+            });
         }
         private void Import() {
             var picker=new OpenFileDialog {Filter="Jake Frost gifts (*.fpgift)|*.fpgift",CheckFileExists=true};
