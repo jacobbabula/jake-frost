@@ -48,6 +48,7 @@ namespace Frostpane
             int setting=(int)Limit(DriftDepth,24,140);
             if (setting==appliedDepth) return;
             appliedDepth=setting;
+            supportBandsDirty = true;
             foreach (SnowBank bank in Banks) {
                 bank.MaxDepth=BankDepth(bank.IsFloor);
                 for(int i=0;i<bank.Heights.Length;i++)

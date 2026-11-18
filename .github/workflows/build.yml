@@ -13,6 +13,18 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Compare snowfall and gift history with version 3.2
+        shell: powershell
+        run: |
+          git archive v3.2.0 src --format=zip --output=baseline.zip
+          if ($LASTEXITCODE) { throw 'Cannot read the 3.2 baseline.' }
+          Expand-Archive baseline.zip .\baseline
+          Write-Host 'Jake Frost 3.2'
+          .\tests\WindowsPerformance.ps1 -SourceDirectory .\baseline\src
+          Write-Host 'Current release candidate'
+          .\tests\WindowsPerformance.ps1
       - name: Build the Windows app and per-user installer
         shell: powershell
         run: |
@@ -38,6 +50,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Measure heavy snowfall against version 3.2
+        run: bash macOS/Tests/benchmark-snow.sh v3.2.0
       - name: Build and test the universal Mac app
         run: bash macOS/build.sh "$RUNNER_TEMP/JakeBuild"
       - name: Exchange portable gifts

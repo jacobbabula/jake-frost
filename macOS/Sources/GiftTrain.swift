@@ -7,7 +7,7 @@ import AppKit
         var receipt: (() -> Void)?
         var x: CGFloat = -25, travel: CGFloat = 0
         var dwell: TimeInterval = 0
-        init(_ gift: FrostGift, _ receipt: @escaping () -> Void) { self.gift = gift; self.receipt = receipt }
+        init(_ gift: FrostGift, _ receipt: (() -> Void)?) { self.gift = gift; self.receipt = receipt }
     }
     private struct Ornament {
         var kind: Int, x: CGFloat, y: CGFloat, scale: CGFloat = 1, angle: CGFloat = 0
@@ -44,11 +44,28 @@ import AppKit
     var groundY: ((CGFloat) -> CGFloat)?
     private var trains: [Delivery] = [], parcels: [Parcel] = []
     private var station: CGFloat = 320
+    private var scale: CGFloat = 1, pace: CGFloat = 1
     var hasActivity: Bool { !trains.isEmpty || !parcels.isEmpty }
+    var isMoving: Bool { !trains.isEmpty }
+
+    func configure(_ controls: MacVisitorControls) {
+        scale = controls.scale(for:.train)
+        pace = controls.pace(for:.train)
+    }
+
+    // An ordinary elf visit passes straight through. Only real gifts dock and acknowledge.
+    func visit() {
+        guard trains.isEmpty else { return }
+        let train = Delivery(FrostGift(),nil)
+        train.x = -25 * scale
+        trains.append(train)
+    }
 
     @discardableResult func start(_ gift: FrostGift, onArrival: @escaping () -> Void) -> Bool {
-        guard trains.count < 4, trains.allSatisfy({ $0.receipt == nil && $0.x > station + 130 }) else { return false }
-        trains.append(Delivery(gift, onArrival))
+        guard trains.count < 4, trains.allSatisfy({ $0.receipt == nil && $0.x > station + 130 * scale }) else { return false }
+        let train = Delivery(gift, onArrival)
+        train.x = -25 * scale
+        trains.append(train)
         return true
     }
     @discardableResult func cancel() -> Bool {
@@ -64,7 +81,7 @@ import AppKit
         for train in trains {
             let old = train.x
             if train.receipt != nil {
-                train.x = min(station, train.x + delta * 64)
+                train.x = min(station, train.x + delta * 64 * pace)
                 if train.x >= station {
                     if train.gift.kind != .note {
                         if parcels.count == 48 { parcels.removeFirst() }
@@ -77,10 +94,10 @@ import AppKit
                     done?()
                 }
             } else if train.dwell > 0 { train.dwell -= Double(delta) }
-            else { train.x += delta * 73 }
+            else { train.x += delta * 73 * pace }
             train.travel += abs(train.x - old)
         }
-        trains.removeAll { $0.x > bounds.maxX + 110 }
+        trains.removeAll { $0.x > bounds.maxX + 110 * scale }
     }
 
     func draw(in bounds: CGRect) {
@@ -94,8 +111,9 @@ import AppKit
         for train in trains {
             let y = groundY?(train.x) ?? bounds.maxY - 2
             c.saveGState(); c.translateBy(x: train.x, y: y)
-            drawEngine(train.travel,c); c.restoreGState()
-            if train.receipt == nil && train.dwell > 0 { caption(train.gift, at: CGPoint(x:train.x,y:y-43), bounds:bounds,c) }
+            c.scaleBy(x:scale,y:scale)
+            drawEngine(train.travel/scale,c); c.restoreGState()
+            if train.receipt == nil && train.dwell > 0 { caption(train.gift, at: CGPoint(x:train.x,y:y-43*scale), bounds:bounds,c) }
         }
     }
 
@@ -129,6 +147,9 @@ import AppKit
         }
         rect(c,0x9D4B45,-26,-30,19,23,2);rect(c,0x5D98A3,-23,-27,11,10)
         rect(c,0xF6DFB3,-24,-28,13,2)
+        dot(c,0xE1BA93,-18,-21.5,2.5,2.7)
+        polygon(c,0x39765B,[point(-21,-22),point(-19,-27),point(-15,-23)])
+        dot(c,0xF3D590,-18.7,-26.7,0.9,0.9)
         rect(c,0x374951,-29,-33,24,4,2);rect(c,0xE7E9DD,-29,-34,24,2)
         rect(c,0x387467,-9,-22,27,15,5);rect(c,0xD3AA63,5,-22,3,15)
         rect(c,0x283C44,10,-31,6,13);rect(c,0x35454A,8,-33,10,4)

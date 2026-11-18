@@ -108,6 +108,7 @@ $nextGift = Join-Path $scratch 'A second gift for the open app.fpgift'
 New-NoteGift $nextGift
 $nextReceived = Join-Path $receivedDir ([IO.File]::ReadAllLines($nextGift)[1]+'.fpgift')
 Open-WhileRunning $nextGift $desktop
+& (Join-Path $PSScriptRoot 'WindowsPanel.ps1') -AppProcessId $desktop.Id -GiftReceipt $nextReceived
 Wait-GiftArrival $nextReceived $desktop
 $firstWrite = [IO.File]::GetLastWriteTimeUtc($received)
 Open-WhileRunning $gift $desktop

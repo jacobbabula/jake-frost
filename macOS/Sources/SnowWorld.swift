@@ -2,7 +2,9 @@ import Foundation
 
 final class Drift {
     var edge: SnowEdge
-    var depth: [CGFloat]
+    private(set) var depth: [CGFloat]
+    private(set) var revision: UInt = 0
+    var maximumDepth: CGFloat { edge.id == 0 ? 55 : 27 }
     var spacing: CGFloat { edge.width / CGFloat(depth.count - 1) }
 
     init(_ edge: SnowEdge) {
@@ -24,19 +26,22 @@ final class Drift {
         var changed: CGFloat = 0
         for i in max(0,mid-spread)...min(depth.count-1,mid+spread) {
             let weight = CGFloat(spread+1-abs(i-mid))/CGFloat(spread+1)
-            let cap: CGFloat = edge.id == 0 ? 55 : min(27, 1.5+CGFloat(min(i,depth.count-1-i))*spacing*0.55)
+            let cap = edge.id == 0 ? maximumDepth : min(maximumDepth, 1.5+CGFloat(min(i,depth.count-1-i))*spacing*0.55)
             let next = min(cap,max(0,depth[i] + amount*weight))
             changed += next - depth[i]; depth[i] = next
         }
+        if changed != 0 { revision &+= 1 }
         return changed
     }
     func move(to next: SnowEdge) {
+        guard edge != next else { return }
         if abs(next.width-edge.width) > 0.5 {
             let count = max(3, Int(ceil(next.width/10))+1)
             depth = (0..<count).map { height(edge.x + edge.width*CGFloat($0)/CGFloat(count-1)) }
         }
-        edge = next
+        edge = next; revision &+= 1
     }
+    func clear() { depth = Array(repeating:0,count:depth.count); revision &+= 1 }
 }
 
 struct SnowParticle {
@@ -58,6 +63,10 @@ final class SnowWorld {
     private(set) var size = CGSize.zero
     private(set) var banks = [Drift]()
     private var byID = [UInt32:Drift]()
+    private var collisionRows = [[Drift]]()
+    private static let rowHeight: CGFloat = 64
+    private var powderCount = 0
+    var hasMotion: Bool { !paused || powderCount > 0 || balls.contains { $0.support == nil } }
     private(set) var particles = [SnowParticle]()
     private(set) var balls = [PackedBall]()
     private var spawnBudget: CGFloat = 0
@@ -80,6 +89,12 @@ final class SnowWorld {
             else { next[edge.id]=Drift(edge) }
         }
         byID=next; banks=([floor]+edges).compactMap { next[$0.id] }
+        collisionRows = Array(repeating: [], count: max(1,Int(size.height / Self.rowHeight)+1))
+        for bank in banks {
+            let firstRow = row(bank.edge.y - bank.maximumDepth)
+            let lastRow = row(bank.edge.y + 1.2)
+            for r in firstRow...lastRow { collisionRows[r].append(bank) }
+        }
         if first {
             for _ in 0..<min(280,Int(size.width*0.08)) { spawn(randomHeight:true) }
         }
@@ -93,16 +108,26 @@ final class SnowWorld {
 
     func burst(_ point: CGPoint, count: Int, strength: CGFloat = 1) {
         guard particles.count < 1800 else { return }
-        for _ in 0..<min(count,1800-particles.count) {
+        let added = max(0,min(count,1800-particles.count))
+        powderCount += added
+        for _ in 0..<added {
             particles.append(SnowParticle(x:point.x,y:point.y,vx:.random(in:-70...70)*strength,
                 vy:.random(in:-112 ... -23)*strength,radius:.random(in:1...2.7),
                 phase:0,powder:true,life:.random(in:0.45...0.85)))
         }
     }
 
+    private func row(_ y: CGFloat) -> Int {
+        max(0, min(collisionRows.count - 1, Int(y / Self.rowHeight)))
+    }
     private func intercept(x:CGFloat, previous:CGFloat, next:CGFloat) -> Drift? {
         var bank: Drift?, earliest = CGFloat.greatestFiniteMagnitude
-        for d in banks where d.edge.contains(x) {
+        let first = row(previous), last = row(next)
+        // A normal flake crosses at most one row boundary. Keep the original bank
+        // order for long sweeps, including a fast snowball passing several ledges.
+        for d in (first == last ? collisionRows[first] : banks) {
+            guard previous <= d.edge.y + 1.2, next >= d.edge.y - d.maximumDepth,
+                  x >= d.edge.x, x <= d.edge.x + d.edge.width, d.edge.contains(x) else { continue }
             let y=d.surface(x)
             if previous <= y+1.2 && next >= y && y < earliest { earliest=y;bank=d }
         }
@@ -116,15 +141,17 @@ final class SnowWorld {
             spawnBudget += dt*amount*size.width*0.023
             while spawnBudget>=1 { if particles.count<1600 {spawn(randomHeight:false)};spawnBudget-=1 }
         }
+        if !paused || powderCount > 0 {
         for i in particles.indices.reversed() {
             var p=particles[i]; if paused && !p.powder {continue}
             let previous=p.y
             if p.powder {p.vy+=170*dt;p.life-=dt} else {p.phase+=dt;p.x+=sin(p.phase)*11*dt}
             p.x+=p.vx*dt;p.y+=p.vy*dt
             if !p.powder, let d=intercept(x:p.x,previous:previous,next:p.y) {
-                d.add(at:p.x,amount:0.28+p.radius*0.25);particles.remove(at:i)
-            } else if p.y>size.height+6 || p.life<=0 || p.x < -15 || p.x>size.width+15 {particles.remove(at:i)}
+                d.add(at:p.x,amount:0.28+p.radius*0.25);removeParticle(at:i)
+            } else if p.y>size.height+6 || p.life<=0 || p.x < -15 || p.x>size.width+15 {removeParticle(at:i)}
             else {particles[i]=p}
+        }
         }
         for i in balls.indices.reversed() {
             let b=balls[i]; if b===held {continue}
@@ -143,6 +170,13 @@ final class SnowWorld {
                 }
             }
         }
+    }
+    private func removeParticle(at index:Int) {
+        if particles[index].powder { powderCount -= 1 }
+        // Reverse traversal means the particle at the back has already advanced.
+        // The renderer groups particles by color, so their array order is immaterial.
+        particles.swapAt(index, particles.count-1)
+        particles.removeLast()
     }
 
     private func rest(_ b: PackedBall,on bank:Drift) {
@@ -209,7 +243,7 @@ final class SnowWorld {
     }
     func cancel(){ start=nil;held=nil;initialBank=nil;samples.removeAll() }
     func clear() {
-        cancel();particles.removeAll();balls.removeAll();spawnBudget=0
-        for d in banks {d.depth=Array(repeating:0,count:d.depth.count)}
+        cancel();particles.removeAll();balls.removeAll();spawnBudget=0;powderCount=0
+        for d in banks {d.clear()}
     }
 }

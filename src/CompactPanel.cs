@@ -1,0 +1,59 @@
+using System;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Input;
+
+namespace Frostpane
+{
+    internal sealed partial class FrostApp
+    {
+        private bool compact;
+        private double expandedWidth;
+
+        private void ConnectCompactPanel()
+        {
+            Control<Button>("MinimizeButton").Click += delegate { SetCompact(true); };
+            Control<Button>("RestoreButton").Click += delegate {
+                if (building) OpenPage("Workshop"); else OpenPanel();
+            };
+            Control<Button>("DoneButton").Click += delegate { SetBuild(false); };
+            Control<DockPanel>("CompactPanel").MouseLeftButtonDown += delegate(object sender, MouseButtonEventArgs e) {
+                if (e.Handled || e.LeftButton != MouseButtonState.Pressed) return;
+                if (e.ClickCount == 2) OpenPanel(); else panel.DragMove();
+            };
+            panel.StateChanged += delegate {
+                if (panel.WindowState != WindowState.Minimized || quitting) return;
+                panel.WindowState = WindowState.Normal;
+                SetCompact(true);
+            };
+        }
+
+        private void SetCompact(bool value)
+        {
+            if (compact != value) {
+                // Keep the same top-left corner and native window when switching layouts.
+                double left = panel.Left, top = panel.Top;
+                if (value) expandedWidth = panel.Width;
+                panel.WindowStartupLocation = WindowStartupLocation.Manual;
+                compact = value;
+                Control<DockPanel>("ExpandedPanel").Visibility = value ? Visibility.Collapsed : Visibility.Visible;
+                Control<DockPanel>("CompactPanel").Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+                panel.Width = value ? (building ? 278 : 188) : expandedWidth;
+                if (!double.IsNaN(left) && !double.IsNaN(top)) {panel.Left = left; panel.Top = top;}
+            }
+            if (!value) return;
+            panel.Width = building ? 278 : 188;
+            var restore = Control<Button>("RestoreButton");
+            restore.Content = building ? "Tools…" : "Restore";
+            AutomationProperties.SetName(restore, building ? "Choose another tool" : "Restore Jake Frost");
+            var done = Control<Button>("DoneButton");
+            done.Visibility = building ? Visibility.Visible : Visibility.Collapsed;
+            done.Content = escapeRegistered ? "Done · Esc" : "Done";
+            var title = Control<TextBlock>("CompactTitle");
+            title.Text = !building ? "Jake Frost" : prefs.Tool == PlayTool.Decorate ?
+                DecorationPicker.NameOf(prefs.Decoration) : prefs.Tool == PlayTool.Erase ? "Remove" : prefs.Tool.ToString();
+            title.ToolTip = building ? PlayPalette.Hint(prefs.Tool) : "Drag to move, or double-click to restore";
+        }
+    }
+}

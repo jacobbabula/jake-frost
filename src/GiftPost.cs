@@ -195,9 +195,14 @@ namespace Frostpane
         }
         internal GiftPayload Latest() {
             lock(gate) {
-                if(!Directory.Exists(Archive))return null;
-                string path=Directory.EnumerateFiles(Archive,"*.fpgift").OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
-                return path==null?null:GiftPayload.DecodeGift(GiftPayload.ReadSmall(path,20000));
+                var archive = new DirectoryInfo(Archive);
+                if (!archive.Exists) return null;
+                // EnumerateFiles supplies the timestamps with the directory entries.
+                // Keep the latest in one pass, including the original tie order.
+                FileInfo latest = null;
+                foreach (var file in archive.EnumerateFiles("*.fpgift"))
+                    if (latest == null || file.LastWriteTimeUtc > latest.LastWriteTimeUtc) latest = file;
+                return latest == null ? null : GiftPayload.DecodeGift(GiftPayload.ReadSmall(latest.FullName,20000));
             }
         }
     }

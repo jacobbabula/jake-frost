@@ -3,6 +3,14 @@ import AppKit
 final class SnowCanvas: NSView {
     let world = SnowWorld()
     let giftTrain = GiftTrain()
+    let visitors = MacVisitors()
+    let workshop = MacWorkshop()
+    var animating: Bool { world.hasMotion || giftTrain.isMoving || visitors.isActive || workshop.hasMotion }
+    private var bankShapes = [(bank:Drift, revision:UInt, path:CGPath)]()
+    private static let flakeColors = [NSColor(calibratedRed:0.79,green:0.89,blue:0.99,alpha:0.58),
+                                     NSColor(calibratedWhite:0.97,alpha:0.85),NSColor.white]
+    private static let snowColor = NSColor(calibratedRed:0.88,green:0.94,blue:0.99,alpha:0.98)
+    private static let ballGradient = NSGradient(starting:.white,ending:NSColor(calibratedRed:0.65,green:0.79,blue:0.91,alpha:1))
     var allowTouch = true
     private(set) var draggingSnow = false
     override var isFlipped: Bool { true }
@@ -10,6 +18,7 @@ final class SnowCanvas: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override init(frame: NSRect) {
         super.init(frame:frame)
+        workshop.invalidate = { [weak self] in self?.needsDisplay = true }
         giftTrain.groundY = { [weak self] x in
             guard let view=self else{return 0}
             return view.world.banks.first?.surface(x) ?? view.bounds.maxY
@@ -18,24 +27,34 @@ final class SnowCanvas: NSView {
     required init?(coder: NSCoder) { fatalError("Programmatic view") }
 
     func frameTick(_ dt:TimeInterval, cursor:CGPoint) {
-        world.step(dt);giftTrain.step(dt,bounds:bounds)
+        let redraw = animating
+        world.step(dt)
+        visitors.step(dt,world:world)
+        giftTrain.step(dt,bounds:bounds)
+        workshop.step(dt)
+        workshop.sync(world:world)
         if let win=window {
             let inside=win.frame.contains(cursor)
             let local=convert(win.convertPoint(fromScreen:cursor),from:nil)
             // This reads the pointer position without monitoring or intercepting other apps' events.
-            let accept=allowTouch && (draggingSnow || (inside && NSEvent.pressedMouseButtons==0 && world.hit(local)))
-            win.ignoresMouseEvents = !accept
+            let accept = draggingSnow || workshop.isDragging || (inside && NSEvent.pressedMouseButtons == 0 &&
+                (workshop.captures(local) || (allowTouch && world.hit(local))))
+            if win.ignoresMouseEvents == accept { win.ignoresMouseEvents = !accept }
         }
-        needsDisplay=true
+        if redraw { needsDisplay=true }
     }
     override func mouseDown(with event:NSEvent) {
-        draggingSnow=world.down(convert(event.locationInWindow,from:nil),at:event.timestamp)
+        let point=convert(event.locationInWindow,from:nil)
+        if workshop.down(point) { return }
+        draggingSnow = allowTouch && world.down(point,at:event.timestamp)
         needsDisplay=true
     }
     override func mouseDragged(with event:NSEvent) {
+        if workshop.isDragging { workshop.drag(convert(event.locationInWindow,from:nil));return }
         if draggingSnow {world.drag(convert(event.locationInWindow,from:nil),at:event.timestamp);needsDisplay=true}
     }
     override func mouseUp(with event:NSEvent) {
+        if workshop.isDragging { workshop.up(convert(event.locationInWindow,from:nil));return }
         if draggingSnow {world.up(convert(event.locationInWindow,from:nil),at:event.timestamp)}
         draggingSnow=false;needsDisplay=true
     }
@@ -52,27 +71,35 @@ final class SnowCanvas: NSView {
             let r=p.powder ? p.radius*min(1,p.life*2.6) : p.radius
             layers[index].appendOval(in:CGRect(x:p.x-r,y:p.y-r,width:r*2,height:r*2))
         }
-        let flakeColors=[NSColor(calibratedRed:0.79,green:0.89,blue:0.99,alpha:0.58),
-                         NSColor(calibratedWhite:0.97,alpha:0.85),NSColor.white]
-        for i in layers.indices {flakeColors[i].setFill();layers[i].fill()}
-        for d in world.banks {
+        for i in layers.indices {Self.flakeColors[i].setFill();layers[i].fill()}
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        if bankShapes.count > world.banks.count { bankShapes.removeLast(bankShapes.count-world.banks.count) }
+        context.setFillColor(Self.snowColor.cgColor)
+        for (index,d) in world.banks.enumerated() {
+            if index < bankShapes.count && bankShapes[index].bank === d && bankShapes[index].revision == d.revision {
+                context.addPath(bankShapes[index].path);continue
+            }
+            let path=CGMutablePath()
             for interval in d.edge.visible {
-                let path=NSBezierPath()
                 let l=interval.lowerBound,r=interval.upperBound
                 path.move(to:CGPoint(x:l,y:d.edge.y))
-                path.line(to:CGPoint(x:l,y:d.surface(l)))
+                path.addLine(to:CGPoint(x:l,y:d.surface(l)))
                 let first=Int(floor((l-d.edge.x)/d.spacing))+1
                 var x=d.edge.x+CGFloat(first)*d.spacing
-                while x<r {path.line(to:CGPoint(x:x,y:d.surface(x)));x+=d.spacing}
-                path.line(to:CGPoint(x:r,y:d.surface(r)));path.line(to:CGPoint(x:r,y:d.edge.y));path.close()
-                NSColor(calibratedRed:0.88,green:0.94,blue:0.99,alpha:0.98).setFill();path.fill()
+                while x<r {path.addLine(to:CGPoint(x:x,y:d.surface(x)));x+=d.spacing}
+                path.addLine(to:CGPoint(x:r,y:d.surface(r)));path.addLine(to:CGPoint(x:r,y:d.edge.y));path.closeSubpath()
             }
+            let entry = (d,d.revision,path as CGPath)
+            if index < bankShapes.count {bankShapes[index]=entry} else {bankShapes.append(entry)}
+            context.addPath(path)
         }
+        context.fillPath()
         for b in world.balls {
             let body=NSBezierPath(ovalIn:CGRect(x:b.x-b.radius,y:b.y-b.radius,width:2*b.radius,height:2*b.radius))
-            let gradient=NSGradient(starting:.white,ending:NSColor(calibratedRed:0.65,green:0.79,blue:0.91,alpha:1))
-            gradient?.draw(in:body,relativeCenterPosition:CGPoint(x:-0.38,y:-0.45))
+            Self.ballGradient?.draw(in:body,relativeCenterPosition:CGPoint(x:-0.38,y:-0.45))
         }
+        workshop.draw()
+        visitors.draw(in:context)
         giftTrain.draw(in:bounds)
     }
 }

@@ -5,7 +5,20 @@ import AppKit
     private static let testMailbox=ProcessInfo.processInfo.environment["JAKE_FROST_TEST_MAILBOX"].map { URL(fileURLWithPath:$0,isDirectory:true) }
     private let settings=FrostApp.smoke || FrostApp.testMailbox != nil ? UserDefaults(suiteName:"io.jakefrost.test."+UUID().uuidString)! : UserDefaults.standard
     private let gifts=MacGifts(mailboxRoot:FrostApp.testMailbox)
+    private lazy var visitorControls = MacVisitorControls(settings:settings,summon:{ [weak self] kind in
+        guard let self = self, let canvas = self.currentScene?.view else { return }
+        if kind == .train { _ = canvas.giftTrain.visit() } else { canvas.visitors.summon(kind,in:canvas.world) }
+        canvas.needsDisplay = true; self.startFrames()
+    },onChange:{ [weak self] in self?.applyPreferences() })
     private var scenes=[UInt32:ScreenScene]()
+    private var previousWindows: [WindowFrame]?
+    private var previousScreens = [UInt32:CGRect]()
+    private var currentScene: ScreenScene? {
+        let mouse = NSEvent.mouseLocation
+        if let screen=NSScreen.screens.first(where: { $0.frame.contains(mouse) }),
+           let id=displayID(screen), let scene=scenes[id] { return scene }
+        return scenes.values.first
+    }
     private var status:NSStatusItem!
     private var timer:Timer?
     private var lastTick=ProcessInfo.processInfo.systemUptime
@@ -76,14 +89,18 @@ import AppKit
         for scene in scenes.values {scene.panel.orderOut(nil)}
     }
     private func startFrames() {
-        guard timer==nil else{return}
+        guard awake else{return}
+        let interval: TimeInterval = scenes.values.contains { $0.view.animating || $0.view.workshop.editing } ? 1/30 : 1/12
+        if let timer=timer, timer.timeInterval==interval { return }
+        timer?.invalidate()
         lastTick=ProcessInfo.processInfo.systemUptime
-        let t=Timer(timeInterval:1/30,target:self,selector:#selector(frame(_:)),userInfo:nil,repeats:true)
+        let t=Timer(timeInterval:interval,target:self,selector:#selector(frame(_:)),userInfo:nil,repeats:true)
+        t.tolerance = interval * 0.1
         RunLoop.main.add(t,forMode:.common);timer=t
     }
     @objc private func suspend() {
         awake=false;timer?.invalidate();timer=nil
-        for scene in scenes.values {scene.view.releasePointer()}
+        for scene in scenes.values {scene.view.workshop.cancelGesture();scene.view.releasePointer()}
     }
     @objc private func resume() {awake=true;synchronizeScreens();startFrames()}
     @objc private func screenChanged() {synchronizeScreens()}
@@ -93,6 +110,7 @@ import AppKit
         var interrupted=false
         for id in Array(scenes.keys) where !current.contains(id) {
             if let scene=scenes.removeValue(forKey:id) {
+                previousScreens.removeValue(forKey:id)
                 if scene.view.giftTrain.cancel(){interrupted=true}
                 scene.view.releasePointer();scene.panel.close()
             }
@@ -101,7 +119,11 @@ import AppKit
             guard let id=displayID(screen) else{continue}
             let frame=screen.visibleFrame
             if let existing=scenes[id] {existing.panel.setFrame(frame,display:true)}
-            else {scenes[id]=ScreenScene(frame:frame)}
+            else {
+                let scene=ScreenScene(frame:frame)
+                scene.view.workshop.configure(settings:settings,displayID:id)
+                scenes[id]=scene
+            }
         }
         applyPreferences();updateEdges()
         if interrupted {gifts.retryUndelivered()}
@@ -112,10 +134,16 @@ import AppKit
     private func updateEdges(){
         guard let primary=NSScreen.screens.first else{return}
         let windows=DesktopEdges.windows()
-        for scene in scenes.values {
+        let windowsChanged = windows != previousWindows
+        previousWindows = windows
+        for (id,scene) in scenes {
             let frame=scene.panel.frame
             let quartz=CGRect(x:frame.minX,y:primary.frame.maxY-frame.maxY,width:frame.width,height:frame.height)
+            guard windowsChanged || previousScreens[id] != quartz else { continue }
+            previousScreens[id] = quartz
             scene.view.world.setDesktop(size:frame.size,edges:DesktopEdges.visible(windows,in:quartz))
+            scene.view.workshop.sync(world:scene.view.world)
+            scene.view.needsDisplay=true
         }
     }
     @objc private func frame(_ timer:Timer) {
@@ -123,12 +151,14 @@ import AppKit
         lastTick=now;if now>=nextEdges {updateEdges();nextEdges=now+0.45}
         let mouse=NSEvent.mouseLocation
         for scene in scenes.values {scene.view.frameTick(dt,cursor:mouse)}
+        startFrames()
     }
     private func applyPreferences(){
         let amounts:[CGFloat]=[0.45,1,2.2]
         for s in scenes.values {
             s.view.world.amount=amounts[min(2,max(0,snowfall))]
             s.view.world.paused=paused;s.view.allowTouch=snowPlay
+            s.view.visitors.configure(visitorControls);s.view.giftTrain.configure(visitorControls)
             if !snowPlay {s.view.releasePointer()}
         }
     }
@@ -146,6 +176,9 @@ import AppKit
         _=item(paused ? "Resume snowfall" : "Pause snowfall",#selector(togglePause),menu)
         let play=item("Grab and throw snow",#selector(togglePlay),menu);play.state=snowPlay ? .on : .off
         _=item("Clear scene",#selector(clearScene),menu)
+        menu.addItem(.separator())
+        currentScene?.view.workshop.appendMenu(to:menu)
+        visitorControls.append(to:menu)
         menu.addItem(.separator());gifts.appendCommands(to:menu)
         menu.addItem(.separator());_=item("How to play",#selector(showWelcome),menu)
         let quit=item("Quit Jake Frost",#selector(quitApp),menu);quit.keyEquivalent="q"
@@ -156,15 +189,18 @@ import AppKit
     @objc private func togglePlay(){settings.set(!snowPlay,forKey:"snowPlay");applyPreferences()}
     @objc private func clearScene(){
         var interrupted=false
-        for s in scenes.values {s.view.world.clear();s.view.releasePointer();if s.view.giftTrain.clear(){interrupted=true}}
+        for s in scenes.values {
+            s.view.world.clear();s.view.workshop.clear();s.view.visitors.clear();s.view.releasePointer()
+            if s.view.giftTrain.clear(){interrupted=true}
+            s.view.needsDisplay = true
+        }
         if interrupted {gifts.retryUndelivered()}
     }
     @objc private func quitApp(){NSApp.terminate(nil)}
     @objc private func showWelcome() {
         settings.set(true,forKey:"welcomed")
-        if let panel=welcome {NSApp.activate(ignoringOtherApps:true);panel.makeKeyAndOrderFront(nil);return}
-        let panel=NSPanel(contentRect:CGRect(x:0,y:0,width:380,height:190),styleMask:[.titled,.closable],backing:.buffered,defer:false)
-        panel.title="Jake Frost";panel.isReleasedWhenClosed=false
+        if let panel=welcome {NSApp.activate(ignoringOtherApps:true);(panel as? AnchoredPanel)?.expand();panel.makeKeyAndOrderFront(nil);return}
+        let panel=AnchoredPanel(contentRect:CGRect(x:0,y:0,width:380,height:190),title:"Jake Frost")
         let header=NSTextField(labelWithString:"Snow is falling on your Mac.")
         header.font = .systemFont(ofSize:20,weight:.semibold)
         let body=NSTextField(wrappingLabelWithString:"Grab a drift above the Dock or on a window edge. Drag to roll a snowball. Flick and release to throw it.\n\nUse the snowflake in the menu bar to send a gift, change the snowfall, or quit.")

@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Automation;
-using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -68,9 +66,6 @@ namespace Frostpane
         [DllImport("user32.dll",EntryPoint="SetWindowLongW")] private static extern int SetStyle(IntPtr h,int n,int v);
         [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr h,IntPtr after,int x,int y,int w,int height,uint flags);
         private const int Extended = -20, ClickThrough=0x20, NoActivate=0x08000000, ToolWindow=0x80;
-        private readonly Border buildBar;
-        private readonly Button done;
-        private readonly TextBlock toolHint;
         private IntPtr hwnd;
         internal DesktopMonitor MonitorInfo;
         internal readonly SnowSurface Surface;
@@ -82,7 +77,7 @@ namespace Frostpane
         private List<System.Drawing.Rectangle> clippedRects;
         private double clippedScale;
 
-        internal Overlay(DesktopMonitor monitor,Action finish,Action openTools,int seed)
+        internal Overlay(DesktopMonitor monitor,int seed)
         {
             MonitorInfo=monitor;
             Title="Jake Frost snowfall"; WindowStyle=WindowStyle.None; ResizeMode=ResizeMode.NoResize;
@@ -91,27 +86,7 @@ namespace Frostpane
             // Native bounds below are authoritative when monitors have different DPI settings.
             Left=monitor.Work.Left/monitor.Scale; Top=monitor.Work.Top/monitor.Scale;
             Width=Math.Max(1,monitor.Work.Width/monitor.Scale); Height=Math.Max(1,monitor.Work.Height/monitor.Scale);
-            var stack = new Grid();
-            Surface = new SnowSurface(seed); stack.Children.Add(Surface);
-            var row=new StackPanel {Orientation=Orientation.Horizontal};
-            toolHint=new TextBlock {FontFamily=new FontFamily("Segoe UI"),FontWeight=FontWeights.SemiBold,
-                FontSize=12,Foreground=Brushes.White,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(5,0,9,0),
-                MaxWidth=Math.Max(25,Math.Min(310,Width-170)),TextTrimming=TextTrimming.CharacterEllipsis};
-            row.Children.Add(toolHint);
-            var switchTool=new Button {Content="Tools…",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,4,0),
-                Style=(Style)Application.Current.MainWindow.FindResource("Button")};
-            switchTool.Click+=delegate {openTools();};
-            row.Children.Add(switchTool);
-            done = new Button { Content="Done",Padding=new Thickness(10,4,10,4),Cursor=Cursors.Hand,
-                Style=(Style)Application.Current.MainWindow.FindResource("Button"),
-                Background=new SolidColorBrush(Color.FromRgb(183,214,193)),Foreground=new SolidColorBrush(Color.FromRgb(26,48,41)) };
-            done.Click += delegate { finish(); };
-            AutomationProperties.SetAutomationId(done,"DoneButton");
-            row.Children.Add(done);
-            buildBar = new Border { Child=row, Background=new SolidColorBrush(Color.FromArgb(241,29,49,52)),
-                CornerRadius=new CornerRadius(8), HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Bottom,
-                Padding=new Thickness(4),Margin=new Thickness(12,0,0,26),Visibility=Visibility.Collapsed };
-            stack.Children.Add(buildBar); Content=stack;
+            Surface = new SnowSurface(seed); Content = Surface;
             SourceInitialized += delegate {
                 hwnd=new WindowInteropHelper(this).Handle;
                 SetBuilding(false);
@@ -132,16 +107,6 @@ namespace Frostpane
             }
             Grab.Enable(enabled && !Suspended && !Surface.Building);
         }
-        internal void SelectTool(PlayTool tool)
-        {
-            toolHint.Text=tool==PlayTool.Decorate?DecorationPicker.NameOf(Surface.Scene.SelectedDecoration):
-                (tool==PlayTool.Erase?"Remove":tool.ToString());
-            if (tool==PlayTool.Lights || tool==PlayTool.Decorate && Surface.Scene.SelectedDecoration==DecorationKind.Lights)
-                toolHint.Text+="  ·  Drag ends to tilt, middle to curve";
-            else if (tool==PlayTool.Arrange || tool==PlayTool.Decorate || tool==PlayTool.Tree || tool==PlayTool.Sled)
-                toolHint.Text+="  ·  Drag the circular arrow to rotate";
-            toolHint.ToolTip=PlayPalette.Hint(tool);
-        }
         internal void Place()
         {
             if (hwnd==IntPtr.Zero) return;
@@ -149,14 +114,12 @@ namespace Frostpane
             SetWindowPos(hwnd,IntPtr.Zero,b.Left,b.Top,b.Width,b.Height,0x14);
             if (Grab!=null) Grab.Place();
         }
-        internal void SetBuilding(bool on,bool escapeRegistered=false)
+        internal void SetBuilding(bool on)
         {
             if (!on && Surface.IsMouseCaptured) Surface.ReleaseMouseCapture();
             Surface.Building=on;
             Surface.Scene.ShowDecorationHandles=on;
             if (on && Grab!=null) Grab.Enable(false);
-            buildBar.Visibility=on ? Visibility.Visible : Visibility.Collapsed;
-            done.Content=escapeRegistered ? "Done  ·  Esc" : "Done";
             Cursor=on ? Cursors.Hand : Cursors.Arrow;
             if (hwnd!=IntPtr.Zero) {
                 int flags=GetStyle(hwnd,Extended) | NoActivate | ToolWindow | ClickThrough;

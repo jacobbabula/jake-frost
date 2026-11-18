@@ -114,15 +114,18 @@
     </Style>
   </Window.Resources>
   <Border CornerRadius="15" BorderThickness="1" BorderBrush="#43575B" Background="#16282C" ClipToBounds="True">
-   <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
-    <StackPanel>
-      <Grid x:Name="TitleBar" Margin="19,13,12,12" Background="Transparent">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <Grid>
+    <DockPanel x:Name="ExpandedPanel">
+      <Grid x:Name="TitleBar" DockPanel.Dock="Top" Margin="19,13,12,12" Background="Transparent">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <Viewbox Width="24" Height="24" Margin="0,0,9,0"><Path Stroke="#C6E4D7" StrokeThickness="1.65" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M12,1 L12,23 M2.5,6.5 L21.5,17.5 M2.5,17.5 L21.5,6.5 M8.7,4.3 L12,7.5 15.3,4.3 M8.7,19.7 L12,16.5 15.3,19.7 M3.5,10.9 L8,9.7 6.8,5.1 M17.2,18.9 L16,14.3 20.5,13.1 M3.5,13.1 L8,14.3 6.8,18.9 M17.2,5.1 L16,9.7 20.5,10.9"/></Viewbox>
         <TextBlock Grid.Column="1" Text="Jake Frost" FontFamily="Georgia" FontSize="23" VerticalAlignment="Center"/>
         <Button x:Name="PauseButton" Grid.Column="2" Content="Pause snow" Margin="0,0,9,0" Padding="11,5" ToolTip="Pause or resume falling snow"/>
-        <Button x:Name="HideButton" Grid.Column="3" Background="Transparent" FontSize="18" Padding="6,0" Foreground="#ABBFBB" Content="×" ToolTip="Hide in system tray" AutomationProperties.Name="Hide in system tray"/>
+        <Button x:Name="MinimizeButton" Grid.Column="3" Content="−" FontSize="17" Padding="8,1" Background="Transparent" ToolTip="Minimize here" AutomationProperties.Name="Minimize here"/>
+        <Button x:Name="HideButton" Grid.Column="4" Background="Transparent" FontSize="18" Padding="6,0" Foreground="#ABBFBB" Content="×" ToolTip="Hide in system tray" AutomationProperties.Name="Hide in system tray"/>
       </Grid>
+      <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+       <StackPanel>
       <Border Margin="17,10,17,0" Background="#102024" Padding="3" CornerRadius="7">
         <UniformGrid Columns="4"><RadioButton x:Name="WorkshopTab" GroupName="PanelTab" Content="Workshop" IsChecked="True"/><RadioButton x:Name="WeatherTab" GroupName="PanelTab" Content="Weather"/><RadioButton x:Name="DecorTab" GroupName="PanelTab" Content="Decorate"/><RadioButton x:Name="FriendsTab" GroupName="PanelTab" Content="Friends"/></UniformGrid>
       </Border>
@@ -244,7 +247,14 @@
           <Button x:Name="QuitButton" Background="Transparent" Foreground="#AEC2BD" Padding="6,5" Margin="5,0,0,0" Content="Quit"/>
         </StackPanel>
       </Grid>
-    </StackPanel>
-   </ScrollViewer>
+       </StackPanel>
+      </ScrollViewer>
+    </DockPanel>
+    <DockPanel x:Name="CompactPanel" Visibility="Collapsed" Background="Transparent" Margin="8,5">
+      <Button x:Name="DoneButton" DockPanel.Dock="Right" Content="Done" Background="#BDDCCB" Foreground="#18352C" Padding="9,4" Margin="4,0,0,0"/>
+      <Button x:Name="RestoreButton" DockPanel.Dock="Right" Content="Restore" Padding="9,4" ToolTip="Open the full panel here"/>
+      <TextBlock x:Name="CompactTitle" Text="Jake Frost" FontWeight="SemiBold" Foreground="#CEE4DA" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="4,0,8,0"/>
+    </DockPanel>
+   </Grid>
   </Border>
 </Window>

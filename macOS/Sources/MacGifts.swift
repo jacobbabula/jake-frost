@@ -117,8 +117,7 @@ import AppKit
 
     @objc private func compose() {
         if composer == nil {
-            let panel=NSPanel(contentRect:NSRect(x:0,y:0,width:415,height:250),styleMask:[.titled,.closable],backing:.buffered,defer:false)
-            panel.title="Send a Gift";panel.isReleasedWhenClosed=false
+            let panel=AnchoredPanel(contentRect:NSRect(x:0,y:0,width:415,height:250),title:"Send a Gift")
             let column=NSStackView()
             column.orientation = .vertical;column.alignment = .leading;column.spacing=13
             column.translatesAutoresizingMaskIntoConstraints=false
@@ -148,7 +147,7 @@ import AppKit
             }
             panel.center();composer=panel
         }
-        NSApp.activate(ignoringOtherApps:true);composer?.makeKeyAndOrderFront(nil);composer?.makeFirstResponder(noteField)
+        NSApp.activate(ignoringOtherApps:true);(composer as? AnchoredPanel)?.expand();composer?.makeKeyAndOrderFront(nil);composer?.makeFirstResponder(noteField)
     }
 
     private func composeGift() throws -> FrostGift {

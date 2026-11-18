@@ -65,5 +65,8 @@ import AppKit
         _=train.clear()
         check(!train.hasActivity,"clearing removes delivered scenery")
     } else { check(false,"portable dressed tree creation") }
-    return failures==0
+    let visitorsOK=runMacVisitorChecks()
+    let workshopOK=runWorkshopChecks()
+    let panelsOK=runAnchoredPanelChecks()
+    return failures==0 && visitorsOK && workshopOK && panelsOK
 }

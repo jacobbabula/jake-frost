@@ -102,6 +102,11 @@ namespace Frostpane
 
         private readonly Random random;
         private readonly Dictionary<string, SnowBank> windows = new Dictionary<string, SnowBank>();
+        // Flakes normally travel only a few pixels per physics step. Index the full possible
+        // depth of each drift so a flake only checks ledges near its current altitude.
+        private const int BandHeight = 64;
+        private List<SnowBank>[] supportBands;
+        private bool supportBandsDirty = true;
         private double width, height, spawnBudget, relaxationClock, pointerX, pointerY, grabX, grabY;
         private SnowBank floor;
         private SnowBall heldBall;
@@ -132,6 +137,7 @@ namespace Frostpane
             if (Math.Abs(width - newWidth) + Math.Abs(height - newHeight) < .01) return;
             width = newWidth;
             height = newHeight;
+            supportBandsDirty = true;
             if (floor == null)
             {
                 floor = MakeBank("floor", 0, height, width, true, true);
@@ -210,6 +216,7 @@ namespace Frostpane
                         bank = MakeBank(edge.Id, x, edge.Y, span, false, initialLedges);
                         windows.Add(edge.Id, bank);
                         Banks.Add(bank);
+                        supportBandsDirty = true;
                     }
                     else
                     {
@@ -218,6 +225,7 @@ namespace Frostpane
                         if (changed < .25) continue;
                         if (changed > 4) Shed(bank, Limit(changed / 85.0, .10, .9), dx, dy);
                         Reshape(bank, x, edge.Y, span);
+                        supportBandsDirty = true;
                     }
                 }
             }
@@ -228,6 +236,7 @@ namespace Frostpane
                 Shed(bank, 1, 0, 0);
                 windows.Remove(bank.Id);
                 Banks.RemoveAt(i);
+                supportBandsDirty = true;
             }
             if (seen.Count > 0) initialLedges = false;
         }
@@ -272,6 +281,7 @@ namespace Frostpane
         {
             if (floor == null || dt <= 0 || double.IsNaN(dt)) return;
             ApplyDepth();
+            if (supportBandsDirty) RebuildSupportBands();
             dt = Math.Min(.12, dt);
             int steps = Math.Max(1, (int)Math.Ceiling(dt * 45));
             for (int i = 0; i < steps; i++) Update(dt / steps, intensity, Limit(wind, -190, 190));
@@ -344,12 +354,43 @@ namespace Frostpane
             }
         }
 
+        private void RebuildSupportBands()
+        {
+            int count = (int)Math.Min(1024, height / BandHeight + 1);
+            if (supportBands == null || supportBands.Length != count)
+                supportBands = new List<SnowBank>[count];
+            else
+                foreach (var band in supportBands) if (band != null) band.Clear();
+            foreach (var bank in Banks)
+            {
+                int first = (int)(Math.Max(0, bank.Y - bank.MaxDepth) / BandHeight);
+                int last = (int)Math.Min(count - 1, bank.Y / BandHeight);
+                for (int i = first; i <= last; i++)
+                {
+                    if (supportBands[i] == null) supportBands[i] = new List<SnowBank>();
+                    supportBands[i].Add(bank);
+                }
+            }
+            supportBandsDirty = false;
+        }
+
         private SnowBank FindSupport(double x, double fromY, double toY, double tolerance, out double surface,bool fallingSnow=false)
         {
             surface = double.PositiveInfinity;
             if (toY < fromY) return null;
+            List<SnowBank> candidates = Banks;
+            if (fallingSnow)
+            {
+                int band = (int)(Math.Max(0, fromY - tolerance) / BandHeight);
+                // A segment crossing a band boundary checks the original bank list.
+                if (band < supportBands.Length && toY + .1 < (band + 1) * BandHeight)
+                {
+                    candidates = supportBands[band];
+                    if (candidates == null) return null;
+                }
+            }
             SnowBank best = null;
-            foreach (SnowBank b in Banks)
+            foreach (SnowBank b in candidates)
             {
                 if(fallingSnow && b.Bare)continue;
                 if (x < b.X || x > b.X + b.Width || b.Y < fromY - tolerance || b.Y - b.MaxDepth > toY + .1) continue;

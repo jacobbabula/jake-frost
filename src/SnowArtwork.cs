@@ -38,6 +38,7 @@ namespace Frostpane
         private sealed class BankArt
         {
             internal double Width;
+            internal int Revision;
             internal double[] Heights;
             internal Sprite Picture;
         }
@@ -221,7 +222,7 @@ namespace Frostpane
             BankArt cache = BankCache.GetOrCreateValue(bank);
             bool update = cache.Heights == null || cache.Heights.Length != bank.Heights.Length ||
                 Math.Abs(cache.Width - bank.Width) > .15;
-            if (!update)
+            if (!update && cache.Revision != bank.Revision)
             {
                 for (int i = 0; i < bank.Heights.Length; i++)
                     if (Math.Abs(cache.Heights[i] - bank.Heights[i]) > .20) { update = true; break; }
@@ -234,6 +235,7 @@ namespace Frostpane
                 cache.Width = bank.Width;
                 cache.Picture = PaintBank(cache.Heights, bank.Width);
             }
+            cache.Revision = bank.Revision;
             if (cache.Picture != null) cache.Picture.Draw(dc, bank.X, bank.Y, 1);
         }
 

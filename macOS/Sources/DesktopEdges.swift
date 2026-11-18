@@ -3,12 +3,12 @@ import CoreGraphics
 
 // Quartz reports global coordinates from the upper-left of the primary display.
 // Every scene below uses upper-left coordinates local to its visible desktop.
-struct WindowFrame {
+struct WindowFrame: Equatable {
     let id: UInt32
     let rect: CGRect
 }
 
-struct SnowEdge {
+struct SnowEdge: Equatable {
     let id: UInt32
     var x: CGFloat
     var y: CGFloat

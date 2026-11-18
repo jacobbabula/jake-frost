@@ -19,7 +19,7 @@ using Forms = System.Windows.Forms;
 [assembly: AssemblyTitle("Jake Frost")]
 [assembly: AssemblyDescription("Interactive desktop snowfall")]
 [assembly: AssemblyProduct("Jake Frost")]
-[assembly: AssemblyVersion("3.2.0.0")]
+[assembly: AssemblyVersion("3.3.0.0")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8")]
 
 namespace Frostpane
@@ -218,6 +218,7 @@ namespace Frostpane
             Control<Grid>("TitleBar").MouseLeftButtonDown += delegate(object o,MouseButtonEventArgs e) {
                 if (!e.Handled && e.LeftButton==MouseButtonState.Pressed) panel.DragMove();
             };
+            ConnectCompactPanel();
             Control<Button>("HideButton").Click += delegate { panel.Hide(); };
             Control<Button>("PauseButton").Click += delegate { TogglePause(); };
             Control<Button>("ClearButton").Click += delegate { ClearSnow(); };
@@ -229,10 +230,10 @@ namespace Frostpane
             panelTools=new PlayPalette(3,ActivateTool);
             Control<Border>("ToolsHost").Child=panelTools;
             panel.Closing += delegate(object o,System.ComponentModel.CancelEventArgs e) {
-                if (!quitting) { e.Cancel=true; panel.Hide(); }
+                if (!quitting) { e.Cancel=true; if(building) SetBuild(false); panel.Hide(); }
             };
             panel.PreviewKeyDown += delegate(object o,KeyEventArgs e) {
-                if (e.Key==Key.Escape) { panel.Hide(); e.Handled=true; }
+                if (e.Key==Key.Escape) { if(building) SetBuild(false); else panel.Hide(); e.Handled=true; }
             };
             SetUpChoices(new[]{"Light","Steady","Flurry"},prefs.Intensity-1,delegate(int n){ prefs.Intensity=n+1; });
             SetUpChoices(new[]{"IceOff","IceFrost","IceIcicles","IceDeep"},prefs.Ice,delegate(int n){ prefs.Ice=n; });
@@ -311,13 +312,16 @@ namespace Frostpane
         {
             panelTools.SelectTool(prefs.Tool);
             foreach (Overlay o in overlays) {
-                Configure(o.Surface.Scene); o.SelectTool(prefs.Tool); o.Surface.InvalidateVisual();
+                Configure(o.Surface.Scene); o.Surface.InvalidateVisual();
                 UpdateGrab(o);
             }
         }
         private void SaveSoon() { if (!loading) { save.Stop(); save.Start(); } }
         private IntPtr PanelMessage(IntPtr hwnd,int msg,IntPtr wParam,IntPtr lParam,ref bool handled)
         {
+            if (msg==0x112 && (wParam.ToInt64() & 0xFFF0)==0xF020) {
+                SetCompact(true); handled=true; return IntPtr.Zero;
+            }
             if (msg==0x312 && wParam.ToInt32()==ExitBuildKey && building) {
                 SetBuild(false); handled=true;
             }
@@ -360,7 +364,7 @@ namespace Frostpane
         {
             if (quitting) return;
             if (building) SetBuild(false);
-            panel.Show(); panel.WindowState=WindowState.Normal;
+            SetCompact(false); panel.Show(); panel.WindowState=WindowState.Normal;
             panel.Topmost=true; panel.Activate(); panel.Focus();
             ScheduleFrames();
         }
@@ -399,7 +403,7 @@ namespace Frostpane
         }
         private void SetBuild(bool value)
         {
-            if (building==value) return;
+            if (building==value) { if(value) SetCompact(true); return; }
             if (value && overlays.All(o=>prefs.HiddenScreens.Contains(o.MonitorInfo.Id))) {
                 OpenPage("Weather");
                 Control<TextBlock>("ScheduleStatus").Text="Enable a display below to play on your desktop.";
@@ -412,17 +416,18 @@ namespace Frostpane
             leftWasDown=(GetAsyncKeyState(1)&0x8000)!=0;
             if (value) {
                 escapeRegistered=RegisterHotKey(panelHandle,ExitBuildKey,0x4000,0x1B);
-                panel.Hide();
             } else if (escapeRegistered) {
                 UnregisterHotKey(panelHandle,ExitBuildKey); escapeRegistered=false;
             }
             foreach (Overlay overlay in overlays) {
                 PollOverlay(overlay);
-                overlay.SetBuilding(value,escapeRegistered);
+                overlay.SetBuilding(value);
                 UpdateGrab(overlay);
                 if (!value) SaveDecorations(overlay);
             }
             trayBuild.Text=value?"Finish playing":"Play on desktop";
+            SetCompact(value);
+            panel.Show(); panel.Topmost=true; panel.Activate();
             ScheduleFrames();
         }
         private void SyncMonitors()
@@ -434,13 +439,14 @@ namespace Frostpane
             foreach (DesktopMonitor monitor in monitors) {
                 Overlay o=overlays.FirstOrDefault(v=>v.MonitorInfo.Id==monitor.Id);
                 if (o==null) {
-                    o=new Overlay(monitor,delegate { SetBuild(false); },delegate { OpenPage("Workshop"); },unchecked(Environment.TickCount+monitor.Id.GetHashCode()));
+                    o=new Overlay(monitor,unchecked(Environment.TickCount+monitor.Id.GetHashCode()));
                     o.GiftSelected=OpenGift;
                     o.Surface.Scene.RedeemDailyGift=RedeemPresent;
                     o.Surface.Scene.GiftArrived=friends.GiftArrived;
                     o.Surface.Scene.IsMountWindowAlive=DesktopMap.WindowAlive;
-                    Configure(o.Surface.Scene); o.SelectTool(prefs.Tool);
-                    overlays.Add(o); o.Show(); o.SetBuilding(building,escapeRegistered);
+                    Configure(o.Surface.Scene);
+                    overlays.Add(o); o.Show(); o.SetBuilding(building);
+                    if (building && panel.IsVisible) panel.Activate();
                 } else if(monitor.Work!=o.MonitorInfo.Work || monitor.Bounds!=o.MonitorInfo.Bounds || monitor.Scale!=o.MonitorInfo.Scale) {
                     o.MonitorInfo=monitor; o.Place();
                 }
