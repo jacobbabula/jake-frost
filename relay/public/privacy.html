@@ -3,14 +3,14 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Jake Frost privacy</title>
 <main style="max-width:44rem;margin:3rem auto;padding:0 1rem;font:1.1rem/1.55 system-ui">
 <h1>Jake Frost privacy</h1>
-<p>The Windows app draws its desktop scene locally. It reads window positions and display geometry so snow can land on open windows. Your scene, preferences and received gifts are stored on your device. The optional animated landscapes use bundled artwork and your device’s local clock.</p>
+<p>Jake Frost draws its desktop scene locally on Windows and Mac. It reads window positions and display geometry so snow can land on open windows. Your scene, preferences and received gifts are stored on your device. The optional animated landscapes use bundled artwork and your device’s local clock.</p>
 <h2>Matching your weather</h2>
 <p>When you choose local weather, Jake Frost sends the city you enter to Open-Meteo’s geocoding service and requests the weather for its coordinates. If you enter coordinates, it sends those coordinates directly to the forecast service. Manual and seasonal weather run locally. <a href="https://open-meteo.com/en/terms">Open-Meteo terms and privacy</a>.</p>
 <h2>Sharing a gift</h2>
 <p>You decide how to send gifts. Gift files include the sender name, note and scene item. The chat, mail or file service you use to send them handles the attachment. For shared-folder delivery, people with access to that folder can read its contents.</p>
-<h2>Online friends on Windows</h2>
+<h2>Online friends on Windows and Mac</h2>
 <p>Creating or accepting an invitation connects Jake Frost to its delivery service on Netlify. Give the one-use code privately to the person you want to add. Whoever first accepts an unused code can join that connection.</p>
 <p>The two apps encrypt display names and gift contents with a key shared through the invitation. The service receives encrypted data and random identifiers that authenticate the two devices. It can see delivery times, sizes and invitation status. Netlify processes connection data, including IP addresses, to serve requests and limit abuse. <a href="https://www.netlify.com/privacy/">Netlify privacy policy</a>.</p>
-<p>Unused invitations expire after seven days. Undelivered gifts expire after fourteen days. The relay removes a gift once the receiving app saves it. Removing a friend cancels the connection and clears queued gifts on the relay. Encrypted friendship records remain while the connection is active. Your PC stores friend keys using Windows user encryption and retains received gifts locally for replay.</p>
+<p>Unused invitations expire after seven days. Undelivered gifts expire after fourteen days. The relay removes a gift once the receiving app saves it. Removing a friend cancels the connection and clears queued gifts on the relay. Encrypted friendship records remain while the connection is active. Windows protects your local friendship keys using Windows user encryption. Mac encrypts its local friend list with a key in your login Keychain. Both platforms retain received gifts locally for replay.</p>
 <p>For questions, <a href="https://github.com/jacobbabula/jake-frost/issues">contact the project</a>. Keep names, private invitations and gifts out of public issues.</p>
 </main></html>

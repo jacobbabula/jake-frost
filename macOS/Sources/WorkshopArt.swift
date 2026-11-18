@@ -63,13 +63,6 @@ enum WorkshopKind: String, CaseIterable, Codable {
                 shape(pine,[(0,t),(w*0.54,(t+b)/2),(w*0.48,(t+b)/2),(w,b-4),(w*0.66,b-5),(w*0.51,b),(w*0.12,b-2),(-w*0.31,b),(-w*0.42,b-3),(-w*0.82,b-1),(-w,b-3),(-w*0.40,(t+b)/2)])
                 shape(0xCEE6D8,[(0,t),(w*0.53,(t+b)/2),(w*0.31,(t+b)/2-1),(w*0.17,(t+b)/2+2),(0,(t+b)/2-2),(-w*0.2,(t+b)/2+1),(-w*0.5,(t+b)/2+3)])
             }
-            stroke(0xE3B864,1.4) { p in
-                p.move(to:CGPoint(x:-12,y:-13));p.addQuadCurve(to:CGPoint(x:18,y:1),control:CGPoint(x:-2,y:-1))
-                p.move(to:CGPoint(x:-20,y:6));p.addQuadCurve(to:CGPoint(x:23,y:21),control:CGPoint(x:-7,y:22))
-            }
-            for (x,y,c) in [(-9,-12,0xF06367),(8,-3,0xFFCC67),(-16,8,0x83DCDD),(0,16,0xF86F79),(17,19,0xFFC76B)] {
-                dot(CGFloat(x),CGFloat(y),2.5,c);dot(CGFloat(x)-0.6,CGFloat(y)-0.8,0.75,0xFFF5CE)
-            }
             star(0,-43,7,0xE8A746);star(-0.4,-44,5.8,0xFFE8A0)
         case .wreath:
             let greens=[0x1E5B50,0x277058,0x3E8768]

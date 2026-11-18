@@ -13,6 +13,7 @@ for variant in baseline current; do
   files=("$src/DesktopEdges.swift" "$src/SnowWorld.swift")
   if [[ -f "$src/MacSceneMemory.swift" ]]; then files+=("$src/MacSceneMemory.swift" "$src/FrostGift.swift"); fi
   if [[ -f "$src/PlowSweep.swift" ]]; then files+=("$src/PlowSweep.swift"); fi
+  if [[ -f "$src/MacSnowBattle.swift" ]]; then files+=("$src/MacSnowBattle.swift"); fi
   xcrun swiftc -swift-version 5 -O "${files[@]}" "$repo/macOS/Tests/SnowBenchmark.swift" -o "$tmp/$variant"
 done
 echo "Heavy snow with 24 ledges, median nanoseconds per active particle-step, five trials:"

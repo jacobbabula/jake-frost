@@ -133,6 +133,19 @@ private struct WallpaperLight: Equatable {
     private(set) var scene:MacLandscape, lighting:MacLighting
     private(set) var motionEnabled:Bool
     var activeScreens:Int {surfaces.count}
+    /// Capture only the app's desktop layers, without sampling personal desktop contents.
+    func snapshot() -> NSBitmapImageRep? {
+        guard let surface=surfaces.values.first else{return nil}
+        let view=surface.view
+        view.layoutSubtreeIfNeeded()
+        view.displayIfNeeded();view.motion.displayIfNeeded()
+        let w=800,h=max(1,Int(800*view.bounds.height/view.bounds.width))
+        guard let context=CGContext(data:nil,width:w,height:h,bitsPerComponent:8,bytesPerRow:w*4,
+                space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue) else{return nil}
+        context.scaleBy(x:CGFloat(w)/view.bounds.width,y:CGFloat(h)/view.bounds.height)
+        view.layer?.render(in:context)
+        return context.makeImage().map { NSBitmapImageRep(cgImage:$0) }
+    }
     var hasDesktopLayer:Bool {
         !surfaces.isEmpty && surfaces.values.allSatisfy {$0.window.isVisible && $0.window.ignoresMouseEvents &&
             $0.window.level.rawValue > Int(CGWindowLevelForKey(.desktopWindow)) &&

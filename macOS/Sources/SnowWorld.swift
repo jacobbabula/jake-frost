@@ -14,6 +14,12 @@ struct SnowRandom {
     }
 }
 
+final class MacPlowLoad {
+    weak var bank: Drift?
+    var samples = [(bin:Int, bed:CGFloat, added:CGFloat)]()
+    var carry:CGFloat=0
+}
+
 final class Drift {
     var edge: SnowEdge
     private(set) var depth: [CGFloat]
@@ -64,35 +70,79 @@ final class Drift {
         edge = next; revision &+= 1
     }
     func clear() { depth = Array(repeating:0,count:depth.count); revision &+= 1 }
+    func settle(area:CGFloat,at x:CGFloat) {
+        let dx=spacing, radius=max(1.8*dx,1.55*sqrt(area))
+        let first=max(0,Int(ceil((x-radius-edge.x)/dx)))
+        let last=min(depth.count-1,Int(floor((x+radius-edge.x)/dx)))
+        guard area>0,first<=last else{return}
+        func weight(_ i:Int)->CGFloat {
+            let u=(edge.x+CGFloat(i)*dx-x)/radius, a=max(0,1-u*u)
+            return a*a
+        }
+        var total:CGFloat=0
+        for i in first...last {total+=weight(i)}
+        guard total>0 else{return}
+        for i in first...last {
+            let cap=edge.id==0 ? maximumDepth:min(maximumDepth,1.5+CGFloat(min(i,depth.count-1-i))*dx*0.55)
+            depth[i]=min(cap,depth[i]+area*weight(i)/(total*dx))
+        }
+        revision &+= 1
+    }
     /// Cut each covered column down to a shallow road and move the reclaimed
     /// powder forward into a long, angle-limited bank. Never refill the wheel lane.
-    func plowLane(rear: CGFloat, lip: CGFloat, scale: CGFloat) -> CGFloat {
-        guard edge.id == 0, lip >= edge.x, rear <= edge.x+edge.width else {return 0}
-        let left=max(0,Int(ceil((rear-edge.x)/spacing-0.5)))
-        let right=min(depth.count-1,Int(floor((lip-edge.x)/spacing+0.5)))
+    func plowLane(rear: CGFloat, lip: CGFloat, scale: CGFloat, load:MacPlowLoad) -> CGFloat {
+        guard edge.id == 0,max(rear,lip)>=edge.x,min(rear,lip)<=edge.x+edge.width else{return 0}
+        let sign=lip>=rear ? 1 : -1,dx=spacing
+        let left=max(0,Int(ceil((min(rear,lip)-edge.x)/dx)))
+        let right=min(depth.count-1,Int(floor((max(rear,lip)-edge.x)/dx)))
         guard left<=right else {return 0}
+        let carriedBefore = !load.samples.isEmpty
+        if load.bank===self {
+            for entry in load.samples where depth.indices.contains(entry.bin) {
+                let lift=min(entry.added,max(0,depth[entry.bin]-entry.bed))
+                depth[entry.bin]-=lift;load.carry+=lift
+            }
+        } else {load.bank=self;load.carry=0}
+        load.samples.removeAll(keepingCapacity:true)
         let road:CGFloat=1.1
         var removed:CGFloat=0
         for i in left...right where depth[i]>road {removed+=depth[i]-road;depth[i]=road}
-        guard removed>0 else {return 0}
-        // The toe meets the near side of a broad mound. Limit the height increase per
-        // sample from the cleared road and taper the far side instead of building a wall.
-        let count=max(7,Int(ceil((70+38*scale)/spacing)))
-        let end=min(depth.count-1,right+count)
-        var powder=removed*0.88,previous=depth[right]
-        if end>right {
-            for i in (right+1)...end {
-                let t=CGFloat(i-right)/CGFloat(count+1)
-                let weight=sin(.pi*t)
-                let ceiling=min(maximumDepth,previous+spacing*0.55)
-                let existing=depth[i]
-                let offered=min(powder,removed*0.88*weight*1.7/CGFloat(count))
-                let next=min(ceiling,existing+offered)
-                // Excess from a pre-existing abrupt bank is carried into later columns.
-                powder+=existing-next;depth[i]=next;previous=next
-            }
+        let first=sign>0 ? right+1:left-1
+        func distance(_ i:Int)->CGFloat {(edge.x+CGFloat(i)*dx-lip)*CGFloat(sign)}
+        var i=first,incoming:CGFloat=0
+        while depth.indices.contains(i),distance(i)<=max(16*dx,95*scale) {
+            if distance(i)>2*dx && depth[i]<0.25 {break}
+            incoming=max(incoming,depth[i]);i+=sign
         }
-        revision &+= 1;return removed
+        let bite=max(dx*7,3.15*incoming+18*scale)
+        i=first
+        while depth.indices.contains(i),distance(i)<bite {
+            let t=max(0,distance(i)/bite),cap=road+incoming*t*t*(3-2*t)
+            let cut=max(0,depth[i]-cap)
+            if cut<0.001 && distance(i)>2*dx {break}
+            removed+=cut;depth[i]-=cut;i+=sign
+        }
+        load.carry+=removed
+        let height=min(10.4*scale,sqrt(load.carry*dx*0.36)),reach=max(4.5*dx,19*scale+3.7*height)
+        let crest=max(0.78*dx,5.2*scale)
+        func profile(_ d:CGFloat)->CGFloat {
+            if d<=crest {let t=max(0,d/crest);return 0.82+0.18*t*t*(3-2*t)}
+            let u=min(1,(d-crest)/(reach-crest));return (1-u)*(1-u)*(1+2*u)
+        }
+        load.carry=min(load.carry,10.4*scale*reach*0.82/dx)
+        var weight:CGFloat=0
+        i=first
+        while depth.indices.contains(i),distance(i)<reach {weight+=profile(distance(i));i+=sign}
+        let amplitude=min(height,load.carry/max(1,weight))
+        i=first
+        while depth.indices.contains(i),distance(i)<reach {
+            let bed=depth[i],added=min(maximumDepth-bed,amplitude*profile(distance(i)))
+            if added>0.0001 {load.samples.append((i,bed,added));depth[i]+=added;load.carry-=added}
+            i+=sign
+        }
+        load.carry=max(0,load.carry)
+        if removed>0 || carriedBefore || !load.samples.isEmpty {revision &+= 1}
+        return removed
     }
 }
 
@@ -100,6 +150,7 @@ struct SnowParticle {
     var x, y, vx, vy, radius, phase: CGFloat
     var powder = false
     var life: CGFloat = 1
+    var wisp = false
 }
 
 final class PackedBall {
@@ -119,7 +170,9 @@ final class BuiltSnowman {
     let style: Int, facing: CGFloat
     var giftID: String?
     var support: UInt32?, supportFraction: CGFloat
-    var vy: CGFloat = 0
+    var vx: CGFloat = 0, vy: CGFloat = 0
+    var thrown = false
+    var guest = false
 
     init(saved: SavedSnowman, desktop: CGSize) {
         x = saved.x*desktop.width; foot = saved.foot*desktop.height
@@ -164,9 +217,12 @@ final class SnowWorld {
     private var collisionRows = [[Drift]]()
     private static let rowHeight: CGFloat = 64
     private var powderCount = 0
+    private(set) var fragments = [MacSnowFragment]()
+    let battle = MacSnowBattle()
+    var battlePace:CGFloat = 1
     var hasMotion: Bool {
         (!paused && snowEnabled && (amount > 0 || !particles.isEmpty)) || powderCount > 0 ||
-            balls.contains { $0.support == nil && $0.below == nil } || snowmen.contains { $0.support == nil }
+            battle.active || !fragments.isEmpty || balls.contains { ($0.support == nil || $0.vx != 0) && $0.below == nil } || snowmen.contains { $0.support == nil }
     }
     private(set) var particles = [SnowParticle]()
     private(set) var balls = [PackedBall]()
@@ -197,6 +253,7 @@ final class SnowWorld {
     private var start: CGPoint?, last = CGPoint.zero
     private var initialBank: Drift?, held: PackedBall?, ballOffset = CGPoint.zero
     private var samples = [(CGPoint,TimeInterval)]()
+    private var explicitThrow = false
 
     func configureSnowmanStorage(settings: UserDefaults, displayID: UInt32) {
         if let store=snowmanStore, store.settings === settings, store.key == "snowmen.v1.\(displayID)" { return }
@@ -204,7 +261,7 @@ final class SnowWorld {
         snowmanStore = store
         if size.width > 1 { snowmen = store.restore(in:size,banks:banks) }
     }
-    func rememberSnowmenNow() { snowmanStore?.save(snowmen,size:size) }
+    func rememberSnowmenNow() { snowmanStore?.save(snowmen.filter{!$0.guest},size:size) }
     @discardableResult func plowObjects(_ blade: PlowSweep) -> Bool {
         guard let floor=byID[0] else {return false}
         func circle(_ b: PackedBall) -> Bool {
@@ -213,13 +270,13 @@ final class SnowWorld {
         }
         for b in balls where b !== held && b.below == nil && (b.support == nil || b.support == 0) {
             guard circle(b) || b.above.map(circle)==true else {continue}
-            b.x=min(max(b.radius,size.width-b.radius),b.x+blade.advance+0.6)
+            b.x=max(b.radius,min(max(b.radius,size.width-b.radius),b.x+blade.advance+0.6*blade.direction))
             b.thrown=false;rest(b,on:floor);positionUpperBall(on:b)
         }
         var moved=false
         for figure in snowmen where figure !== heldSnowman && (figure.support == nil || figure.support == 0) {
             guard blade.touches(figure.hitBounds,includingSnow:figure.support==0,ink:{ figure.contains($0,padding:0) }) else {continue}
-            let x=min(max(figure.reach,size.width-figure.reach),figure.x+blade.advance+0.6)
+            let x=max(figure.reach,min(max(figure.reach,size.width-figure.reach),figure.x+blade.advance+0.6*blade.direction))
             if x != figure.x {figure.x=x;settle(figure,on:floor);moved=true}
         }
         return moved
@@ -275,10 +332,11 @@ final class SnowWorld {
         guard particles.count < 1800 else { return }
         let added = max(0,min(count,1800-particles.count))
         powderCount += added
-        for _ in 0..<added {
+        for i in 0..<added {
+            let wisp=i%8 == 0
             particles.append(SnowParticle(x:point.x,y:point.y,vx:random.between(-70,70)*strength,
-                vy:random.between(-112,-23)*strength,radius:random.between(1,2.7),
-                phase:0,powder:true,life:random.between(0.45,0.85)))
+                vy:random.between(-112,-23)*strength*(wisp ? 0.58 : 1),radius:wisp ? random.between(5,8)*strength : random.between(1,2.7),
+                phase:0,powder:true,life:random.between(0.45,0.85),wisp:wisp))
         }
     }
 
@@ -311,7 +369,8 @@ final class SnowWorld {
     private func row(_ y: CGFloat) -> Int {
         max(0, min(collisionRows.count - 1, Int(y / Self.rowHeight)))
     }
-    func intercept(x:CGFloat, previous:CGFloat, next:CGFloat) -> Drift? {
+    func intercept(x:CGFloat, previous:CGFloat, next:CGFloat, embedded:Bool=false) -> Drift? {
+        guard next>=previous,!collisionRows.isEmpty else{return nil}
         var bank: Drift?, earliest = CGFloat.greatestFiniteMagnitude
         let first = row(previous), last = row(next)
         // A normal flake crosses at most one row boundary. Keep the original bank
@@ -320,7 +379,7 @@ final class SnowWorld {
             guard previous <= d.edge.y + 1.2, next >= d.edge.y - d.maximumDepth,
                   x >= d.edge.x, x <= d.edge.x + d.edge.width, d.edge.contains(x) else { continue }
             let y=d.surface(x)
-            if previous <= y+1.2 && next >= y && y < earliest { earliest=y;bank=d }
+            if (embedded || previous <= y+1.2) && next >= y && y < earliest { earliest=y;bank=d }
         }
         return bank
     }
@@ -333,24 +392,38 @@ final class SnowWorld {
             while spawnBudget>=1 { if particles.count<1600 {spawn(randomHeight:false)};spawnBudget-=1 }
         }
         if !paused || powderCount > 0 { stepParticles(dt) }
+        stepFragments(dt)
+        if !paused {battle.step(dt,world:self)}
         for b in balls where b !== held && b.below == nil {
             if b.thrown { advanceThrow(b,dt:dt);continue }
             if let id=b.support,let d=byID[id] {
-                let x=d.edge.x+b.supportFraction*d.edge.width
+                let anchor=d.edge.x+b.supportFraction*d.edge.width
+                let slope=(d.surface(anchor+b.radius*0.5)-d.surface(anchor-b.radius*0.5))/max(1,b.radius)
+                if abs(slope)>0.16 || abs(b.vx)>2 {b.vx+=max(-1,min(1,slope))*260*dt}
+                b.vx *= max(0,1-0.65*dt)
+                b.vx = (b.vx<0 ? -1:1)*max(0,abs(b.vx)-14*dt)
+                let x=max(b.radius,min(max(b.radius,size.width-b.radius),anchor+b.vx*dt))
+                b.x=x
                 if d.edge.contains(x) {
-                    b.x=x;b.y=d.surface(x)-b.radius;positionUpperBall(on:b);continue
+                    if x==b.radius || x==size.width-b.radius {b.vx=0}
+                    b.supportFraction=(x-d.edge.x)/d.edge.width;b.y=d.surface(x)-b.radius
+                    positionUpperBall(on:b);continue
                 }
             }
             b.support=nil
             let old=b.y+b.radius;b.vy+=340*dt;b.x+=b.vx*dt;b.y+=b.vy*dt
             let bank=intercept(x:b.x,previous:old,next:b.y+b.radius)
             let nextFoot=min(b.y+b.radius,bank?.surface(b.x) ?? size.height)
-            if b.vy>=0 && tryStack(b,previous:old,next:nextFoot,byHand:false) {continue}
+            if (abs(b.vx)>100 || b.vy>=175), hitFigure(b) {splat(b,nil);continue}
+            if b.vy>=0 && b.vy<230 && tryStack(b,previous:old,next:nextFoot,byHand:false) {continue}
             if let d=bank {
+                if b.vy>=175 {b.y=d.surface(b.x)-b.radius;splat(b,d);continue}
                 rest(b,on:d)
             } else if b.y+b.radius>=size.height || b.x < -b.radius || b.x > size.width+b.radius {
                 if let floor=byID[0] {
-                    b.x=min(max(b.radius,b.x),size.width-b.radius);rest(b,on:floor)
+                    b.x=min(max(b.radius,b.x),size.width-b.radius)
+                    if b.vy>=175 {b.y=floor.surface(b.x)-b.radius;splat(b,floor);continue}
+                    rest(b,on:floor)
                 }
             }
             positionUpperBall(on:b)
@@ -362,11 +435,7 @@ final class SnowWorld {
                 if bank.edge.contains(x) {figure.x=x;figure.foot=bank.surface(x);continue}
             }
             figure.support=nil
-            let old=figure.foot
-            figure.vy += 340*dt;figure.foot += figure.vy*dt
-            if let bank = intercept(x:figure.x,previous:old,next:figure.foot) ?? (figure.foot >= size.height ? byID[0] : nil) {
-                settle(figure,on:bank); landed = true
-            }
+            if advanceFigure(figure,dt) {landed=true}
         }
         if landed { rememberSnowmenNow() }
     }
@@ -379,7 +448,7 @@ final class SnowWorld {
                 var p=buffer[i]
                 if !paused || p.powder {
                     let previous=p.y
-                    if p.powder {p.vy+=170*dt;p.life-=dt}
+                    if p.powder {p.vy+=(p.wisp ? 38:170)*dt;p.life-=dt}
                     else {p.phase+=dt;p.x+=(sin(p.phase)*11+wind)*dt}
                     p.x+=p.vx*dt;p.y+=p.vy*dt
                     if !p.powder, let d=intercept(x:p.x,previous:previous,next:p.y) {
@@ -403,7 +472,7 @@ final class SnowWorld {
     }
     private func settle(_ figure: BuiltSnowman,on bank:Drift) {
         figure.support=bank.edge.id;figure.supportFraction=(figure.x-bank.edge.x)/bank.edge.width
-        figure.foot=bank.surface(figure.x);figure.vy=0
+        figure.foot=bank.surface(figure.x);figure.vy=0;figure.vx=0;figure.thrown=false
     }
     private func positionUpperBall(on bottom:PackedBall) {
         if let upper=bottom.above {
@@ -438,9 +507,8 @@ final class SnowWorld {
         return true
     }
     private func splat(_ b: PackedBall,_ bank:Drift?) {
-        let y=bank?.surface(b.x) ?? min(size.height-2,b.y)
-        burst(CGPoint(x:b.x,y:y),count:Int(b.radius*2.5),strength:1.2)
-        bank?.add(at:b.x,amount:b.radius*0.35,spread:3);balls.removeAll { $0 === b }
+        scatter(x:b.x,y:b.y,r:b.radius,vx:b.vx,speed:hypot(b.vx,b.vy),contact:bank)
+        b.above?.below=nil;b.below?.above=nil;balls.removeAll { $0 === b }
     }
     private func advanceThrow(_ b:PackedBall,dt:CGFloat) {
         b.vy += 340*dt
@@ -450,9 +518,10 @@ final class SnowWorld {
             let previous=b.y+b.radius
             b.x += b.vx*slice;b.y += b.vy*slice
             let bank=intercept(x:b.x,previous:previous,next:b.y+b.radius)
-            if bank != nil || b.x <= b.radius || b.x+b.radius >= size.width || b.y <= b.radius || b.y+b.radius >= size.height ||
-                snowmen.contains(where:{$0 !== heldSnowman && $0.contains(CGPoint(x:b.x,y:b.y),padding:b.radius)}) {
+            if hitFigure(b) {splat(b,nil);return}
+            if bank != nil || b.x <= b.radius || b.x+b.radius >= size.width || b.y <= b.radius || b.y+b.radius >= size.height {
                 b.x=max(1,min(size.width-1,b.x));b.y=max(1,min(size.height-1,b.y))
+                if let d=bank {b.y=d.surface(b.x)-b.radius}
                 splat(b,bank);return
             }
         }
@@ -470,7 +539,7 @@ final class SnowWorld {
         cancel()
         if let figure=snowmen.reversed().first(where:{$0.contains(p)}) {
             heldSnowman=figure;start=p;ballOffset=CGPoint(x:figure.x-p.x,y:figure.foot-p.y)
-            figure.support=nil;figure.vy=0;return true
+            figure.support=nil;figure.vy=0;figure.vx=0;figure.thrown=false;last=p;samples=[(p,t)];return true
         }
         let b=ball(p), d=snowyBank(p)
         guard b != nil || d != nil else {return false}
@@ -486,7 +555,7 @@ final class SnowWorld {
         if let figure=heldSnowman {
             figure.x=max(0,min(size.width,p.x+ballOffset.x))
             figure.foot=max(0,min(byID[0]?.surface(figure.x) ?? size.height,p.y+ballOffset.y))
-            return
+            last=p;samples.append((p,t));samples.removeAll{t-$0.1>0.14};return
         }
         if held==nil {
             guard hypot(p.x-origin.x,p.y-origin.y)>=4,balls.count+snowmen.count<55 else{return}
@@ -511,19 +580,25 @@ final class SnowWorld {
     func up(_ p:CGPoint,at t:TimeInterval) {
         guard start != nil else{return}
         drag(p,at:t)
+        var vx:CGFloat=0,vy:CGFloat=0
+        if let first=samples.first {
+            let elapsed=CGFloat(max(0.04,t-first.1))
+            vx=(p.x-first.0.x)/elapsed;vy=(p.y-first.0.y)/elapsed
+        }
+        let speed=hypot(vx,vy), releaseSpeed:CGFloat=explicitThrow ? 55:175
         if let figure=heldSnowman {
-            if let bank=banks.filter({$0.edge.contains(figure.x) && abs($0.surface(figure.x)-figure.foot)<9})
+            if speed>releaseSpeed {
+                let k=min(1,920/speed);figure.thrown=true;figure.vx=vx*k;figure.vy=vy*k
+            } else if let bank=banks.filter({$0.edge.contains(figure.x) && abs($0.surface(figure.x)-figure.foot)<9})
                 .min(by:{abs($0.surface(figure.x)-figure.foot)<abs($1.surface(figure.x)-figure.foot)}) {
                 settle(figure,on:bank)
             }
         } else if let b=held {
-            if let first=samples.first,t-first.1>=0.008 {
-                let elapsed=CGFloat(t-first.1),vx=(p.x-first.0.x)/elapsed,vy=(p.y-first.0.y)/elapsed
-                let speed=hypot(vx,vy)
-                if speed>175 {let k=min(1,1100/speed);b.vx=vx*k;b.vy=vy*k;b.thrown=true}
-            }
+            let support=banks.first{$0.edge.contains(b.x) && abs($0.surface(b.x)-(b.y+b.radius))<7}
+            let rolling = !explicitThrow && support != nil && abs(vy)<abs(vx)*0.45
+            if !rolling && speed>releaseSpeed {let k=min(1,1100/speed);b.vx=vx*k;b.vy=vy*k;b.thrown=true}
             if !b.thrown,!tryStack(b,previous:b.y+b.radius,next:b.y+b.radius,byHand:true),
-               let d=banks.first(where:{$0.edge.contains(b.x) && abs($0.surface(b.x)-(b.y+b.radius))<7}) {rest(b,on:d)}
+               let d=support {rest(b,on:d);if rolling && abs(vx)>34 {b.vx=max(-410,min(410,vx*0.63))}}
         } else if let d=initialBank {
             d.add(at:p.x,amount:-3,spread:2);burst(CGPoint(x:p.x,y:d.surface(p.x)),count:23)
         }
@@ -531,10 +606,107 @@ final class SnowWorld {
     }
     func cancel(){
         if heldSnowman != nil { rememberSnowmenNow() }
-        start=nil;held=nil;heldSnowman=nil;initialBank=nil;samples.removeAll()
+        start=nil;held=nil;heldSnowman=nil;initialBank=nil;explicitThrow=false;samples.removeAll()
+    }
+    @discardableResult func rollDown(_ p:CGPoint,at time:TimeInterval)->Bool {
+        if down(p,at:time) {return true}
+        guard balls.count+snowmen.count<55,size.width>1 else{return false}
+        let b=PackedBall(p.x,p.y,9);balls.append(b);held=b;start=p;last=p;ballOffset = .zero;samples=[(p,time)]
+        return true
+    }
+    @discardableResult func throwDown(_ p:CGPoint,at time:TimeInterval)->Bool {
+        guard rollDown(p,at:time) else{return false}
+        explicitThrow=true
+        if held == nil && heldSnowman == nil {
+            guard balls.count+snowmen.count<55 else{cancel();return false}
+            let b=PackedBall(p.x,p.y,12);balls.append(b);held=b;ballOffset = .zero
+        }
+        return true
+    }
+    @discardableResult func wakeSnowmen()->Bool {battle.start(in:self)}
+    func availableForPlay(_ man:BuiltSnowman)->Bool {
+        man !== heldSnowman && !man.thrown && snowmen.contains(where:{$0===man})
+    }
+    func addGuest(at point:CGPoint,radius:CGFloat,style:Int)->BuiltSnowman? {
+        guard balls.count+snowmen.count<55,let floor=byID[0] else{return nil}
+        var gift=FrostGift();gift.kind = .snowman;gift.size=Double(radius);gift.mid=Double(radius*0.77)
+        gift.head=Double(radius*0.56);gift.style=style
+        let m=BuiltSnowman(gift:gift,foot:point)
+        m.guest=true;m.giftID=nil
+        let bank=intercept(x:point.x,previous:point.y-65,next:size.height+1) ?? floor
+        settle(m,on:bank);snowmen.append(m);burst(CGPoint(x:m.x,y:m.foot-3),count:11,strength:0.6)
+        return m
+    }
+    func removeGuests() {snowmen.removeAll{$0.guest && $0 !== heldSnowman}}
+    func dropVisitorSnowman(at x:CGFloat,scale:CGFloat) {
+        guard let m=addGuest(at:CGPoint(x:x,y:size.height),radius:19*scale,style:Int.random(in:0...4)) else{return}
+        m.guest=false;rememberSnowmenNow()
+    }
+    private func advanceFigure(_ m:BuiltSnowman,_ dt:CGFloat)->Bool {
+        m.vy=min(850,m.vy+(m.thrown ? 565:400)*dt)
+        let n=max(1,Int(ceil(max(abs(m.vx),abs(m.vy))*dt/7))),slice=dt/CGFloat(n)
+        for _ in 0..<n {
+            let old=m.foot
+            m.x+=m.vx*slice;m.foot+=m.vy*slice
+            if let d=intercept(x:m.x,previous:old,next:m.foot,embedded:true) ?? (m.foot>=size.height ? byID[0]:nil) {
+                m.foot=d.surface(m.x)
+                if m.thrown || m.vy>=155 {crumble(m,vx:m.vx,vy:m.vy,contact:d)}
+                else {settle(m,on:d)}
+                return true
+            }
+            if m.thrown && ((m.vx<0 && m.x<=m.reach) || (m.vx>0 && m.x>=size.width-m.reach) ||
+                             (m.vy<0 && m.hitBounds.minY<=0)) {crumble(m,vx:m.vx,vy:m.vy);return true}
+        }
+        return false
+    }
+    private func hitFigure(_ b:PackedBall)->Bool {
+        guard let m=snowmen.first(where:{$0 !== heldSnowman && $0.contains(CGPoint(x:b.x,y:b.y),padding:b.radius)}) else{return false}
+        crumble(m,vx:b.vx,vy:b.vy);return true
+    }
+    func crumble(_ m:BuiltSnowman,vx:CGFloat,vy:CGFloat,contact:Drift?=nil) {
+        guard let i=snowmen.firstIndex(where:{$0===m}) else{return}
+        snowmen.remove(at:i)
+        let floor=contact ?? intercept(x:m.x,previous:m.foot-2,next:m.foot+2)
+        let base=m.foot-m.base,middle=base-0.78*(m.base+m.middle),head=middle-0.78*(m.middle+m.head)
+        let speed=hypot(vx,vy)
+        scatter(x:m.x,y:base,r:m.base,vx:vx*0.45,speed:speed,contact:floor)
+        scatter(x:m.x,y:middle,r:m.middle,vx:vx*0.70,speed:speed,contact:nil)
+        scatter(x:m.x,y:head,r:m.head,vx:vx,speed:speed,contact:nil)
+        if !m.guest {rememberSnowmenNow()}
+    }
+    func scatter(x:CGFloat,y:CGFloat,r:CGFloat,vx:CGFloat,speed:CGFloat,contact:Drift?) {
+        let power=min(1.85,max(0.75,0.65+speed/820+r/85)),mass=1.65*r*r
+        let count=min(9,max(3,Int(r/3))),carried=contact==nil ? mass:0.35*mass
+        contact?.settle(area:mass*0.65,at:x)
+        for _ in 0..<count {
+            let fx=max(0,min(size.width,x+random.between(-0.55,0.55)*r))
+            var fy=y+random.between(-0.55,0.24)*r
+            if let bank=contact,bank.edge.contains(fx) {fy=min(fy,bank.surface(fx)-1)}
+            let f=MacSnowFragment(x:fx,y:fy,vx:max(-220,min(220,vx*0.30))+random.between(-76,76)*power,
+                                  vy:random.between(-140,-48)*power,r:min(7,max(1.8,r*random.between(0.12,0.28))),area:carried/CGFloat(count))
+            if fragments.count<320 {fragments.append(f)}
+            else if let near=fragments.indices.min(by:{hypot(fragments[$0].x-fx,fragments[$0].y-fy)<hypot(fragments[$1].x-fx,fragments[$1].y-fy)}) {
+                fragments[near].area+=f.area
+            }
+        }
+        burst(CGPoint(x:x,y:y),count:Int(min(46,max(12,r+speed/40))),strength:power)
+    }
+    private func stepFragments(_ dt:CGFloat) {
+        guard !fragments.isEmpty else{return}
+        var kept=0
+        for i in fragments.indices {
+            var f=fragments[i];let old=f.y
+            f.vy=min(360,f.vy+290*dt);f.vx*=1-0.6*dt;f.x+=(f.vx+wind*0.1)*dt;f.y+=f.vy*dt
+            if f.x<0 || f.x>size.width {f.x=max(0,min(size.width,f.x));f.vx *= -0.24}
+            if f.vy>=0,let d=intercept(x:f.x,previous:old,next:f.y,embedded:true) ?? (f.y>=size.height ? byID[0]:nil) {
+                d.settle(area:f.area,at:f.x);continue
+            }
+            fragments[kept]=f;kept+=1
+        }
+        fragments.removeLast(fragments.count-kept)
     }
     func clear() {
-        cancel();particles.removeAll();balls.removeAll();snowmen.removeAll();spawnBudget=0;powderCount=0
+        cancel();battle.end(in:self);fragments.removeAll();particles.removeAll();balls.removeAll();snowmen.removeAll();spawnBudget=0;powderCount=0
         snowmanStore?.clear()
         for d in banks {d.clear()}
     }

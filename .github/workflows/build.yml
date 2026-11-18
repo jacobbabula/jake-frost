@@ -106,10 +106,21 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - name: Pair online friends, retry offline gifts, and exchange authenticated Windows envelopes
+        run: |
+          mkdir -p dist
+          bash macOS/test-online.sh dist/mac-online.json
       - name: Measure heavy snowfall against version 3.3
         run: bash macOS/Tests/benchmark-snow.sh v3.3.0
       - name: Build and test the universal Mac app
+        env:
+          JAKEFROST_MAC_GALLERY: ${{ runner.temp }}/JakeFrost-gallery
         run: bash macOS/build.sh "$RUNNER_TEMP/JakeBuild"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mac-gallery
+          path: ${{ runner.temp }}/JakeFrost-gallery/
+          if-no-files-found: error
       - name: Exchange portable gifts
         run: |
           mkdir -p dist
@@ -132,7 +143,9 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mac-gift
-          path: dist/mac-tree.fpgift
+          path: |
+            dist/mac-tree.fpgift
+            dist/mac-online.json
           if-no-files-found: error
 
   intel-mac:
@@ -176,6 +189,8 @@ jobs:
           path: dist/windows-shared
       - name: Receive the Windows tree and send an addressed Mac snowman
         run: bash macOS/test-shared.sh dist/windows-shared/share dist/mac-shared
+      - name: Pair online friends and deliver encrypted gifts on Intel
+        run: bash macOS/test-online.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mac-shared-gifts
@@ -201,6 +216,7 @@ jobs:
         run: |
           Expand-Archive .\dist\public\Jake-Frost-Windows.zip .\dist
           .\tests\WindowsSetup.ps1 -SetupPath .\dist\public\Jake-Frost-Setup.exe -AppDirectory .\dist\Jake-Frost -GiftPath .\dist\gifts\mac-tree.fpgift
+          .\tests\WindowsFriendEnvelope.ps1 -Mode Read -Path .\dist\gifts\mac-online.json -AppDirectory .\dist\Jake-Frost
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: windows-shared-gifts

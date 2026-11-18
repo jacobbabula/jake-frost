@@ -15,6 +15,7 @@ import AppKit
     struct Parcel {
         let gift: FrostGift
         var x: CGFloat, tilt: CGFloat = 0, ornaments: [Ornament] = []
+        var trim:Int?, palette:Int?
         init(_ gift: FrostGift, x: CGFloat) {
             self.gift = gift; self.x = x
             guard gift.kind == .tree else { return }
@@ -24,7 +25,10 @@ import AppKit
                     guard i < a.count, let v = Double(a[i]), v.isFinite, abs(v) < 1_000_000 else { return nil }
                     return CGFloat(v)
                 }
-                if a[0] == "angles" {
+                if a[0] == "trim",a.count == 3,let flags=Int(a[1]),(0...7).contains(flags),
+                   let choice=Int(a[2]),(-1...2).contains(choice) {
+                    trim=flags;palette=choice
+                } else if a[0] == "angles" {
                     tilt = n(1) ?? 0
                     for i in ornaments.indices { ornaments[i].angle = n(i + 2) ?? 0 }
                 } else if a[0] == "scale" {
@@ -228,6 +232,11 @@ import AppKit
             polygon(c,0xD2E6DD,[point(0,t),point(width*0.44,t+(b-t)*0.52),point(width*0.16,t+(b-t)*0.43),point(-width*0.23,t+(b-t)*0.57),point(-width*0.46,t+(b-t)*0.53)])
         }
         let localTreeHeight = WorkshopSymbol.forKind(.tree).bounds.height
+        c.saveGState()
+        c.scaleBy(x:1/localTreeHeight,y:1/localTreeHeight)
+        c.translateBy(x:0,y:-WorkshopSymbol.forKind(.tree).bounds.maxY)
+        MacTreeLights.draw(trim:parcel.trim ?? 7,palette:parcel.palette ?? 1,time:nil,in:c)
+        c.restoreGState()
         for ornament in parcel.ornaments {
             guard let kind = WorkshopKind(giftOrnamentID: ornament.kind) else { continue }
             c.saveGState(); c.translateBy(x:ornament.x,y:ornament.y); c.rotate(by:ornament.angle * .pi/180)

@@ -6,6 +6,7 @@ import AppKit
     private let settings=FrostApp.smoke || FrostApp.testMailbox != nil ? UserDefaults(suiteName:"io.jakefrost.test."+UUID().uuidString)! : UserDefaults.standard
     private let gifts=MacGifts(mailboxRoot:FrostApp.testMailbox)
     private lazy var weatherControls = MacWeatherControls(settings:settings,onChange:{ [weak self] in self?.applyPreferences() })
+    private lazy var wallpapers = MacWallpapers(settings:settings,onChange:{ [weak self] in self?.syncWallpapers() })
     private lazy var visitorControls = MacVisitorControls(settings:settings,summon:{ [weak self] kind in
         guard let self = self, let canvas = self.currentScene?.view else { return }
         if kind == .train { canvas.giftTrain.visit() } else { canvas.visitors.summon(kind,in:canvas.world) }
@@ -27,6 +28,10 @@ import AppKit
     private var lastTick=ProcessInfo.processInfo.systemUptime
     private var nextEdges:TimeInterval=0
     private var welcome:AnchoredPanel?
+    private lazy var studio = MacStudio(menu:{ [unowned self] in
+        let menu=self.status.menu ?? NSMenu(title:"Jake Frost")
+        self.fill(menu);return menu
+    })
     private var workshopActive = false
     private var receivedDocument=false
     private var awake=true
@@ -39,7 +44,14 @@ import AppKit
     private var paused:Bool {settings.bool(forKey:"pauseSnow")}
 
     func applicationDidFinishLaunching(_ note:Notification) {
-        settings.register(defaults:["snowfall":1,"snowPlay":true,"pauseSnow":false,"snowDepth":55,"windowSnow":true,"clickPuff":true,"powerSaving":true])
+        settings.register(defaults:["snowfall":1,"snowIntensity":1,"snowPlay":true,"pauseSnow":false,"snowDepth":55,"windowSnow":true,"clickPuff":true,"powerSaving":true])
+        weatherControls.onManualChoice = { [weak self] in
+            guard let self=self else{return}
+            for scene in self.scenes.values {
+                scene.view.weatherEffects.sky.endStorm();scene.view.visitors.clearWild()
+                scene.view.needsDisplay=true
+            }
+        }
         NSApp.setActivationPolicy(.accessory)
         status=NSStatusBar.system.statusItem(withLength:NSStatusItem.squareLength)
         if let button=status.button {
@@ -86,7 +98,8 @@ import AppKit
                 else {print("FAIL: native application did not create its desktop overlay")}
                 let controls=self.exerciseMenu()
                 print((controls ? "PASS: " : "FAIL: ")+"menu actions change real weather, window ice, depth, display layer and pause")
-                exit(ready && controls ? 0 : 1)
+                let gallery=self.studio.captureGalleryIfRequested()
+                exit(ready && controls && gallery ? 0 : 1)
             }
         } else if !settings.bool(forKey:"welcomed") {
             DispatchQueue.main.asyncAfter(deadline:.now()+0.4) { [weak self] in
@@ -96,13 +109,14 @@ import AppKit
         }
     }
     func application(_ sender:NSApplication,open urls:[URL]) {
-        receivedDocument=true;welcome?.close();gifts.open(urls)
+        receivedDocument=true;welcome?.close();studio.close();gifts.open(urls)
     }
     func applicationShouldHandleReopen(_ sender:NSApplication,hasVisibleWindows flag:Bool)->Bool {
         showWelcome();return true
     }
     func applicationWillTerminate(_ note:Notification) {
         timer?.invalidate()
+        wallpapers.sync([],enabled:[])
         NotificationCenter.default.removeObserver(self)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         for scene in scenes.values {scene.view.world.rememberSnowmenNow();scene.panel.orderOut(nil)}
@@ -142,6 +156,7 @@ import AppKit
             if let existing=scenes[id] {existing.panel.setFrame(frame,display:true)}
             else {
                 let scene=ScreenScene(frame:frame)
+                scene.view.santaPresent.settings=settings
                 scene.view.giftExistsElsewhere = { [weak self] giftID in
                     guard let self=self else{return false}
                     let loaded=self.scenes.compactMap { $0.value.view.world.size.width>1 ? $0.key:nil }
@@ -152,6 +167,10 @@ import AppKit
                 scene.view.giftTrain.configureParcelStorage(settings:settings,displayID:id)
                 let workshop=scene.view.workshop
                 workshop.configure(settings:settings,displayID:id)
+                workshop.onPlantTree = { [weak self] in
+                    guard let self=self,!self.weatherControls.mode.isSnow else{return}
+                    self.weatherControls.choose(.snow)
+                }
                 workshop.onEditingChanged = { [weak self,weak workshop] in
                     self?.updateWorkshopPanels(toolSelected:workshop?.editing == true)
                 }
@@ -169,8 +188,10 @@ import AppKit
         let editing = scenes.values.contains { $0.view.workshop.editing }
         guard workshopActive != editing || toolSelected else { return }
         workshopActive = editing
+        studio.setWorkshopEditing(editing)
         welcome?.setWorkshopEditing(editing)
         gifts.setWorkshopEditing(editing)
+        for s in scenes.values {s.view.workshop.setEditorToolActive(editing)}
     }
     private func updateEdges(){
         guard let primary=NSScreen.screens.first else{return}
@@ -206,15 +227,26 @@ import AppKit
             nextEdges=now+0.45
         }
         let mouse=NSEvent.mouseLocation
-        for scene in scenes.values where scene.panel.isVisible {scene.view.frameTick(dt,cursor:mouse)}
+        for scene in scenes.values where scene.panel.isVisible {
+            let canvas=scene.view
+            canvas.weatherEffects.sky.step(dt,world:canvas.world,clouds:weatherControls.mode == .clouds,wind:weatherControls.wind,
+                sendYeti:{canvas.visitors.summonWild(in:canvas.world,direction:$0)},ended:{canvas.visitors.clearWild()})
+            canvas.frameTick(dt,cursor:mouse)
+        }
+        wallpapers.tick(dt,paused:paused,lowPower:lowPower)
         startFrames()
+    }
+    private func syncWallpapers(){
+        wallpapers.sync(NSScreen.screens,enabled:Set(scenes.compactMap { $0.value.panel.isVisible ? $0.key : nil }))
     }
     private func updatePanelVisibility(){
         let chosen=settings.integer(forKey:"onlyDisplay")
         let restrict=chosen>0 && scenes.keys.contains { Int($0)==chosen }
+        let excluded=Set(settings.stringArray(forKey:"excludedDisplays") ?? [])
         var interrupted=false
         for (id,s) in scenes {
-            let visible = (!restrict || chosen==Int(id)) && !fullscreenDisplays.contains(id)
+            let enabled=restrict ? chosen==Int(id) : !excluded.contains(String(id))
+            let visible = enabled && !fullscreenDisplays.contains(id)
             if s.panel.isVisible != visible {
                 if visible {s.panel.orderFrontRegardless();previousScreens.removeValue(forKey:id)}
                 else {
@@ -223,6 +255,7 @@ import AppKit
                 }
             }
         }
+        syncWallpapers()
         if interrupted {gifts.retryUndelivered()}
     }
     private func applyPreferences(){
@@ -232,7 +265,8 @@ import AppKit
             let level:NSWindow.Level = settings.bool(forKey:"behindWindows") ?
                 NSWindow.Level(rawValue:Int(CGWindowLevelForKey(.desktopIconWindow))+1) : .floating
             if s.panel.level != level {s.panel.level=level}
-            s.view.world.amount=intensity*(weatherControls.mode == .heavySnow ? 1.7 : 1)
+            let density:[CGFloat]=[0.45,1,1.8]
+            s.view.world.amount=intensity*density[max(0,min(2,settings.integer(forKey:"snowIntensity")))]*(weatherControls.mode == .heavySnow ? 1.7 : 1)
             s.view.world.snowEnabled=weatherControls.mode.isSnow
             s.view.world.wind=weatherControls.wind
             s.view.world.setAccumulation(CGFloat(settings.integer(forKey:"snowDepth")))
@@ -250,7 +284,9 @@ import AppKit
     }
     private func fill(_ menu:NSMenu) {
         menu.removeAllItems()
+        _=item("Open Jake Frost…",#selector(showWelcome),menu)
         weatherControls.append(to:menu)
+        wallpapers.append(to:menu)
         let snow = NSMenu(title:"Snow and windows")
         menu.addItem(withTitle:snow.title,action:nil,keyEquivalent:"").submenu=snow
         func choices(_ title:String,_ key:String,_ values:[(Int,String)],_ current:Int) {
@@ -262,11 +298,25 @@ import AppKit
             }
         }
         choices("Weather volume","snowVolume",[0,25,45,75,100,150,220,300,400].map {($0,"\($0)%")},volume)
+        choices("Snowfall","snowIntensity",[(0,"Light"),(1,"Steady"),(2,"Flurry")],settings.integer(forKey:"snowIntensity"))
         choices("Accumulation depth","snowDepth",[24,40,55,80,110,140,180,240,320].map {($0,"\($0) pt")},settings.integer(forKey:"snowDepth"))
         choices("Window ice","windowIce",[(0,"Off"),(1,"Light frost"),(2,"Icicles"),(3,"Heavy ice")],settings.integer(forKey:"windowIce"))
         choices("Show effects on","onlyDisplay",[(0,"All displays")]+NSScreen.screens.compactMap { screen in
             guard let id=displayID(screen) else {return nil};return (Int(id),screen.localizedName)
         },settings.integer(forKey:"onlyDisplay"))
+        if let displayMenu=snow.item(withTitle:"Show effects on")?.submenu {
+            let excluded=Set(settings.stringArray(forKey:"excludedDisplays") ?? [])
+            let chosen=settings.integer(forKey:"onlyDisplay")
+            if chosen==0 && !excluded.isEmpty {displayMenu.item(withTitle:"All displays")?.state = .off}
+            let individual=NSMenu(title:"Enabled displays")
+            displayMenu.addItem(.separator())
+            displayMenu.addItem(withTitle:individual.title,action:nil,keyEquivalent:"").submenu=individual
+            for screen in NSScreen.screens {
+                guard let id=displayID(screen) else{continue}
+                let entry=item(screen.localizedName,#selector(toggleDisplay(_:)),individual)
+                entry.tag=Int(id);entry.state=(chosen>0 ? chosen==Int(id) : !excluded.contains(String(id))) ? .on:.off
+            }
+        }
         let edges=item("Collect snow on window edges",#selector(toggleWindows),snow);edges.state=windowSnow ? .on:.off
         let layer=item("Show behind windows",#selector(toggleLayer),snow);layer.state=settings.bool(forKey:"behindWindows") ? .on:.off
         for (key,label) in [("pauseFullscreen","Pause over fullscreen apps"),("powerSaving","Reduce animation in Low Power Mode"),("clickPuff","Puff falling flakes on click")] {
@@ -280,9 +330,14 @@ import AppKit
         _=item("Clear scene",#selector(clearScene),menu)
         menu.addItem(.separator())
         currentScene?.view.workshop.appendMenu(to:menu)
+        if let play=menu.item(withTitle:"Play on the snow")?.submenu {
+            play.addItem(.separator())
+            _=item("Wake the snowmen",#selector(wakeSnowmen),play)
+            _=item("Blizzard",#selector(blizzard),play)
+        }
         visitorControls.append(to:menu)
         menu.addItem(.separator());gifts.appendCommands(to:menu)
-        menu.addItem(.separator());_=item("How to play",#selector(showWelcome),menu)
+        menu.addItem(.separator());_=item("How to play",#selector(showHelp),menu)
         let quit=item("Quit Jake Frost",#selector(quitApp),menu);quit.keyEquivalent="q"
     }
     func menuNeedsUpdate(_ menu:NSMenu){fill(menu)}
@@ -297,6 +352,11 @@ import AppKit
             return NSApp.sendAction(action,to:item.target,from:item)
         }
         guard choose("Weather","Rain"),!scene.view.world.snowEnabled,scene.view.weatherEffects.mode == .rain,
+              choose("Weather","Clouds"),scene.view.weatherEffects.mode == .clouds,
+              choose("Play on the snow","Blizzard"),scene.view.weatherEffects.sky.inBlizzard,
+              choose("Weather","Clouds"),!scene.view.weatherEffects.sky.inBlizzard,
+              choose("Desktop wallpaper","Switchback Station"),wallpapers.hasDesktopLayer,
+              choose("Desktop wallpaper","System wallpaper"),wallpapers.activeScreens==0,
               choose("Weather","Heavy snow"),scene.view.world.snowEnabled,scene.view.world.amount>1,
               choose("Snow and windows","Weather volume","300%"),scene.view.world.amount>5,
               choose("Snow and windows","Window ice","Heavy ice"),scene.view.iceLevel==3,
@@ -307,8 +367,28 @@ import AppKit
     }
     @objc private func setPreference(_ item:NSMenuItem){
         guard let key=item.representedObject as? String else {return}
+        if key=="onlyDisplay" {settings.removeObject(forKey:"excludedDisplays")}
         settings.set(item.tag,forKey:key);applyPreferences()
         if key == "onlyDisplay" {updateEdges()}
+    }
+    @objc private func toggleDisplay(_ item:NSMenuItem){
+        let chosen=settings.integer(forKey:"onlyDisplay")
+        var excluded=Set(settings.stringArray(forKey:"excludedDisplays") ?? [])
+        if chosen>0 {excluded=Set(scenes.keys.filter {Int($0) != chosen}.map {String($0)})}
+        let id=String(item.tag)
+        if excluded.remove(id)==nil {excluded.insert(id)}
+        settings.set(0,forKey:"onlyDisplay");settings.set(Array(excluded),forKey:"excludedDisplays")
+        applyPreferences();updateEdges()
+    }
+    @objc private func wakeSnowmen(){
+        guard let scene=currentScene else{return}
+        _=scene.view.world.wakeSnowmen();scene.view.needsDisplay=true;startFrames()
+    }
+    @objc private func blizzard(){
+        for scene in scenes.values where scene.panel.isVisible {
+            scene.view.weatherEffects.sky.startStorm();scene.view.needsDisplay=true
+        }
+        startFrames()
     }
     @objc private func toggleWindows(){settings.set(!windowSnow,forKey:"windowSnow");previousWindows=nil;updateEdges()}
     @objc private func toggleLayer(){settings.set(!settings.bool(forKey:"behindWindows"),forKey:"behindWindows");applyPreferences()}
@@ -327,6 +407,7 @@ import AppKit
     @objc private func clearScene(){
         var interrupted=false
         for s in scenes.values {
+            s.view.santaPresent.clear()
             s.view.world.clear();s.view.weatherEffects.clear();s.view.workshop.clear();s.view.visitors.clear();s.view.releasePointer()
             if s.view.giftTrain.clear(){interrupted=true}
             s.view.needsDisplay = true
@@ -336,6 +417,9 @@ import AppKit
     @objc private func quitApp(){NSApp.terminate(nil)}
     @objc private func showWelcome() {
         settings.set(true,forKey:"welcomed")
+        studio.show()
+    }
+    @objc private func showHelp() {
         if let panel=welcome {NSApp.activate(ignoringOtherApps:true);panel.expand();panel.makeKeyAndOrderFront(nil);return}
         let panel=AnchoredPanel(contentRect:CGRect(x:0,y:0,width:380,height:190),title:"Jake Frost")
         let header=NSTextField(labelWithString:"Play in the snow")

@@ -117,11 +117,19 @@ enum MacVisitorKind: String, CaseIterable {
         let kind: MacVisitorKind
         var x: CGFloat, y: CGFloat = 0, distance: CGFloat = 0, angle: CGFloat = 0
         var powderBudget: CGFloat = 0
-        init(_ kind: MacVisitorKind, x: CGFloat) { self.kind = kind; self.x = x }
+        let direction:CGFloat,load=MacPlowLoad()
+        var yeti:MacYeti?,dropped=false
+        init(_ kind: MacVisitorKind, x: CGFloat,direction:CGFloat) { self.kind = kind; self.x = x;self.direction=direction }
     }
     private var active = [Visit]()
     private var scales = [MacVisitorKind:CGFloat]()
     private var speeds = [MacVisitorKind:CGFloat]()
+    private var nextPlow:CGFloat=1,nextYeti:CGFloat=1
+    weak var workshop:MacWorkshop?
+    var onSantaDrop:((CGPoint)->Void)?
+    var onPlow:((PlowSweep)->Void)?
+    var wildCount:Int {active.filter{$0.yeti?.wild==true}.count}
+    var yetis:[MacYeti] {active.compactMap(\.yeti)}
     var pushWorkshop: ((PlowSweep) -> Void)?
     var finishPlowing: (() -> Void)?
     private var pushedFigure = false
@@ -133,14 +141,30 @@ enum MacVisitorKind: String, CaseIterable {
     }
     func clear() { active.removeAll(keepingCapacity:true);plowPose=nil;finishPlowing?();pushedFigure=false }
     func summon(_ kind: MacVisitorKind, in world: SnowWorld) {
+        let direction:CGFloat
+        switch kind {
+        case .snowplow: direction=nextPlow;nextPlow *= -1
+        case .yeti: direction=nextYeti;nextYeti *= -1
+        default: direction=1
+        }
+        enter(kind,world:world,direction:direction,wild:false)
+    }
+    func summonWild(in world:SnowWorld,direction:CGFloat) {
+        if wildCount<3 {enter(.yeti,world:world,direction:direction<0 ? -1:1,wild:true)}
+    }
+    func clearWild() {active.removeAll{$0.yeti?.wild==true}}
+    private func enter(_ kind:MacVisitorKind,world:SnowWorld,direction:CGFloat,wild:Bool) {
         guard kind != .train, world.size.width > 1, active.count < 8 else { return }
         let scale = scales[kind] ?? 1
-        var x = -kind.spriteBounds.maxX * scale + 2
+        let offset=kind.spriteBounds.maxX*scale-2
+        var x=direction>0 ? -offset:world.size.width+offset
         // Leave cars room to enter even if the same menu command is used repeatedly.
-        if let last = active.last(where:{ $0.kind == kind }) {
-            x = min(x,last.x - kind.spriteBounds.width * scale - 8)
+        if let last = active.last(where:{ $0.kind == kind && $0.direction==direction }) {
+            let margin=kind.spriteBounds.width*scale+8
+            x=direction>0 ? min(x,last.x-margin):max(x,last.x+margin)
         }
-        let visit = Visit(kind,x:x)
+        let visit = Visit(kind,x:x,direction:direction)
+        if kind == .yeti {visit.yeti=MacYeti(x:x,facing:direction,wild:wild)}
         position(visit,world:world,scale:scale)
         active.append(visit)
     }
@@ -172,20 +196,26 @@ enum MacVisitorKind: String, CaseIterable {
         }
     }
     func step(_ seconds: TimeInterval, world: SnowWorld) {
+        world.battlePace=speeds[.snowmen] ?? 1
         guard !active.isEmpty else { return }
         let dt = CGFloat(max(0,min(0.1,seconds)))
         for v in active {
             let scale = scales[v.kind] ?? 1
             let displacement = v.kind.pointsPerSecond * (speeds[v.kind] ?? 1) * dt
             let old = CGPoint(x:v.x,y:v.y), oldAngle = v.angle
-            v.x += displacement; v.distance += displacement
+            if let yeti=v.yeti {
+                yeti.step(dt,scale:scale,pace:speeds[.yeti] ?? 1,world:world,workshop:workshop)
+                v.x=yeti.x;v.y=yeti.y;continue
+            }
+            v.x += displacement*v.direction; v.distance += displacement
             if v.kind == .snowplow, let ground = world.banks.first {
                 position(v,world:world,scale:scale)
                 var blade=PlowSweep(from:old,angle:oldAngle,to:CGPoint(x:v.x,y:v.y),angle:v.angle,
-                                    scale:scale,speed:v.kind.pointsPerSecond*(speeds[v.kind] ?? 1))
-                if blade.bounds.maxX >= 0 && old.x-27*scale <= world.size.width {
-                    let bladeX=blade.bounds.maxX,contact=ground.surface(bladeX)
-                    let removed=ground.plowLane(rear:old.x-27*scale,lip:bladeX,scale:scale)
+                                    scale:scale,speed:v.kind.pointsPerSecond*(speeds[v.kind] ?? 1),direction:v.direction)
+                let bladeX=v.direction>0 ? blade.bounds.maxX:blade.bounds.minX,rear=old.x-v.direction*27*scale
+                if max(bladeX,rear)>=0 && min(bladeX,rear)<=world.size.width {
+                    let contact=ground.surface(bladeX)
+                    let removed=ground.plowLane(rear:rear,lip:bladeX,scale:scale,load:v.load)
                     blade.carryingSnow(on:ground,scale:scale)
                     if removed > 0 {
                         v.powderBudget = min(12,v.powderBudget+removed*0.38)
@@ -197,12 +227,21 @@ enum MacVisitorKind: String, CaseIterable {
                     }
                     if world.plowObjects(blade) {pushedFigure=true}
                     pushWorkshop?(blade)
+                    onPlow?(blade)
                 }
             }
             if v.kind != .snowplow {position(v,world:world,scale:scale)}
+            if !v.dropped && v.x>=world.size.width*0.48 {
+                v.dropped=true
+                if v.kind == .santa {onSantaDrop?(CGPoint(x:v.x,y:v.y))}
+                if v.kind == .snowmen {world.dropVisitorSnowman(at:v.x,scale:scale)}
+            }
         }
         let hadPlow=plowPose != nil
-        active.removeAll { $0.x + $0.kind.spriteBounds.minX * (scales[$0.kind] ?? 1) > world.size.width }
+        active.removeAll { visit in
+            let margin = -visit.kind.spriteBounds.minX*(scales[visit.kind] ?? 1)
+            return visit.direction>0 ? visit.x-margin>world.size.width:visit.x+margin<0
+        }
         if hadPlow && !active.contains(where:{$0.kind == .snowplow}) {
             plowPose=nil
             if pushedFigure {world.rememberSnowmenNow();pushedFigure=false}
@@ -212,11 +251,12 @@ enum MacVisitorKind: String, CaseIterable {
     func draw(in c: CGContext) {
         for visitor in active {
             let scale = scales[visitor.kind] ?? 1
+            if let yeti=visitor.yeti {yeti.draw(in:c,scale:scale);continue}
             // One complete gait per stride. Treads and boots keep pace as their size changes.
             let stride: CGFloat = visitor.kind == .snowplow ? 42 : visitor.kind == .santa ? 47 : 27
             let frame = Int(visitor.distance * 8 / (stride * scale)) % 8
             c.saveGState(); c.translateBy(x:visitor.x,y:visitor.y)
-            c.rotate(by:visitor.angle); c.scaleBy(x:scale,y:scale)
+            c.rotate(by:visitor.angle); c.scaleBy(x:scale*visitor.direction,y:scale)
             VisitorArt.draw(visitor.kind,frame:frame,in:c)
             c.restoreGState()
         }
@@ -248,7 +288,7 @@ enum MacVisitorKind: String, CaseIterable {
             let art = VisitorArt(c:bitmap), phase = CGFloat(frame)*(.pi/4)
             switch kind {
             case .snowplow: art.plow(phase)
-            case .yeti: art.yeti(phase)
+            case .yeti: return // The planted feet and upper body render independently.
             case .santa: art.sleigh(phase)
             case .snowmen: art.snowmen(phase)
             case .train: return
@@ -309,36 +349,10 @@ enum MacVisitorKind: String, CaseIterable {
                 oval(0xDAC29B,x+cos(a)*2.2,-7+sin(a)*2.2,0.55,0.55)
             }
         }
-        stroke(0x5C7179,2.8,[(24,-11),(33,-8),(37,-13)])
-        poly(0x9E5530,[(31,-18),(37,-20),(39,-10),(45,-3),(34,-1),(30,-7)])
-        poly(0xEF943C,[(33,-17),(36,-18),(38,-9),(43,-4),(35,-3),(32,-8)])
-        stroke(0xD8E3E1,2.2,[(34,-2),(44,-4)])
-        stroke(0xF8C46B,1.3,[(32,-16),(34,-9),(37,-6)])
-    }
-    private func yeti(_ p:CGFloat) {
-        let gait=sin(p)*4
-        for side: CGFloat in [-1,1] {
-            let x=side*8, foot=x+side*gait
-            stroke(side<0 ? 0x92B3C0:0xD1E4E6,9,[(x,-19),(x+side*gait*0.35,-9),(foot,-4)])
-            oval(0x708F9F,foot+1,-2.5,6.5,2.7)
-        }
-        c.saveGState(); c.translateBy(x:0,y:-abs(cos(p))*1.4)
-        stroke(0x95B7C1,8,[(-9,-38),(-18,-29-gait),(-19,-20-gait)])
-        oval(0x789EAE,-19,-19-gait,4.3,4.9)
-        oval(0xB7D1D6,0,-29,16.5,18.5)
-        oval(0xE5F0EB,1,-31,14.5,18)
-        poly(0xF1F4E9,[(-14,-25),(-12,-13),(-8,-17),(-4,-11),(0,-16),(6,-13),(7,-18),(12,-16),(12,-29)])
-        stroke(0xCBDDE0,8.6,[(11,-38),(17,-31+gait),(23,-29+gait)])
-        oval(0xA3C1C8,24,-29+gait,4.1,4.6)
-        poly(0xCFAB77,[(-11,-47),(-16,-51),(-15,-58),(-12,-54),(-8,-52)])
-        poly(0xCFAB77,[(7,-49),(13,-55),(14,-60),(16,-54),(12,-47)])
-        oval(0xE5EFEB,1,-46,12.8,12.1)
-        poly(0xEFF4EE,[(-9,-51),(-8,-59),(-4,-56),(0,-62),(2,-57),(8,-59),(9,-51)])
-        oval(0x8CB6C2,4,-46,8.6,6.4)
-        oval(0x23434F,2,-47,1.15,1.5); oval(0x23434F,8,-47,1.15,1.5)
-        oval(0x667E8C,5,-44.8,1.7,1.2)
-        stroke(0x42616B,0.9,[(3,-42.8),(5,-42),(7.3,-42.6)])
-        c.restoreGState()
+        stroke(0x5C7179,2.6,[(23,-9),(29,-7),(31,-11)])
+        poly(0x536A73,[(30.6,-14),(34.6,-14.2),(31.6,-8),(33.4,-2.6),(35.8,-0.3),(31.9,-0.3),(28.5,-7.7)])
+        stroke(0xC1D9D9,1.5,[(34,-13.5),(31,-8),(32.8,-2.7),(35.2,-0.9)])
+        stroke(0xF9B65D,1.8,[(30.5,-14.2),(34.8,-14.2)])
     }
     private func sleigh(_ p:CGFloat) {
         // Runners and sleigh follow the rein; reindeer legs gallop independently.

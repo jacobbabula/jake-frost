@@ -7,17 +7,17 @@ Snow falls on your open windows. Grab a drift, roll a snowball, or send a friend
 | Computer | Download | Get started |
 | --- | --- | --- |
 | Windows 10 or 11 | [Download Windows setup](https://github.com/jacobbabula/jake-frost/releases/latest/download/Jake-Frost-Setup.exe) | Quit an older running copy of Jake Frost, open the installer, and click **Install**. Snow starts when setup finishes. |
-| Mac with Apple silicon or Intel, macOS 12 or later | [Download the Mac preview](https://github.com/jacobbabula/jake-frost/releases/latest/download/Jake-Frost-Mac.dmg) | Open the disk image, drag **Jake Frost** onto **Applications**, then open it from Applications. |
+| Mac with Apple silicon or Intel, macOS 12 or later | [Download Jake Frost for Mac](https://github.com/jacobbabula/jake-frost/releases/download/mac-v4.1.0/Jake-Frost-Mac.dmg) | Open the disk image, drag **Jake Frost** onto **Applications**, then open it from Applications. |
 
 Use the snowflake in the Windows system tray or Mac menu bar to change snowfall or quit. The Windows installer also adds Jake Frost to the Start menu. It installs for your user account and needs .NET Framework 4.8. A [portable Windows ZIP](https://github.com/jacobbabula/jake-frost/releases/latest/download/Jake-Frost-Windows.zip) is available too. Extract it and open **JakeFrost.exe**.
 
-The Windows installer is unsigned, so Windows may show a publisher warning. The Mac preview uses an ad-hoc signature and does not have Apple notarization. Gatekeeper may block its first launch. [Apple’s guide to opening downloaded apps](https://support.apple.com/en-us/102445).
+The Windows installer is unsigned, so Windows may show a publisher warning. The Mac app uses an ad-hoc signature and has not been notarized by Apple. If macOS blocks the first launch, follow [Apple’s guide to opening downloaded apps](https://support.apple.com/en-us/102445).
 
 ## Send your first gift
 
-**Between two Windows PCs**, open **Friends**, enter your display name and copy a private invitation. Send the code to your friend and have them choose **Accept invite**. Once paired, choose their name and send a note, tree or snowman. The train can deliver after the recipient comes back online. The code is for one friendship. Share it privately. [Gift service privacy](https://jake-frost-mail.netlify.app/privacy.html)
+**On Windows or Mac**, open **Friends** on Windows or **Send a Gift… → Online friends** on Mac. Enter your display name, copy a private invitation, and have your friend accept the code on their computer. Choose their name and send a note, tree or snowman. The elf train can deliver after they come back online. Each code is for one friendship. Share it privately. [Gift service privacy](https://jake-frost-mail.netlify.app/privacy.html)
 
-Install Jake Frost on both computers. A Windows user can send to a Mac user and vice versa. All you need to share is a small gift file.
+You can also exchange a small gift file between any two installations.
 
 1. **On Windows**, open **Friends**, choose your gift, and select **Copy gift to send**. Paste it into a chat that accepts files, or choose **Save gift file…** and attach the file. **On Mac**, open the snowflake menu, choose **Send a Gift…**, then **Share…** or **Save Gift File…**.
 2. **Your friend** downloads the `.fpgift` attachment and double-clicks it. The elf train delivers it on their desktop. They can also open the file from inside Jake Frost, including when using the portable Windows ZIP.
@@ -26,7 +26,7 @@ For automatic deliveries, connect the same shared or synced folder on both compu
 
 ## Play on the desktop
 
-**New on Windows**
+**Desktop features**
 
 - **Weather → Desktop wallpaper** offers two original painted landscapes. Switchback Station has a smoking chimney. Lantern Sound has moving water and a sweeping beacon. Choose **Follow local time** for changing daylight, hold a particular time, or turn motion off. Select **System wallpaper** to reveal your regular desktop again.
 - **Weather → Clouds** sends clouds drifting across your desktop. **Workshop → Blizzard** sends windblown snow and running Yetis across enabled displays for 22 seconds. Your selected weather returns when the storm clears. Choose a weather mode to end it early.
@@ -35,12 +35,12 @@ For automatic deliveries, connect the same shared or synced folder on both compu
 - Roll snowballs through a deep drift to grow them up to 152 desktop units across. Use **Weather → Drift depth** to build ground drifts up to 320 desktop units. On Mac, choose **Snow and windows → Accumulation depth → 320 pt**. Window ledges hold shallower drifts on both platforms.
 - Open **Workshop → Decorate a tree**. Choose a planted tree from the list or pick it on your desktop, then change its colors, baubles and lights or choose **Hang ornament**. For light strings, you can change the bulbs from 50% to 500% or bend the wire. Uncheck **Decorate → Twinkle string and tree lights** to keep every bulb steady. Switching twinkle back on restores each tree’s own design. In **Weather**, select **Rain** and enable lightning for occasional branching bolts.
 
-**Mac preview.** Open the snowflake menu to play on the display under your pointer.
+**Mac.** Click the menu bar snowflake and choose **Open Jake Frost…** for the controls. Desktop tools act on the display under your pointer. Choose **Decorate a tree…** to plant or dress a tree. **Play on the snow** includes **Blizzard** and **Wake the snowmen**. **Desktop wallpaper** contains both paintings and their lighting and motion controls.
 
 - **Decorate** includes all 17 Windows decorations and a mitten. Select **Arrange decorations** to move, rotate or resize a piece. Drag the ends of a light strand to tilt it and pull its center to set the sag. Drop ornaments on a tree to dress it. They travel with that tree when you move it or send it to a friend.
 - **Play on the snow** lets you puff a drift, pile a hill and push a sled down it. Grab snow on a window ledge or above the Dock, drag to roll a ball, then flick to throw it. Lower one ball onto another and gently add a third to build a snowman. You can move it or send it as a gift.
-- **Weather** includes Snow, Heavy snow, Rain, Cherry Blossom, Leaves, Fireflies, Starfall and Off. Choose wind, lightning and manual, random, seasonal or local weather. **Snow and windows** adjusts particle volume, accumulation depth, window ice, displays and whether snow appears behind windows. You can also pause over fullscreen apps, reduce animation in Low Power Mode and remember your scene between launches.
-- **Visitors** sends the snowplow, Yeti, Santa and reindeer, visiting snowmen or elf train. Choose a size and speed for each visitor, or enable occasional snowplow and Santa visits. The plow clears a path through accumulated snow.
+- **Weather** includes Snow, Heavy snow, Rain, Clouds, Cherry Blossom, Leaves, Fireflies, Starfall and Off. Choose wind, lightning and manual, random, seasonal or local weather. **Snow and windows** adjusts particle volume, snowfall intensity, accumulation depth, window ice, displays and whether snow appears behind windows. You can also pause over fullscreen apps, reduce animation in Low Power Mode and remember your scene between launches.
+- **Visitors** sends the snowplow, Yeti, Santa and reindeer, visiting snowmen or elf train. Choose a size and speed for each visitor, or enable occasional snowplow and Santa visits. Click Santa’s dropped present for a daily note. Visiting snowmen leave a playable figure, and the plow carries loose ground decorations offscreen.
 - The help window and gift composer fold where they stand when you choose a desktop tool. **Done** restores them with your draft intact. You can also fold a panel yourself with the yellow button or **⌘M**, then click **Restore** when you want it back.
 
 **Windows.** Click **−** or send a visitor to fold the panel into a small blue snowflake where it stands. Click the snowflake to reopen Jake Frost, or drag it to move it. While a desktop tool is active, click the snowflake to change tools or **Done** to finish. The **×** hides Jake Frost in the system tray.

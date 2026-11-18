@@ -86,16 +86,20 @@ import AppKit
     } else { check(false,"portable dressed tree creation") }
     let snowmenOK=runBuiltSnowmanChecks()
     let visitorsOK=runMacVisitorChecks()
+    let santaOK=runMacSantaChecks()
     let workshopOK=runWorkshopChecks()
     let panelsOK=runAnchoredPanelChecks()
-    let weatherOK=runMacWeatherChecks()
+    check(runMacStudioChecks(),"native studio controls and anchored desktop tools")
+    let atmosphereOK=runMacAtmosphereChecks()
+    let impactOK=runMacSnowImpactChecks()
+    let weatherOK=runMacWeatherChecks() && atmosphereOK && impactOK
     let windowsOK=runMacWindowChecks()
     let dressingOK=runMacTreeDressingChecks()
     let memoryOK=runMacSceneMemoryChecks()
     let playOK=runMacPlayChecks()
     let deliveryOK=runReceivedSceneGiftChecks()
     let plowOK=runMacPlowContactChecks()
-    return failures==0 && snowmenOK && visitorsOK && workshopOK && panelsOK && weatherOK && windowsOK && dressingOK && memoryOK && playOK && deliveryOK && plowOK
+    return failures==0 && snowmenOK && visitorsOK && santaOK && workshopOK && panelsOK && weatherOK && windowsOK && dressingOK && memoryOK && playOK && deliveryOK && plowOK
 }
 
 @MainActor private func runBuiltSnowmanChecks() -> Bool {
@@ -161,14 +165,8 @@ import AppKit
     _=world.down(from,at:8);world.up(CGPoint(x:from.x+40,y:from.y),at:8.05)
     check(shot.thrown,"flicking still throws a snowball with a completed snowman nearby")
     for _ in 0..<15 {world.step(1.0/60);if world.balls.isEmpty {break}}
-    check(world.balls.isEmpty && world.snowmen.count==1 && world.particles.contains { $0.powder && abs($0.x-figure.x)<35 && $0.y<edge.y-8 },
-          "a fast throw poofs on the snowman before hitting the ledge")
-    let foot=figure.foot
-    _=world.down(CGPoint(x:figure.x,y:foot-figure.base),at:9)
-    world.up(CGPoint(x:400,y:230),at:9.5)
-    for _ in 0..<90 {world.step(1.0/30)}
-    check(abs(figure.x-400)<0.1 && figure.support==0 && abs(figure.foot-ground.surface(400))<0.1,
-          "a finished snowman can be moved and settles on the new drift")
+    check(world.balls.isEmpty && world.snowmen.isEmpty && world.particles.contains { $0.powder && abs($0.x-figure.x)<35 && $0.y<edge.y-8 },
+          "a fast throw crumbles the snowman before hitting the ledge")
     world.clear()
     check(world.snowmen.isEmpty && world.latestSnowmanGift==nil && !world.hasMotion,"clear removes local snowmen and their gift template")
     return failures==0

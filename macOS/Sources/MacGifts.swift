@@ -20,6 +20,10 @@ extension SnowWorld {
     private var activeID: String?, pendingReceipt: FrostGift?, replayGift: FrostGift?
     private var needsDrain = true, lastFailure: String?
     private let mailboxRoot: URL?
+    private lazy var online = MacOnlineFriendsPane(mailbox:{ [unowned self] in try self.box() },
+        makeGift:{ [unowned self] in try self.composeGift() },
+        displayName:{ [unowned self] in self.senderField.stringValue },
+        received:{ [weak self] in self?.needsDrain = true; self?.drain() })
     private lazy var friends = MacGiftFriends(mailbox:{ [unowned self] in try self.box() },
         makeGift:{ [unowned self] in try self.composeGift() },
         displayName:{ [unowned self] in self.senderField.stringValue },
@@ -48,7 +52,7 @@ extension SnowWorld {
         needsDrain = true
         drain()
     }
-    @objc private func timerFired(_ timer: Timer) { drain(); friends.poll() }
+    @objc private func timerFired(_ timer: Timer) { drain(); friends.poll(); online.poll() }
     func retryUndelivered() { activeID = nil; needsDrain = true }
 
     private func drain() {
@@ -132,7 +136,7 @@ extension SnowWorld {
 
     @objc private func compose() {
         if composer == nil {
-            let panel=AnchoredPanel(contentRect:NSRect(x:0,y:0,width:440,height:425),title:"Send a Gift")
+            let panel=AnchoredPanel(contentRect:NSRect(x:0,y:0,width:465,height:430),title:"Send a Gift")
             let column=NSStackView()
             column.orientation = .vertical;column.alignment = .leading;column.spacing=13
             column.translatesAutoresizingMaskIntoConstraints=false
@@ -154,9 +158,18 @@ extension SnowWorld {
             let save=NSButton(title:"Save Gift File…",target:self,action:#selector(saveFile))
             let buttons=NSStackView(views:[shareButton,save]);buttons.spacing=8
             column.addArrangedSubview(buttons)
-            let shared = friends.controls()
-            column.addArrangedSubview(shared)
-            shared.widthAnchor.constraint(equalTo:column.widthAnchor).isActive = true
+            let delivery = NSTabView()
+            for (title, view) in [("Online friends",online.controls()),("Shared folder",friends.controls())] {
+                let tab = NSTabViewItem(identifier:title); tab.label=title
+                let host = NSView(); host.addSubview(view); view.translatesAutoresizingMaskIntoConstraints=false
+                NSLayoutConstraint.activate([view.leadingAnchor.constraint(equalTo:host.leadingAnchor,constant:8),
+                                             view.trailingAnchor.constraint(equalTo:host.trailingAnchor,constant:-8),
+                                             view.topAnchor.constraint(equalTo:host.topAnchor,constant:8)])
+                tab.view=host; delivery.addTabViewItem(tab)
+            }
+            column.addArrangedSubview(delivery)
+            delivery.widthAnchor.constraint(equalTo:column.widthAnchor).isActive=true
+            delivery.heightAnchor.constraint(equalToConstant:208).isActive=true
             if let content=panel.contentView {
                 content.addSubview(column)
                 NSLayoutConstraint.activate([column.leadingAnchor.constraint(equalTo:content.leadingAnchor,constant:22),
@@ -166,7 +179,7 @@ extension SnowWorld {
             panel.center();composer=panel
         }
         NSApp.activate(ignoringOtherApps:true);composer?.expand();composer?.makeKeyAndOrderFront(nil);composer?.makeFirstResponder(noteField)
-        friends.poll(force:true)
+        friends.poll(force:true);online.poll(force:true)
     }
 
     func setWorkshopEditing(_ active:Bool) { composer?.setWorkshopEditing(active) }

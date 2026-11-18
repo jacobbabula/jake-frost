@@ -110,5 +110,95 @@ import AppKit
         }
         check(different>12,"unpacking a tree paints its golden bauble at the delivery stop")
     } else { check(false,"delivered dressed tree renders to a native bitmap") }
-    return ok
+    return runTreeStudioChecks() && ok
+}
+
+@MainActor private func runTreeStudioChecks()->Bool {
+    let suite="io.jakefrost.native-tree-editor."+UUID().uuidString
+    guard let prefs=UserDefaults(suiteName:suite) else{return false}
+    defer{prefs.removePersistentDomain(forName:suite)}
+    let world=SnowWorld(), workshop=MacWorkshop(),size=CGSize(width:540,height:300)
+    var sill=SnowEdge(id:41,x:100,y:135,width:190,visible:[100...290])
+    world.setDesktop(size:size,edges:[sill]);workshop.configure(settings:prefs,displayID:12);workshop.sync(world:world)
+    func invoke(_ item:NSMenuItem?)->Bool {
+        guard let item=item,let action=item.action else{return false};return NSApp.sendAction(action,to:item.target,from:item)
+    }
+    func menu()->NSMenu {let m=NSMenu();workshop.appendMenu(to:m);return m}
+    guard invoke(menu().item(withTitle:"Decorate a tree…")),let first=workshop.designedTree,
+          let editor=NSApp.windows.first(where:{$0.title=="Decorate a tree" && $0.isVisible}) else {
+        print("FAIL: menu did not open the editor and plant a tree for an empty desktop");return false
+    }
+    defer{editor.close()}
+    func descendants(_ v:NSView)->[NSView]{[v]+v.subviews.flatMap(descendants)}
+    guard let root=editor.contentView else{return false}
+    let controls=descendants(root)
+    func button(_ title:String)->NSButton?{controls.compactMap{$0 as? NSButton}.first{$0.title==title}}
+    guard let colors=controls.compactMap({$0 as? NSPopUpButton}).first(where:{$0.itemTitles.contains("Aurora")}),
+          let add=button("Hang ornament"),let plant=button("Plant another"),let toggleBaubles=button("Baubles"),
+          let choose=controls.compactMap({$0 as? NSPopUpButton}).first(where:{$0.itemTitles.contains("Tree 1")}) else {
+        print("FAIL: tree design controls are absent");return false
+    }
+    plant.performClick(nil)
+    guard let second=workshop.designedTree,second.id != first.id else{return false}
+    colors.selectItem(withTitle:"Aurora");_=NSApp.sendAction(colors.action!,to:colors.target,from:colors)
+    toggleBaubles.performClick(nil);add.performClick(nil)
+    guard workshop.designedTree?.trim==6,workshop.designedTree?.treePalette==2,workshop.trees.first?.trim==7,
+          workshop.pieces.filter({$0.attachment?.tree==second.id}).count==1 else {
+        print("FAIL: selecting trim or hanging an ornament changed the wrong desktop tree");return false
+    }
+    choose.selectItem(at:0);_=NSApp.sendAction(choose.action!,to:choose.target,from:choose)
+    workshop.pickTreeOnDesktop()
+    guard workshop.down(second.center),workshop.designedTree?.id==second.id,!workshop.editing else {return false}
+    guard let gift=workshop.treeGiftTemplate(),let checked=try? FrostGift.decode(gift.encoded()),
+          checked.dress.contains("trim,6,2") else{return false}
+    let restored=MacWorkshop();restored.configure(settings:prefs,displayID:12);restored.sync(world:world)
+    let received=MacWorkshop();received.configure(settings:prefs,displayID:13);received.sync(world:world)
+    guard restored.designedTree?.id==second.id,restored.treeGiftTemplate()?.dress==gift.dress,
+          received.receiveTree(GiftTrain.Parcel(checked,x:165),at:CGPoint(x:165,y:world.banks[0].surface(165))),
+          received.trees.first?.treePalette==2,received.trees.first?.trim==6,
+          received.pieces.filter({$0.attachment != nil}).count==1 else{return false}
+
+    workshop.beginPlacement(.lights);let anchor=CGPoint(x:155,y:135)
+    _=workshop.down(anchor);workshop.up(anchor)
+    guard let strand=workshop.pieces.last,strand.kind == .lights,strand.firstPin?.bank==41,strand.lastPin?.bank==41,
+          abs(strand.span-184)<1 else{return false}
+    sill.x+=24;sill.y-=13;sill.visible=[124...314]
+    world.setDesktop(size:size,edges:[sill]);workshop.sync(world:world)
+    guard abs(workshop.pieces.last!.wirePoint(0).x-strand.wirePoint(0).x-24)<0.1 else{return false}
+    let change=menu().item(withTitle:"Decorate")?.submenu?.item(withTitle:"Bulb size")?.submenu?.item(withTitle:"500%")
+    guard invoke(change),workshop.pieces.last?.scale==5,workshop.pieces.last?.span==strand.span else{return false}
+    workshop.finishEditing()
+    func snapshot()->NSBitmapImageRep? {
+        let image=NSImage(size:size,flipped:true){_ in workshop.draw();return true}
+        return image.tiffRepresentation.flatMap{NSBitmapImageRep(data:$0)}
+    }
+    func pixels(_ image:NSBitmapImageRep?)->Data? {
+        guard let image=image,let p=image.bitmapData else{return nil}
+        return Data(bytes:p,count:image.bytesPerRow*image.pixelsHigh)
+    }
+    let initial=pixels(snapshot())
+    for _ in 0..<21{workshop.step(1.0/30)}
+    guard let animated=pixels(snapshot()),let initial=initial,animated != initial else {
+        print("FAIL: bulb twinkle produced no visible change");return false
+    }
+    guard invoke(menu().item(withTitle:"Decorate")?.submenu?.item(withTitle:"Twinkle string and tree lights")),
+          !restored.twinkleEnabled,!workshop.twinkleEnabled else{return false}
+    let frozen=pixels(snapshot())
+    for _ in 0..<30{workshop.step(1.0/30)}
+    guard frozen != nil,frozen==pixels(snapshot()) else{print("FAIL: disabled twinkle should keep bulbs steady");return false}
+    if let output=ProcessInfo.processInfo.environment["JAKEFROST_MAC_GALLERY"] {
+        let directory=URL(fileURLWithPath:output,isDirectory:true)
+        do {
+            try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
+            workshop.openTreeEditor();editor.displayIfNeeded();root.layoutSubtreeIfNeeded()
+            guard let bitmap=root.bitmapImageRepForCachingDisplay(in:root.bounds),let scene=snapshot() else{return false}
+            root.cacheDisplay(in:root.bounds,to:bitmap)
+            for (name,rep) in [("tree-editor.png",bitmap),("trees-and-lights.png",scene)]{
+                guard let bytes=rep.representation(using:.png,properties:[:]) else{return false}
+                try bytes.write(to:directory.appendingPathComponent(name))
+            }
+        } catch {print("FAIL: rendering desktop tree checks: \(error)");return false}
+    }
+    print("PASS: native Mac editor selects and dresses individual desktop trees, restores gifts and choices, anchors and sizes strands and switches actual rendered bulbs between twinkle and steady")
+    return true
 }

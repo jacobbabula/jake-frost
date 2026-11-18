@@ -27,6 +27,7 @@ struct TreeAttachment: Codable {
 }
 
 struct WorkshopPiece: Codable {
+    struct WirePin: Codable {let bank:UInt32, fraction:CGFloat}
     var id = UUID()
     var kind: WorkshopKind
     var center: CGPoint
@@ -39,10 +40,19 @@ struct WorkshopPiece: Codable {
     var attachment: TreeAttachment?
     var giftID: String?
     var giftStyle: Int?
+    var treeTrim: Int?
+    var treePalette: Int?
+    var firstPin: WirePin?
+    var lastPin: WirePin?
+    var trim: Int { treeTrim ?? 7 }
 
     func wirePoint(_ t: CGFloat) -> CGPoint {
         let u = (t - 0.5) * span
         return CGPoint(x:center.x + cos(angle)*u,y:center.y + sin(angle)*u + 4*sag*t*(1-t))
+    }
+    mutating func endpoints(_ a:CGPoint,_ b:CGPoint) {
+        center=CGPoint(x:(a.x+b.x)/2,y:(a.y+b.y)/2)
+        angle=atan2(b.y-a.y,b.x-a.x);span=max(26,min(3200,hypot(b.x-a.x,b.y-a.y)))
     }
 }
 
@@ -50,8 +60,10 @@ struct WorkshopPiece: Codable {
     private struct Saved: Codable {
         let size: CGSize
         let pieces: [WorkshopPiece]
+        let designedTree: UUID?
+        let savedMounts: [UUID:Mount]?
     }
-    private struct Mount { var id: UInt32; var fraction: CGFloat }
+    private struct Mount: Codable { var id: UInt32; var fraction: CGFloat }
     private enum Action { case move, size, rotate, start, end, sag, remove, newWire }
     private struct Gesture {
         let action: Action
@@ -64,26 +76,38 @@ struct WorkshopPiece: Codable {
     private var size = CGSize.zero
     private var mounts: [UUID:Mount] = [:]
     private var extents: [UUID:CGRect] = [:]
-    private struct Paint {let path:CGPath;let color:CGColor;var solid=true}
+    private struct Paint {let path:CGPath;let color:CGColor;var solid=true;var phase:Int?}
     private var wires: [UUID: [Paint]] = [:]
     private var pending: WorkshopKind?, gesture: Gesture?
-    private enum PlayTool {case pile, puff, sled, push}
+    private enum PlayTool {case pile, puff, sled, push, roll, toss}
     private var scrollTarget: UUID?, scrollRotating=false, scrollCarry:CGFloat=0, lastScroll:TimeInterval=0
     private var playTool:PlayTool?, brushPoint:CGPoint?
     private var puffClock:TimeInterval=0
     private let sleds=MacSledField()
     private var plowMovedDecorations=false
+    private var carriedByBlade=Set<UUID>()
+    private var bladeExit:CGFloat=0
+    private var clearingDirection:CGFloat=0
+    private var snowGesture=false, pickingTree=false
+    private var clock:TimeInterval=0
+    private var falling:[(tree:WorkshopPiece,ornaments:[WorkshopPiece],age:TimeInterval)]=[]
+    var twinkleEnabled=true {didSet {invalidate?()}}
+    private var treeEditor:MacTreeEditor?
     private(set) var pieces: [WorkshopPiece] = []
     var onEditingChanged: (() -> Void)?
+    var onPlantTree: (() -> Void)?
     private(set) var editing = false {
         // Selecting a different tool should fold a panel the user reopened while editing.
-        didSet { if editing || oldValue {onEditingChanged?()} }
+        didSet { if editing || oldValue {setEditorToolActive(editing);onEditingChanged?()} }
     }
     private(set) var selected: UUID?
     private var lastTree: UUID?
     private var index: Int? { pieces.firstIndex { $0.id == selected } }
-    var isDragging: Bool { gesture != nil || brushPoint != nil || sleds.isDragging }
-    var hasMotion: Bool { brushPoint != nil || sleds.hasMotion }
+    var isDragging: Bool { gesture != nil || brushPoint != nil || sleds.isDragging || snowGesture }
+    private var animatingLights:Bool {
+        twinkleEnabled && world?.paused != true && pieces.contains { $0.kind == .lights || ($0.kind == .tree && $0.trim & 6 == 6) }
+    }
+    var hasMotion: Bool { brushPoint != nil || sleds.hasMotion || animatingLights || !falling.isEmpty || clearingDirection != 0 }
     var invalidate: (() -> Void)?
     private static let limit = 100
     private static let paletteNames = ["Carnival", "Warm white", "Aurora", "Peppermint"]
@@ -97,6 +121,9 @@ struct WorkshopPiece: Codable {
         let name="workshop.v1.\(displayID)"
         guard self.settings !== settings || key != name else { return }
         self.settings=settings; key=name
+        NotificationCenter.default.removeObserver(self,name:Self.twinkleChange,object:nil)
+        NotificationCenter.default.addObserver(self,selector:#selector(readTwinkle),name:Self.twinkleChange,object:settings)
+        readTwinkle()
         pieces=[];size = .zero;selected=nil;lastTree=nil;mounts.removeAll();extents.removeAll();wires.removeAll()
         if MacSceneMemory.remembers(settings),let data=settings.data(forKey:name),data.count<=120_000,
            let saved=try? JSONDecoder().decode(Saved.self,from:data),
@@ -105,13 +132,17 @@ struct WorkshopPiece: Codable {
             var seen=Set<UUID>()
             for p in saved.pieces.prefix(Self.limit) where seen.insert(p.id).inserted {
                 let importedTree = p.kind == .tree && p.giftID.map(FrostGift.validID) == true
-                guard p.scale.isFinite,(p.attachment != nil || (importedTree ? 0.02...3.5 : 0.4...3.5).contains(p.scale)),
+                let range:ClosedRange<CGFloat> = p.kind == .lights ? 0.4...5 : (importedTree ? 0.02...3.5 : 0.4...3.5)
+                guard p.scale.isFinite,(p.attachment != nil || range.contains(p.scale)),
                       (26...3200).contains(p.span),(-220...340).contains(p.sag),
-                      Self.bulbs.indices.contains(p.palette),abs(p.angle)<=2 * .pi,
+                      Self.bulbs.indices.contains(p.palette),(0...7).contains(p.trim),(-1...2).contains(p.treePalette ?? -1),
+                      abs(p.angle)<=2 * .pi,
                       p.center.x.isFinite,p.center.y.isFinite else {continue}
                 pieces.append(p)
             }
             let trees = Dictionary(uniqueKeysWithValues: pieces.filter { $0.kind == .tree }.map { ($0.id, $0) })
+            lastTree = saved.designedTree.flatMap { trees[$0]?.id }
+            mounts=(saved.savedMounts ?? [:]).filter { seen.contains($0.key) && $0.value.fraction.isFinite && (0...1).contains($0.value.fraction) }
             for i in pieces.indices {
                 guard let a = pieces[i].attachment else { continue }
                 if pieces[i].kind.giftOrnamentID != nil, a.isValid, let tree = trees[a.tree] {
@@ -127,30 +158,36 @@ struct WorkshopPiece: Codable {
     private func save() {
         guard let settings=settings,MacSceneMemory.remembers(settings),!key.isEmpty,size.width>0,size.height>0 else{return}
         if pieces.isEmpty {settings.removeObject(forKey:key);return}
-        if let data=try? JSONEncoder().encode(Saved(size:size,pieces:pieces)) {settings.set(data,forKey:key)}
+        if let data=try? JSONEncoder().encode(Saved(size:size,pieces:pieces,designedTree:lastTree,savedMounts:mounts)) {settings.set(data,forKey:key)}
     }
     func rememberLayoutNow() { save() }
     func finishPlowing() {
+        clearingDirection=carriedByBlade.isEmpty ? 0 : bladeExit
         if plowMovedDecorations {plowMovedDecorations=false;save()}
     }
     func plow(_ blade:PlowSweep) {
         guard let world=world else{return}
         sleds.plow(blade,world:world)
+        if blade.advance != 0 {bladeExit=blade.advance<0 ? -1 : 1}
         var moved=false
+        var cleared=Set<UUID>()
         for i in pieces.indices {
             let p=pieces[i]
             guard p.attachment==nil,gesture?.piece.id != p.id,gesture?.piece.attachment?.tree != p.id,
                   mounts[p.id].map({$0.id==0}) ?? true else {continue}
-            var right:CGFloat
+            let captive=carriedByBlade.contains(p.id)
+            var area:CGRect
             if p.kind == .lights {
+                if p.firstPin.map({$0.bank != 0}) == true || p.lastPin.map({$0.bank != 0}) == true {continue}
                 // The cached strand contains the actual wire, sockets and bulbs.
                 let local=blade.bounds.offsetBy(dx:-p.center.x,dy:-p.center.y)
                 let a=p.wirePoint(0),b=p.wirePoint(1)
                 let minX=min(a.x,b.x)-10*p.scale,maxX=max(a.x,b.x)+10*p.scale
                 let minY=min(a.y,b.y)+min(0,p.sag)-8*p.scale,maxY=max(a.y,b.y)+max(0,p.sag)+16*p.scale
-                guard blade.bounds.intersects(CGRect(x:minX,y:minY,width:maxX-minX,height:maxY-minY)) else {continue}
+                area=CGRect(x:minX,y:minY,width:maxX-minX,height:maxY-minY)
+                guard captive || blade.bounds.intersects(area) else {continue}
                 let inks=strand(p)
-                guard inks.contains(where:{ ink in
+                guard captive || inks.contains(where:{ ink in
                     guard ink.solid else {return false}
                     let area=ink.path.boundingBoxOfPath.intersection(local)
                     guard !area.isNull else {return false}
@@ -158,15 +195,16 @@ struct WorkshopPiece: Codable {
                         ink.path.contains(CGPoint(x:q.x-p.center.x,y:q.y-p.center.y))
                     }
                 }) else {continue}
-                right=maxX
             } else {
-                let outline=extent(p).offsetBy(dx:p.center.x,dy:p.center.y)
-                guard blade.touches(outline,includingSnow:p.onFloor,ink:{ body(p,hits:$0) }) else {continue}
-                right=outline.maxX
+                area=extent(p).offsetBy(dx:p.center.x,dy:p.center.y)
+                guard captive || blade.touches(area,includingSnow:p.onFloor,ink:{ body(p,hits:$0) }) else {continue}
             }
-            let dx=min(blade.advance+0.6,max(0,size.width-right))
-            guard dx>0 else {continue}
+            carriedByBlade.insert(p.id)
+            let dx=blade.advance
+            guard dx != 0 else {continue}
+            pieces[i].firstPin=nil;pieces[i].lastPin=nil
             pieces[i].center.x+=dx
+            if area.minX+dx>=size.width || area.maxX+dx<=0 {cleared.insert(p.id);moved=true;continue}
             if p.onFloor || mounts[p.id]?.id == 0, let floor=world.banks.first {
                 let x=pieces[i].center.x
                 mounts[p.id]=Mount(id:0,fraction:x/floor.edge.width)
@@ -174,7 +212,18 @@ struct WorkshopPiece: Codable {
             }
             moveOrnaments(on:pieces[i]);moved=true
         }
+        if !cleared.isEmpty { removeFamily(cleared) }
         if moved {plowMovedDecorations=true;invalidate?()}
+    }
+    private func removeFamily(_ parents:Set<UUID>) {
+        let ids=Set(pieces.compactMap { p in
+            parents.contains(p.id) || p.attachment.map{parents.contains($0.tree)} == true ? p.id : nil
+        })
+        pieces.removeAll {ids.contains($0.id)}
+        for id in ids {mounts[id]=nil;extents[id]=nil;wires[id]=nil;carriedByBlade.remove(id)}
+        if let s=selected,ids.contains(s){selected=nil;gesture=nil}
+        if let t=lastTree,ids.contains(t){lastTree=nil}
+        treeEditor?.refresh()
     }
     private func extent(_ p:WorkshopPiece)->CGRect {
         if let b=extents[p.id] {return b}
@@ -256,6 +305,7 @@ struct WorkshopPiece: Codable {
         }
         if !scales.isEmpty { ornaments.append("scale," + scales.joined(separator: ",")) }
         ornaments.append("angles," + angles.joined(separator: ","))
+        if tree.treePalette != nil || tree.trim != 7 {ornaments.append("trim,\(tree.trim),\(tree.treePalette ?? -1)")}
         var result = FrostGift()
         result.kind = .tree
         result.style = tree.giftStyle ?? 0
@@ -272,6 +322,7 @@ struct WorkshopPiece: Codable {
         let symbol = WorkshopSymbol.forKind(.tree)
         var tree = WorkshopPiece(kind:.tree,center:foot)
         tree.giftID = gift.id; tree.giftStyle = gift.style
+        tree.treeTrim = parcel.trim;tree.treePalette = parcel.palette
         tree.scale = CGFloat(gift.size)/symbol.bounds.height
         tree.angle = signed(parcel.tilt * .pi/180)
         position(&tree,at:foot);pieces.append(tree)
@@ -309,6 +360,14 @@ struct WorkshopPiece: Codable {
         if !pieces.isEmpty {
             for i in pieces.indices {
                 let p=pieces[i]
+                if p.kind == .lights,gesture?.piece.id != p.id,(p.firstPin != nil || p.lastPin != nil) {
+                    let a=p.wirePoint(0),b=p.wirePoint(1)
+                    let left=resolve(pin:p.firstPin,world:world) ?? a,right=resolve(pin:p.lastPin,world:world) ?? b
+                    if distance(a,left)>0.08 || distance(b,right)>0.08 {
+                        pieces[i].endpoints(left,right);wires[p.id]=nil;changed=true
+                    }
+                    continue
+                }
                 guard let m=mounts[p.id] else{
                     if p.onFloor,let ground=world.banks.first {mounts[p.id]=Mount(id:0,fraction:(p.center.x-ground.edge.x)/ground.edge.width)}
                     continue
@@ -345,20 +404,39 @@ struct WorkshopPiece: Codable {
         pieces[i].center.y=bank.surface(p.center.x)-extent(p).maxY
         pieces[i].onFloor=bank.edge.id==0
     }
+    private func resolve(pin:WorkshopPiece.WirePin?,world:SnowWorld)->CGPoint? {
+        guard let pin=pin,pin.fraction.isFinite,(0...1).contains(pin.fraction),
+              let bank=world.banks.first(where:{$0.edge.id==pin.bank}) else{return nil}
+        let x=bank.edge.x+pin.fraction*bank.edge.width
+        guard bank.edge.contains(x) else{return nil}
+        return CGPoint(x:x,y:bank.surface(x))
+    }
+    private func wireSupport(near p:CGPoint)->Drift? {
+        world?.banks.filter{$0.edge.contains(p.x) && abs($0.surface(p.x)-p.y)<=10}
+            .min{abs($0.surface(p.x)-p.y)<abs($1.surface(p.x)-p.y)}
+    }
+    private func wirePin(at p:CGPoint)->WorkshopPiece.WirePin? {
+        guard let bank=wireSupport(near:p) else{return nil}
+        return WorkshopPiece.WirePin(bank:bank.edge.id,fraction:(p.x-bank.edge.x)/bank.edge.width)
+    }
     func beginPlacement(_ kind:WorkshopKind) {
         guard pieces.count < Self.limit else{return}
+        if kind == .tree {onPlantTree?()}
         resetTools();pending=kind;editing=true;invalidate?()
     }
-    private func resetTools() {cancelGesture();playTool=nil;pending=nil;selected=nil}
+    private func resetTools() {cancelGesture();playTool=nil;pending=nil;selected=nil;pickingTree=false}
     func arrange() {resetTools();editing=true;invalidate?()}
     func finishEditing() {resetTools();editing=false;invalidate?()}
     @objc func beginPiling() {resetTools();playTool = .pile;editing=true;invalidate?()}
     @objc func beginPuffing() {resetTools();playTool = .puff;editing=true;invalidate?()}
+    @objc func beginRolling() {resetTools();playTool = .roll;editing=true;invalidate?()}
+    @objc func beginThrowing() {resetTools();playTool = .toss;editing=true;invalidate?()}
     @objc func placeSled() {resetTools();playTool = .sled;editing=true;invalidate?()}
     @objc private func pushSleds() {resetTools();playTool = .push;editing=true;invalidate?()}
     func clear() {
         pending=nil;gesture=nil;editing=false;selected=nil;lastTree=nil;playTool=nil;brushPoint=nil;sleds.clear()
         pieces.removeAll();mounts.removeAll();extents.removeAll();wires.removeAll()
+        falling.removeAll();carriedByBlade.removeAll();clearingDirection=0;pickingTree=false;snowGesture=false;treeEditor?.refresh()
         save();invalidate?()
     }
     private func removeSelected() {
@@ -389,9 +467,12 @@ struct WorkshopPiece: Codable {
             let dx=cos(p.angle)*p.span,dy=sin(p.angle)*p.span
             let a=p.wirePoint(0)
             // Broad phase also covers the bulbs extending below a diagonal wire.
-            let area=CGRect(x:min(a.x,a.x+dx)-12,y:min(a.y,a.y+dy)+min(0,p.sag)-12,
-                            width:abs(dx)+24,height:abs(dy)+abs(p.sag)+28)
+            let padding=max(12,13*p.scale)
+            let area=CGRect(x:min(a.x,a.x+dx)-padding,y:min(a.y,a.y+dy)+min(0,p.sag)-padding,
+                            width:abs(dx)+padding*2,height:abs(dy)+abs(p.sag)+padding*2)
             guard area.contains(q) else{return false}
+            let local=CGPoint(x:q.x-p.center.x,y:q.y-p.center.y)
+            if strand(p).contains(where:{$0.solid && $0.path.contains(local)}) {return true}
             var last=a
             for i in 1...32 {
                 let next=p.wirePoint(CGFloat(i)/32), vx=next.x-last.x,vy=next.y-last.y
@@ -415,12 +496,19 @@ struct WorkshopPiece: Codable {
     }
     func captures(_ point:CGPoint)->Bool {
         if isDragging {return true}
+        if pickingTree {return pieces.contains{$0.kind == .tree && body($0,hits:point)}}
         if playTool == .push {return sleds.captures(point)}
         return editing && (playTool != nil || pending != nil || action(at:point) != nil)
     }
     @discardableResult func down(_ point:CGPoint)->Bool {
+        if pickingTree {
+            guard let p=pieces.last(where:{$0.kind == .tree && body($0,hits:point)}) else{return false}
+            finishEditing();selectTree(p.id);openTreeEditor();return true
+        }
         if let tool=playTool,let w=world {
             switch tool {
+            case .roll: snowGesture=w.rollDown(point,at:ProcessInfo.processInfo.systemUptime)
+            case .toss: snowGesture=w.throwDown(point,at:ProcessInfo.processInfo.systemUptime)
             case .sled: _=sleds.add(at:point,world:w);playTool = .push
             case .push: return sleds.down(point,time:ProcessInfo.processInfo.systemUptime)
             case .pile: brushPoint=point;puffClock=0;pile(at:point,amount:3.4,world:w)
@@ -433,6 +521,8 @@ struct WorkshopPiece: Codable {
             guard pieces.count<Self.limit else{pending=nil;return false}
             pending=nil
             var p=WorkshopPiece(kind:kind,center:point)
+            if kind == .lights {p.scale=defaultBulbSize;p.palette=defaultWirePalette}
+            if kind == .tree {p.treeTrim=defaultTrim;p.treePalette=defaultTreePalette}
             if kind != .lights {position(&p,at:point)}
             selected=p.id;pieces.append(p)
             if kind == .tree { lastTree = p.id }
@@ -447,6 +537,7 @@ struct WorkshopPiece: Codable {
         invalidate?();return true
     }
     func drag(_ point:CGPoint) {
+        if snowGesture {world?.drag(point,at:ProcessInfo.processInfo.systemUptime);invalidate?();return}
         if sleds.isDragging {sleds.drag(point,time:ProcessInfo.processInfo.systemUptime);invalidate?();return}
         if let previous=brushPoint,let w=world {
             let distance=hypot(point.x-previous.x,point.y-previous.y)
@@ -505,17 +596,29 @@ struct WorkshopPiece: Codable {
         moveOrnaments(on: p);invalidate?()
     }
     func up(_ point:CGPoint) {
+        if snowGesture {world?.up(point,at:ProcessInfo.processInfo.systemUptime);snowGesture=false;invalidate?();return}
         if sleds.isDragging,let w=world {sleds.up(point,time:ProcessInfo.processInfo.systemUptime,world:w);invalidate?();return}
         if brushPoint != nil {drag(point);brushPoint=nil;invalidate?();return}
         guard let g=gesture,let i=index else{return}
         // A click on an existing mounted piece selects it without detaching it.
         let moved = distance(g.origin,point)>0.1
         if moved { drag(point) }
+        if pieces[i].kind == .lights {
+            if g.action == .newWire && !moved,let bank=wireSupport(near:point),bank.edge.id != 0,
+               let visible=bank.edge.visible.first(where:{$0.contains(point.x)}),visible.upperBound-visible.lowerBound>30 {
+                let left=visible.lowerBound+3,right=visible.upperBound-3
+                pieces[i].endpoints(CGPoint(x:left,y:bank.surface(left)),CGPoint(x:right,y:bank.surface(right)))
+                wires[pieces[i].id]=nil
+            }
+            if g.action == .newWire || (moved && (g.action == .start || g.action == .move)){pieces[i].firstPin=wirePin(at:pieces[i].wirePoint(0))}
+            if g.action == .newWire || (moved && (g.action == .end || g.action == .move)){pieces[i].lastPin=wirePin(at:pieces[i].wirePoint(1))}
+        }
         if g.isPlacement || moved { settle(i, g, at: point) }
         if let w=world {_=sync(world:w)}
         gesture=nil;save();invalidate?()
     }
     func cancelGesture() {
+        if snowGesture {world?.cancel();snowGesture=false}
         brushPoint=nil;sleds.cancel()
         guard gesture != nil else{return}
         if let i=index,let g=gesture, g.isPlacement || distance(pieces[i].center, g.piece.center)>0.1 {
@@ -540,6 +643,25 @@ struct WorkshopPiece: Codable {
     }
     func step(_ dt:TimeInterval) {
         guard let w=world else{return}
+        if animatingLights {clock+=max(0,min(dt,0.12));invalidate?()}
+        if !falling.isEmpty {
+            for i in falling.indices {falling[i].age+=max(0,min(dt,0.12))}
+            falling.removeAll{$0.age>=0.86};invalidate?()
+        }
+        if clearingDirection != 0 {
+            let distance=clearingDirection*max(0,min(CGFloat(dt),0.12))*160
+            var gone=Set<UUID>()
+            for i in pieces.indices where carriedByBlade.contains(pieces[i].id) {
+                let p=pieces[i]
+                pieces[i].center.x+=distance;mounts[p.id]=nil;pieces[i].onFloor=false
+                moveOrnaments(on:pieces[i])
+                let radius=p.kind == .lights ? p.span/2+20*p.scale : max(extent(p).width,extent(p).height)
+                if pieces[i].center.x+radius<0 || pieces[i].center.x-radius>size.width {gone.insert(p.id)}
+            }
+            if !gone.isEmpty {removeFamily(gone);save()}
+            if carriedByBlade.isEmpty {clearingDirection=0}
+            invalidate?()
+        }
         if let p=brushPoint, playTool == .pile {
             let elapsed=min(0.1,max(0,dt));puffClock-=elapsed
             pile(at:p,amount:CGFloat(elapsed)*36,world:w);invalidate?()
@@ -569,9 +691,9 @@ struct WorkshopPiece: Codable {
             glints.addEllipse(in:CGRect(x:q.x-0.48*r,y:q.y+1.23*r,width:0.55*r,height:0.85*r))
         }
         var paths=[Paint(path:wire.copy(strokingWithWidth:2,lineCap:.round,lineJoin:.round,miterLimit:3),color:Self.color(0x203D42))]
-        for j in palette.indices {paths.append(Paint(path:haloes[j],color:Self.color(palette[j],0.16),solid:false))}
+        for j in palette.indices {paths.append(Paint(path:haloes[j],color:Self.color(palette[j],0.30),solid:false,phase:j))}
         paths.append(Paint(path:sockets,color:Self.color(0x2A4D50)))
-        for j in palette.indices {paths.append(Paint(path:glass[j],color:Self.color(palette[j])))}
+        for j in palette.indices {paths.append(Paint(path:glass[j],color:Self.color(palette[j]),phase:j))}
         paths.append(Paint(path:glints,color:Self.color(0xFFF5DF,0.95)))
         wires[p.id]=paths;return paths
     }
@@ -580,12 +702,27 @@ struct WorkshopPiece: Codable {
         for p in pieces {
             if p.kind == .lights {
                 c.saveGState();c.translateBy(x:p.center.x,y:p.center.y)
-                for ink in strand(p) {c.setFillColor(ink.color);c.addPath(ink.path);c.fillPath()}
+                for ink in strand(p) {
+                    c.setAlpha(twinkleEnabled && ink.phase != nil ? MacTreeLights.brightness(clock,ink.phase!) : 1)
+                    c.setFillColor(ink.color);c.addPath(ink.path);c.fillPath()
+                }
                 c.restoreGState()
             } else {
                 c.saveGState();c.translateBy(x:p.center.x,y:p.center.y);c.rotate(by:p.angle);c.scaleBy(x:p.scale,y:p.scale)
-                WorkshopSymbol.forKind(p.kind).draw();c.restoreGState()
+                drawSymbol(p,in:c);c.restoreGState()
             }
+        }
+        for f in falling {
+            let trunk=f.tree, bounds=WorkshopSymbol.forKind(.tree).bounds
+            let pivot=rotate(CGPoint(x:0,y:bounds.maxY*trunk.scale),by:trunk.angle)
+            let u=CGFloat(f.age/0.86), ax=trunk.center.x+pivot.x, ay=trunk.center.y+pivot.y
+            c.saveGState();c.translateBy(x:ax,y:ay);c.rotate(by:u*u*1.40);c.translateBy(x:-ax,y:-ay)
+            c.setAlpha(min(1,(1-u)*4))
+            for p in [trunk]+f.ornaments {
+                c.saveGState();c.translateBy(x:p.center.x,y:p.center.y);c.rotate(by:p.angle);c.scaleBy(x:p.scale,y:p.scale)
+                drawSymbol(p,in:c);c.restoreGState()
+            }
+            c.restoreGState()
         }
         sleds.draw()
         guard editing,let i=index else{return}
@@ -614,6 +751,8 @@ struct WorkshopPiece: Codable {
     }
 
     func appendMenu(to menu:NSMenu) {
+        let editor=NSMenuItem(title:"Decorate a tree…",action:#selector(openTreeEditor),keyEquivalent:"")
+        editor.target=self;menu.addItem(editor)
         let root=NSMenuItem(title:"Decorate",action:nil,keyEquivalent:"")
         let list=NSMenu(title:"Decorate");list.autoenablesItems=false;root.submenu=list;menu.addItem(root)
         func item(_ title:String,_ action:Selector)->NSMenuItem {
@@ -625,11 +764,14 @@ struct WorkshopPiece: Codable {
             add.state=pending==kind ? .on : .off;add.isEnabled=pieces.count < Self.limit
         }
         list.addItem(.separator())
+        let twinkle=item("Twinkle string and tree lights",#selector(toggleTwinkle));twinkle.state=twinkleEnabled ? .on : .off
+        addWireOptions(to:list,selectedIndex:nil)
         let edit=item("Arrange decorations",#selector(startArranging));edit.isEnabled = !pieces.isEmpty
         edit.state=editing && pending==nil && playTool==nil ? .on : .off
         if let i=index,editing {
             let p=pieces[i]
             if p.kind == .lights {
+                addWireOptions(to:list,selectedIndex:i)
                 let palettes=NSMenu(title:"Light colors")
                 let colors=NSMenuItem(title:"Light colors",action:nil,keyEquivalent:"");colors.submenu=palettes;list.addItem(colors)
                 for (j,title) in Self.paletteNames.enumerated() {
@@ -640,7 +782,7 @@ struct WorkshopPiece: Codable {
             for (title,k) in [("Make larger",1),("Make smaller",-1)] {
                 let sz=item(title,#selector(resizeSelected(_:)));sz.tag=k
                 let adjustable = p.attachment?.magnification ?? p.scale
-                sz.isEnabled=k>0 ? adjustable<3.5 : adjustable>0.4
+                sz.isEnabled=k>0 ? adjustable<(p.kind == .lights ? 5 : 3.5) : adjustable>(p.kind == .lights ? 0.5 : 0.4)
             }
             if p.attachment != nil { _=item("Detach from tree",#selector(detachSelected)) }
             _=item("Remove selected decoration",#selector(removeCurrent))
@@ -648,6 +790,10 @@ struct WorkshopPiece: Codable {
         let done=item("Done arranging",#selector(endArranging));done.isEnabled=editing
         let playRoot=NSMenuItem(title:"Play on the snow",action:nil,keyEquivalent:"")
         let tools=NSMenu(title:"Play on the snow");tools.autoenablesItems=false;playRoot.submenu=tools;menu.addItem(playRoot)
+        for (name,action,active) in [("Roll snowball",#selector(beginRolling),playTool == .roll),
+                                     ("Throw snowball",#selector(beginThrowing),playTool == .toss)] {
+            let tool=NSMenuItem(title:name,action:action,keyEquivalent:"");tool.target=self;tool.state=active ? .on : .off;tools.addItem(tool)
+        }
         let pile=NSMenuItem(title:"Pile snow",action:#selector(beginPiling),keyEquivalent:"")
         pile.target=self;pile.state=playTool == .pile ? .on : .off;tools.addItem(pile)
         let puff=NSMenuItem(title:"Puff snow",action:#selector(beginPuffing),keyEquivalent:"")
@@ -684,7 +830,8 @@ struct WorkshopPiece: Codable {
             a.magnification = max(0.4,min(3.5,a.magnification*factor))
             fit(i, attachment: a, to: tree)
         } else {
-            pieces[i].scale=max(0.4,min(3.5,pieces[i].scale*factor))
+            let wire=pieces[i].kind == .lights
+            pieces[i].scale=max(wire ? 0.5 : 0.4,min(wire ? 5 : 3.5,pieces[i].scale*factor))
             moveOrnaments(on: pieces[i])
         }
     }
@@ -715,5 +862,129 @@ struct WorkshopPiece: Codable {
             }
         } else {resize(i,by:pow(1.16,steps))}
         finishAdjustment(i);return true
+    }
+}
+
+extension MacWorkshop {
+    private static let twinkleChange=Notification.Name("JakeFrostLightTwinkleChanged")
+    @objc private func readTwinkle() {twinkleEnabled=settings?.object(forKey:"twinkleLights") as? Bool ?? true}
+    @objc func toggleTwinkle() {
+        settings?.set(!twinkleEnabled,forKey:"twinkleLights")
+        if let settings=settings {NotificationCenter.default.post(name:Self.twinkleChange,object:settings)}
+        else {twinkleEnabled.toggle()}
+        treeEditor?.refresh()
+    }
+    private var defaultBulbSize:CGFloat {
+        let value=settings?.object(forKey:"newLightPercent") as? Int ?? 100
+        return CGFloat(min(500,max(50,value)))/100
+    }
+    private var defaultWirePalette:Int {min(Self.bulbs.count-1,max(0,settings?.integer(forKey:"newLightPalette") ?? 0))}
+    private var defaultTrim:Int? {(settings?.object(forKey:"newTreeTrim") as? Int).flatMap{(0...7).contains($0) ? $0:nil}}
+    private var defaultTreePalette:Int? {(settings?.object(forKey:"newTreePalette") as? Int).flatMap{(0...2).contains($0) ? $0:nil}}
+    private func addWireOptions(to list:NSMenu,selectedIndex:Int?) {
+        let defaultSize=selectedIndex.map{pieces[$0].scale} ?? defaultBulbSize
+        let label=selectedIndex==nil ? "New string bulb size" : "Bulb size"
+        let row=NSMenuItem(title:label,action:nil,keyEquivalent:"")
+        let menu=NSMenu(title:label);row.submenu=menu;list.addItem(row)
+        for percent in [50,75,100,125,150,200,300,400,500] {
+            let option=NSMenuItem(title:"\(percent)%",action:#selector(chooseBulbs(_:)),keyEquivalent:"")
+            option.target=self;option.tag=percent;option.representedObject=selectedIndex.map{pieces[$0].id.uuidString}
+            option.state=abs(CGFloat(percent)-100*defaultSize)<0.01 ? .on:.off;menu.addItem(option)
+        }
+        if selectedIndex==nil {
+            let colors=NSMenuItem(title:"New string colors",action:nil,keyEquivalent:"")
+            let choices=NSMenu(title:colors.title);colors.submenu=choices;list.addItem(colors)
+            for (i,name) in Self.paletteNames.enumerated() {
+                let option=NSMenuItem(title:name,action:#selector(chooseWirePalette(_:)),keyEquivalent:"")
+                option.target=self;option.tag=i;option.state=i==defaultWirePalette ? .on:.off;choices.addItem(option)
+            }
+        }
+    }
+    @objc private func chooseBulbs(_ sender:NSMenuItem) {
+        if let target=sender.representedObject as? String {
+            guard let i=pieces.firstIndex(where:{$0.kind == .lights && $0.id.uuidString==target}) else{return}
+            pieces[i].scale=CGFloat(sender.tag)/100;finishAdjustment(i)
+        } else {settings?.set(sender.tag,forKey:"newLightPercent")}
+    }
+    @objc private func chooseWirePalette(_ sender:NSMenuItem){settings?.set(sender.tag,forKey:"newLightPalette")}
+
+    var trees:[WorkshopPiece] {pieces.filter{$0.kind == .tree}}
+    var designedTree:WorkshopPiece? {pieces.first{$0.kind == .tree && $0.id==lastTree}}
+    func nearestTreeForYeti(to x:CGFloat)->WorkshopPiece? {
+        pieces.filter{$0.kind == .tree && $0.onFloor && gesture?.piece.id != $0.id && !carriedByBlade.contains($0.id)}
+            .min{abs($0.center.x-x)<abs($1.center.x-x)}
+    }
+    @discardableResult func chopTree(_ id:UUID)->Bool {
+        guard let tree=pieces.first(where:{$0.id==id && $0.kind == .tree && $0.onFloor && gesture?.piece.id != id}) else{return false}
+        let ornaments=pieces.filter{$0.attachment?.tree==id}
+        falling.append((tree,ornaments,0));removeFamily([id]);save();invalidate?();return true
+    }
+    @objc func openTreeEditor() {
+        finishEditing()
+        if designedTree==nil {
+            if let tree=trees.last {selectTree(tree.id)} else {plantForEditor()}
+        }
+        if treeEditor==nil {treeEditor=MacTreeEditor(workshop:self)}
+        treeEditor?.show()
+    }
+    func setEditorToolActive(_ active:Bool){treeEditor?.setPicking(active)}
+    func selectTree(_ id:UUID) {
+        guard pieces.contains(where:{$0.id==id && $0.kind == .tree}) else{return}
+        lastTree=id;save();treeEditor?.refresh();invalidate?()
+    }
+    func pickTreeOnDesktop() {
+        guard !trees.isEmpty else{return}
+        resetTools();pickingTree=true;editing=true;treeEditor?.setPicking(true);invalidate?()
+    }
+    func plantForEditor() {
+        guard pieces.count<Self.limit,let floor=world?.banks.first,size.width>0 else{return}
+        onPlantTree?()
+        let options=[0.67,0.29,0.49,0.83,0.15].map{CGFloat($0)*size.width}
+        let trunks=trees
+        let x=options.max { a,b in
+            (trunks.map{abs($0.center.x-a)}.min() ?? 0)<(trunks.map{abs($0.center.x-b)}.min() ?? 0)
+        } ?? size.width/2
+        let foot=CGPoint(x:x,y:floor.surface(x))
+        var tree=WorkshopPiece(kind:.tree,center:foot);tree.treeTrim=defaultTrim;tree.treePalette=defaultTreePalette
+        position(&tree,at:foot);tree.onFloor=true;pieces.append(tree)
+        mounts[tree.id]=Mount(id:0,fraction:x/size.width);selectTree(tree.id)
+    }
+    func setTreeDesign(trim:Int,color:Int) {
+        guard (0...7).contains(trim),(0...2).contains(color),
+              let i=pieces.firstIndex(where:{$0.id==lastTree && $0.kind == .tree}) else{return}
+        pieces[i].treeTrim=trim;pieces[i].treePalette=color;save();treeEditor?.refresh();invalidate?()
+    }
+    func rememberTreeDefaults() {
+        guard let p=designedTree else{return}
+        settings?.set(p.trim,forKey:"newTreeTrim");settings?.set(p.treePalette ?? 1,forKey:"newTreePalette")
+    }
+    @discardableResult func hang(_ kind:WorkshopKind)->Bool {
+        guard pieces.count<Self.limit,kind.giftOrnamentID != nil,let tree=designedTree else{return false}
+        let n=pieces.filter{$0.attachment?.tree==tree.id}.count
+        let row=0.26+0.55*CGFloat((Double(n)*0.381966).truncatingRemainder(dividingBy:1))
+        let x=(0.055+0.22*row)*(n.isMultiple(of:2) ? 1 : -1)
+        let a=TreeAttachment(tree:tree.id,anchor:CGPoint(x:x,y:row-1),magnification:0.72,angle:0)
+        pieces.append(WorkshopPiece(kind:kind,center:tree.center));fit(pieces.count-1,attachment:a,to:tree)
+        save();treeEditor?.refresh();invalidate?();return true
+    }
+    func unhang() {
+        guard let id=lastTree,let i=pieces.lastIndex(where:{$0.attachment?.tree==id}) else{return}
+        removeFamily([pieces[i].id]);save();invalidate?()
+    }
+    private func drawSymbol(_ piece:WorkshopPiece,in c:CGContext) {
+        WorkshopSymbol.forKind(piece.kind).draw()
+        if piece.kind == .tree {
+            MacTreeLights.draw(trim:piece.trim,palette:piece.treePalette ?? 1,time:twinkleEnabled ? clock:nil,in:c)
+        }
+    }
+    func drawPreview(in rect:CGRect) {
+        guard let tree=designedTree,let c=NSGraphicsContext.current?.cgContext else{return}
+        let h=WorkshopSymbol.forKind(.tree).bounds.height, zoom=(rect.height-12)/(h*tree.scale)
+        c.saveGState();defer{c.restoreGState()}
+        c.translateBy(x:rect.midX,y:rect.midY);c.scaleBy(x:zoom,y:zoom);c.translateBy(x:-tree.center.x,y:-tree.center.y)
+        for p in pieces where p.id==tree.id || p.attachment?.tree==tree.id {
+            c.saveGState();c.translateBy(x:p.center.x,y:p.center.y);c.rotate(by:p.angle);c.scaleBy(x:p.scale,y:p.scale)
+            drawSymbol(p,in:c);c.restoreGState()
+        }
     }
 }

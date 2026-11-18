@@ -74,8 +74,8 @@ import AppKit
                 let x=dx*cos(s.angle)+dy*sin(s.angle),y=dy*cos(s.angle)-dx*sin(s.angle)
                 return abs(x)<=23 && (-13 ... -6).contains(y) || abs(x)<=21 && (-3...0).contains(y)
             }) else {continue}
-            s.x=min(max(0,world.size.width-27),s.x+blade.advance+0.6)
-            s.vx=max(s.vx,blade.speed*1.22)
+            s.x=max(0,min(max(0,world.size.width-27),s.x+blade.advance+blade.direction*0.6))
+            s.vx=blade.direction*max(blade.direction*s.vx,blade.speed*1.22)
             if s.support==0 {attach(s,to:floor)}
         }
     }

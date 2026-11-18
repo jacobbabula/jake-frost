@@ -28,7 +28,7 @@ import AppKit
         if let pose=terrain.visitors.plowPose,pose.x>30,pose.x<590 {
             pitch=max(pitch,abs(pose.angle))
             for dx:CGFloat in [-19,0,16] {wheelDepth=max(wheelDepth,road.height(pose.x+dx))}
-            let lip=pose.x+45
+            let lip=pose.x+35.8
             let end=min(road.depth.count-1,Int(floor(lip/road.spacing+0.5)))
             if end+2<road.depth.count {
                 wall=max(wall,road.depth[end+1]-road.depth[end],road.depth[end+2]-road.depth[end+1])
@@ -54,7 +54,7 @@ import AppKit
     }
     check(gradedFrames>100 && pitch<=4 * .pi/180 && wheelDepth<=1.11 && road.depth.allSatisfy{$0<=1.11},
           "the chassis stays level and both wheels cut a continuous lane through flat snow, a spike and a tall wall")
-    check(wall<6.6 && bareMetal,"the blade grades the next snow columns into a mound and its rendered body stays visible")
+    check(wall<15 && bareMetal,"the upright blade carries a low rounded roll and its rendered cab stays visible")
 
     let view=canvas(),world=view.world,workshop=view.workshop,ground=world.banks[0]
     func place(_ kind:WorkshopKind,_ x:CGFloat,_ y:CGFloat) -> WorkshopPiece {
