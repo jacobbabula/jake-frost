@@ -5,7 +5,10 @@ final class SnowCanvas: NSView {
     let giftTrain = GiftTrain()
     let visitors = MacVisitors()
     let workshop = MacWorkshop()
-    var animating: Bool { world.hasMotion || giftTrain.isMoving || visitors.isActive || workshop.hasMotion }
+    let weatherEffects = MacWeatherEffects()
+    let ice = WindowIce()
+    var iceLevel = 0
+    var animating: Bool { world.hasMotion || (!world.paused && weatherEffects.isActive) || giftTrain.isMoving || visitors.isActive || workshop.hasMotion }
     private var bankShapes = [(bank:Drift, revision:UInt, path:CGPath)]()
     private static let flakeColors = [NSColor(calibratedRed:0.79,green:0.89,blue:0.99,alpha:0.58),
                                      NSColor(calibratedWhite:0.97,alpha:0.85),NSColor.white]
@@ -33,14 +36,17 @@ final class SnowCanvas: NSView {
         giftTrain.step(dt,bounds:bounds)
         workshop.step(dt)
         workshop.sync(world:world)
+        var pointer: CGPoint?
         if let win=window {
             let inside=win.frame.contains(cursor)
             let local=convert(win.convertPoint(fromScreen:cursor),from:nil)
+            pointer = inside ? local : nil
             // This reads the pointer position without monitoring or intercepting other apps' events.
             let accept = draggingSnow || workshop.isDragging || (inside && NSEvent.pressedMouseButtons == 0 &&
                 (workshop.captures(local) || (allowTouch && world.hit(local))))
             if win.ignoresMouseEvents == accept { win.ignoresMouseEvents = !accept }
         }
+        weatherEffects.step(dt,world:world,pointer:pointer,paused:world.paused)
         if redraw { needsDisplay=true }
     }
     override func mouseDown(with event:NSEvent) {
@@ -73,6 +79,8 @@ final class SnowCanvas: NSView {
         }
         for i in layers.indices {Self.flakeColors[i].setFill();layers[i].fill()}
         guard let context = NSGraphicsContext.current?.cgContext else { return }
+        weatherEffects.draw(in:context)
+        ice.draw(context,banks:world.banks,level:world.snowEnabled ? iceLevel : 0)
         if bankShapes.count > world.banks.count { bankShapes.removeLast(bankShapes.count-world.banks.count) }
         context.setFillColor(Self.snowColor.cgColor)
         for (index,d) in world.banks.enumerated() {
@@ -97,6 +105,11 @@ final class SnowCanvas: NSView {
         for b in world.balls {
             let body=NSBezierPath(ovalIn:CGRect(x:b.x-b.radius,y:b.y-b.radius,width:2*b.radius,height:2*b.radius))
             Self.ballGradient?.draw(in:body,relativeCenterPosition:CGPoint(x:-0.38,y:-0.45))
+        }
+        for figure in world.snowmen {
+            context.saveGState();context.translateBy(x:figure.x,y:figure.foot)
+            giftTrain.drawSnowman(base:figure.base,middle:figure.middle,head:figure.head,style:figure.style,facing:figure.facing,in:context)
+            context.restoreGState()
         }
         workshop.draw()
         visitors.draw(in:context)

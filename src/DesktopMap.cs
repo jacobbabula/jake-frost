@@ -4,6 +4,8 @@ using System.Drawing;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
+using System.Windows.Threading;
 
 namespace Frostpane
 {
@@ -22,7 +24,8 @@ namespace Frostpane
         private const int Caption = 0x00C00000;
         private static readonly uint ProcessId = GetCurrentProcessId();
         private static int lastRead;
-        private static List<WindowFrame> snapshot;
+        private static WindowSnapshot snapshot;
+        private static readonly List<Action<WindowSnapshot>> waiting = new List<Action<WindowSnapshot>>();
 
         [StructLayout(LayoutKind.Sequential)]
         private struct Rect
@@ -77,7 +80,7 @@ namespace Frostpane
             return result;
         }
 
-        private sealed class WindowFrame
+        internal sealed class WindowFrame
         {
             public string Id;
             public Rectangle Bounds;
@@ -119,21 +122,67 @@ namespace Frostpane
             };
         }
 
-        // All monitor overlays on the UI thread share one front-to-back window enumeration per poll.
-        private static List<WindowFrame> Frames()
+        internal sealed class WindowSnapshot
         {
-            int now = Environment.TickCount;
-            if (snapshot != null && unchecked((uint)(now - lastRead)) < 80) return snapshot;
+            private readonly List<WindowFrame> frames;
+            internal WindowSnapshot(List<WindowFrame> frames) { this.frames = frames; }
+            internal bool Matches(WindowSnapshot other)
+            {
+                if (other == null || frames.Count != other.frames.Count) return false;
+                for (int i=0; i<frames.Count; i++) {
+                    var a=frames[i]; var b=other.frames[i];
+                    if (a.Id!=b.Id || a.Bounds!=b.Bounds || a.CanHoldSnow!=b.CanHoldSnow) return false;
+                }
+                return true;
+            }
+            internal List<Ledge> Ledges(DesktopMonitor monitor, double scale)
+            {
+                return VisibleLedges(frames,monitor,scale);
+            }
+            internal List<Rectangle> AppBounds(DesktopMonitor monitor)
+            {
+                var result=new List<Rectangle>();
+                foreach (var frame in frames) {
+                    Rectangle r=Rectangle.Intersect(frame.Bounds,monitor.Work);
+                    if (r.Width>0 && r.Height>0) result.Add(r);
+                }
+                return result;
+            }
+        }
+        private static WindowSnapshot Capture()
+        {
             var frames = new List<WindowFrame>();
-            EnumWindows(delegate(IntPtr window, IntPtr data)
+            bool complete=EnumWindows(delegate(IntPtr window, IntPtr data)
             {
                 WindowFrame frame = ReadWindow(window);
                 if (frame != null) frames.Add(frame);
                 return true;
             }, IntPtr.Zero);
-            snapshot = frames;
-            lastRead = now;
-            return frames;
+            return complete ? new WindowSnapshot(frames) : null;
+        }
+        // One immutable capture serves every monitor. The initial desktop is needed
+        // synchronously to seed existing ledges; subsequent DWM calls run off the UI thread.
+        internal static void RequestWindows(Action<WindowSnapshot> apply)
+        {
+            if (snapshot==null) {
+                snapshot=Capture() ?? new WindowSnapshot(new List<WindowFrame>());
+                lastRead=Environment.TickCount;
+            }
+            apply(snapshot);
+            if (unchecked((uint)(Environment.TickCount-lastRead))<80 || waiting.Contains(apply)) return;
+            waiting.Add(apply);
+            if (waiting.Count>1) return;
+            Dispatcher dispatcher=Dispatcher.CurrentDispatcher;
+            ThreadPool.QueueUserWorkItem(delegate {
+                WindowSnapshot fresh=Capture();
+                dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(delegate {
+                    lastRead=Environment.TickCount;
+                    var listeners=waiting.ToArray(); waiting.Clear();
+                    if (fresh==null || fresh.Matches(snapshot)) return;
+                    snapshot=fresh;
+                    foreach(var listener in listeners) listener(fresh);
+                }));
+            });
         }
 
         private struct Segment
@@ -156,19 +205,6 @@ namespace Frostpane
             }
         }
 
-        public static List<Ledge> Ledges(DesktopMonitor monitor, double effectiveScale)
-        {
-            return VisibleLedges(Frames(), monitor, effectiveScale);
-        }
-        internal static List<Rectangle> AppBounds(DesktopMonitor monitor)
-        {
-            var result=new List<Rectangle>();
-            foreach(WindowFrame item in Frames()) {
-                Rectangle intersect=Rectangle.Intersect(item.Bounds,monitor.Work);
-                if (intersect.Width>0 && intersect.Height>0) result.Add(intersect);
-            }
-            return result;
-        }
         internal static bool WindowAlive(string ledgeId)
         {
             if (String.IsNullOrEmpty(ledgeId)) return false;

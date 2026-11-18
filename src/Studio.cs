@@ -13,7 +13,6 @@ namespace Frostpane
     {
         private WeatherController weather;
         private FriendsPane friends;
-        private DecorationPicker decorations;
         private Overlay giftMonitor;
         private string screenKey="",dailyGiftOpened="";
         private bool updatingWeather,displayAsleep,onBattery;
@@ -29,14 +28,6 @@ namespace Frostpane
 
         private void SetupStudio()
         {
-            decorations=new DecorationPicker(delegate(DecorationKind kind) {
-                prefs.Decoration=kind; ActivateTool(PlayTool.Decorate);
-            });
-            var gallery=new StackPanel();
-            gallery.Children.Add(new TextBlock {Text="Pick a decoration to place it on your desktop. Drag its circular arrow to rotate, or use Arrange to edit it later.",
-                TextWrapping=TextWrapping.Wrap,Margin=new Thickness(3,0,3,8)});
-            gallery.Children.Add(decorations);
-            Control<Border>("DecorPane").Child=gallery; decorations.SelectKind(prefs.Decoration);
             friends=new FriendsPane(GiftSource,Summon,ReceiveGift,
                 delegate(string id) { return overlays.Exists(o=>o.Surface.Scene.IsGiftInTransit(id)); },Preferences.DirectoryName);
             Control<Border>("FriendsHost").Child=friends;
@@ -70,6 +61,20 @@ namespace Frostpane
             Control<Button>("SnowmenButton").Click+=delegate { Summon(VisitorKind.Snowmen); };
             Control<Button>("YetiButton").Click+=delegate { Summon(VisitorKind.Yeti); };
             Control<Button>("SantaButton").Click+=delegate { Summon(VisitorKind.Santa); };
+        }
+        private void EnsureDecorationGallery()
+        {
+            var host=Control<Border>("DecorPane");
+            if (host.Child!=null) return;
+            var picker=new DecorationPicker(delegate(DecorationKind kind) {
+                prefs.Decoration=kind; ActivateTool(PlayTool.Decorate);
+            });
+            var gallery=new StackPanel();
+            gallery.Children.Add(new TextBlock {Text="Pick a decoration to place it on your desktop. Drag its circular arrow to rotate, or use Arrange to edit it later.",
+                TextWrapping=TextWrapping.Wrap,Margin=new Thickness(3,0,3,8)});
+            gallery.Children.Add(picker);
+            picker.SelectKind(prefs.Decoration);
+            host.Child=gallery;
         }
         private void SetupOption(string id,bool initial,Action<bool> set)
         {

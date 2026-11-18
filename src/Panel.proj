@@ -1,0 +1,15 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
+  <UsingTask TaskName="Microsoft.Build.Tasks.Windows.MarkupCompilePass1" AssemblyFile="$(MSBuildBinPath)\WPF\PresentationBuildTasks.dll"/>
+  <UsingTask TaskName="Microsoft.Build.Tasks.Windows.ResourcesGenerator" AssemblyFile="$(MSBuildBinPath)\WPF\PresentationBuildTasks.dll"/>
+  <ItemGroup>
+    <Reference Include="$(MSBuildBinPath)\mscorlib.dll;$(MSBuildBinPath)\System.dll;$(MSBuildBinPath)\System.Xaml.dll;$(MSBuildBinPath)\WPF\WindowsBase.dll;$(MSBuildBinPath)\WPF\PresentationCore.dll;$(MSBuildBinPath)\WPF\PresentationFramework.dll"/>
+  </ItemGroup>
+  <Target Name="Build">
+    <MarkupCompilePass1 AssemblyName="JakeFrost" Language="C#" LanguageSourceExtension=".cs"
+        OutputType="winexe" PageMarkup="Panel.xaml" References="@(Reference)" OutputPath="$(OutputPath)">
+      <Output TaskParameter="GeneratedBamlFiles" ItemName="CompiledPage"/>
+    </MarkupCompilePass1>
+    <ResourcesGenerator ResourceFiles="@(CompiledPage)" OutputPath="$(OutputPath)"
+        OutputResourcesFile="$(OutputPath)\JakeFrost.g.resources"/>
+  </Target>
+</Project>

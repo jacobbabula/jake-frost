@@ -150,10 +150,13 @@ internal static class WindowsPerformance
     [STAThread]
     public static void Main(string[] args)
     {
+        if(args.Length==2 && args[0]=="--window-fixture") {WindowsFrameProbe.ShowTestWindows(args[1]);return;}
         MeasurePhysics(0, false);
         MeasurePhysics(4, false);
         MeasurePhysics(16, true);
         MeasureDriftDrawing();
         MeasureGiftHistory(args[0]);
+        WindowsFrameProbe.CheckMask(Scene(16,false));
+        WindowsFrameProbe.MeasurePolls(args[0]);
     }
 }

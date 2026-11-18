@@ -1,7 +1,18 @@
 import AppKit
 
+extension SnowWorld {
+    var latestSnowmanGift: FrostGift? {
+        guard let figure=snowmen.last else {return nil}
+        var gift=FrostGift()
+        gift.kind = .snowman;gift.style=figure.style;gift.facing=Double(figure.facing)
+        gift.size=Double(figure.base);gift.mid=Double(figure.middle);gift.head=Double(figure.head)
+        return gift
+    }
+}
+
 @MainActor final class MacGifts: NSObject {
     var deliver: ((FrostGift, @escaping () -> Void) -> Bool)?
+    var localTemplate: ((FrostGift.Kind) -> FrostGift?)?
     private var mailbox: GiftMailbox?
     private var timer: Timer?, composer: AnchoredPanel?, sharing: NSSharingServicePicker?
     private var senderField = NSTextField(), noteField = NSTextField(), kindField = NSPopUpButton()
@@ -155,7 +166,7 @@ import AppKit
     private func composeGift() throws -> FrostGift {
         let mailbox=try box()
         let kind=FrostGift.Kind(rawValue:kindField.titleOfSelectedItem ?? "") ?? .note
-        let template=kind == .note ? nil : try mailbox.latest(kind:kind)
+        let template=kind == .note ? nil : try (localTemplate?(kind) ?? mailbox.latest(kind:kind))
         let gift=try FrostGift.make(kind,sender:senderField.stringValue,note:noteField.stringValue,senderID:mailbox.senderID,template:template)
         UserDefaults.standard.set(senderField.stringValue,forKey:"giftSender")
         return gift

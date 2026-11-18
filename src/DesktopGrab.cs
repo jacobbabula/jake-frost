@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -103,7 +104,7 @@ namespace Frostpane
                 var p=System.Windows.Forms.Cursor.Position;
                 End(mask.PointFromScreen(new Point(p.X,p.Y)));
             }
-            mask.InvalidateVisual();
+            if (!mask.Dragging && mask.HitTargetsChanged()) mask.InvalidateVisual();
         }
         private Geometry lastSnowClip;
         private Rect lastPanel=Rect.Empty;
@@ -129,7 +130,42 @@ namespace Frostpane
             private sealed class BankShape {internal int Revision=-1; internal Geometry Shape;}
             private readonly ConditionalWeakTable<SnowBank,BankShape> shapes=new ConditionalWeakTable<SnowBank,BankShape>();
             private static readonly SolidColorBrush Hit=new SolidColorBrush(Color.FromArgb(1,0,0,0));
+            private struct Target {
+                internal object Source;
+                internal double X,Y,A,B,C;
+            }
+            private readonly List<Target> previous=new List<Target>();
+            private int index;
+            private bool changed;
             internal Mask(SnowScene scene) {snow=scene; ClipToBounds=true;}
+            // Falling flakes never intercept mouse input. Publishing an identical full-display
+            // layered window every animation tick only adds work to WPF and the compositor.
+            internal bool HitTargetsChanged()
+            {
+                index=0; changed=false;
+                var present=snow.DailyPresent;
+                if (present!=null) Observe(present,present.X,present.Y);
+                foreach(var b in snow.Banks)
+                    if (b.Heights.Length>=2 && (b.IsFloor || snow.WindowSnowEnabled)) Observe(b,b.Revision,0);
+                foreach(var ball in snow.Balls) Observe(ball,ball.X,ball.Y,ball.Radius);
+                foreach(var man in snow.Snowmen) Observe(man,man.X,man.Y,man.BaseRadius,man.MidRadius,man.HeadRadius);
+                foreach(var sled in snow.Sleds) Observe(sled,sled.X,sled.DisplayY,sled.DisplayAngle);
+                foreach(var tree in snow.Trees) if (!tree.Hidden) Observe(tree,tree.X,tree.Y,tree.Size,tree.Angle);
+                if (index<previous.Count) {previous.RemoveRange(index,previous.Count-index);changed=true;}
+                return changed;
+            }
+            private void Observe(object source,double x,double y,double a=0,double b=0,double c=0)
+            {
+                var target=new Target {Source=source,X=x,Y=y,A=a,B=b,C=c};
+                if (index==previous.Count) {previous.Add(target);changed=true;}
+                else {
+                    var old=previous[index];
+                    if (old.Source!=source || old.X!=x || old.Y!=y || old.A!=a || old.B!=b || old.C!=c) {
+                        previous[index]=target; changed=true;
+                    }
+                }
+                index++;
+            }
             protected override void OnRender(DrawingContext dc)
             {
                 if (Dragging) {dc.DrawRectangle(Hit,null,new Rect(RenderSize));return;}

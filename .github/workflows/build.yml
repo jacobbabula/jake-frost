@@ -15,13 +15,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: Compare snowfall and gift history with version 3.2
+      - name: Compare snowfall, desktop polling and gift history with version 3.3
         shell: powershell
         run: |
-          git archive v3.2.0 src --format=zip --output=baseline.zip
-          if ($LASTEXITCODE) { throw 'Cannot read the 3.2 baseline.' }
+          git archive v3.3.0 --format=zip --output=baseline.zip src Build.ps1
+          if ($LASTEXITCODE) { throw 'Cannot read the 3.3 baseline.' }
           Expand-Archive baseline.zip .\baseline
-          Write-Host 'Jake Frost 3.2'
+          Write-Host 'Jake Frost 3.3'
           .\tests\WindowsPerformance.ps1 -SourceDirectory .\baseline\src
           Write-Host 'Current release candidate'
           .\tests\WindowsPerformance.ps1
@@ -31,6 +31,11 @@ jobs:
           .\Build.ps1 -OutputDirectory .\dist\Jake-Frost
           .\BuildSetup.ps1 -AppDirectory .\dist\Jake-Frost -OutputDirectory .\dist\public
           Compress-Archive -LiteralPath .\dist\Jake-Frost -DestinationPath .\dist\public\Jake-Frost-Windows.zip
+      - name: Measure time until the settings panel and snow overlay are responsive
+        shell: powershell
+        run: |
+          .\baseline\Build.ps1 -OutputDirectory .\dist\baseline
+          .\tests\WindowsStartup.ps1 -BaselineApplication .\dist\baseline\JakeFrost.exe -Application .\dist\Jake-Frost\JakeFrost.exe
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-downloads
@@ -52,8 +57,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: Measure heavy snowfall against version 3.2
-        run: bash macOS/Tests/benchmark-snow.sh v3.2.0
+      - name: Measure heavy snowfall against version 3.3
+        run: bash macOS/Tests/benchmark-snow.sh v3.3.0
       - name: Build and test the universal Mac app
         run: bash macOS/build.sh "$RUNNER_TEMP/JakeBuild"
       - name: Exchange portable gifts

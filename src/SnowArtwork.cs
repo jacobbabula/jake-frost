@@ -61,9 +61,9 @@ namespace Frostpane
         private static readonly Brush Bark = Ink("#795945");
         private static readonly Sprite Snow = new Sprite(DrawSnowSphere);
         private static readonly Sprite Button = new Sprite(DrawButton);
-        private static readonly Sprite[][,] Outfits = BuildOutfits();
+        private static readonly Lazy<Sprite[][,]> Outfits = new Lazy<Sprite[][,]>(BuildOutfits);
         private static readonly Sprite[,] Crystals = BuildCrystals();
-        private static readonly Sprite[] RollMarks = BuildRollMarks();
+        private static readonly Lazy<Sprite[]> RollMarkArt = new Lazy<Sprite[]>(BuildRollMarks);
 
         internal static void Draw(DrawingContext dc, SnowScene scene)
         {
@@ -92,8 +92,9 @@ namespace Frostpane
                 if (ball.InFlight) WinterArt.DrawThrow(dc, ball);
                 Snow.Draw(dc, ball.X, ball.Y, ball.Radius / 30);
                 double turns = ball.Rotation / (2 * Math.PI);
-                int frame = (int)((turns - Math.Floor(turns)) * RollMarks.Length);
-                RollMarks[frame % RollMarks.Length].Draw(dc, ball.X, ball.Y, ball.Radius / 30);
+                var marks = RollMarkArt.Value;
+                int frame = (int)((turns - Math.Floor(turns)) * marks.Length);
+                marks[frame % marks.Length].Draw(dc, ball.X, ball.Y, ball.Radius / 30);
             }
             foreach (Flake flake in scene.Flakes)
                 if (flake.Depth >= .88) DrawFlake(dc, flake);
@@ -455,7 +456,7 @@ namespace Frostpane
             double midY = baseY - .78 * (b + m);
             double headY = midY - .78 * (m + h);
             int face = man.Facing < 0 ? 1 : 0;
-            Sprite[,] outfit = Outfits[Math.Abs(man.Style % 3)];
+            Sprite[,] outfit = Outfits.Value[Math.Abs(man.Style % 3)];
             outfit[0, face].Draw(dc, man.X, midY, m / 30);
             Snow.Draw(dc, man.X, baseY, b / 30);
             Snow.Draw(dc, man.X, midY, m / 30);

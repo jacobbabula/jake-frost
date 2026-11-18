@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -11,7 +11,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
-using System.Windows.Markup;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Forms = System.Windows.Forms;
@@ -19,7 +18,7 @@ using Forms = System.Windows.Forms;
 [assembly: AssemblyTitle("Jake Frost")]
 [assembly: AssemblyDescription("Interactive desktop snowfall")]
 [assembly: AssemblyProduct("Jake Frost")]
-[assembly: AssemblyVersion("3.3.0.0")]
+[assembly: AssemblyVersion("3.4.0.0")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8")]
 
 namespace Frostpane
@@ -110,6 +109,7 @@ namespace Frostpane
         [DllImport("user32.dll")] private static extern bool RegisterHotKey(IntPtr hwnd,int id,uint modifiers,uint key);
         [DllImport("user32.dll")] private static extern bool UnregisterHotKey(IntPtr hwnd,int id);
         [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+        [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr handle,IntPtr after,int x,int y,int width,int height,uint flags);
         private const int ExitBuildKey=0x4650;
         private readonly Preferences prefs=new Preferences();
         private readonly List<Overlay> overlays=new List<Overlay>();
@@ -165,8 +165,7 @@ namespace Frostpane
         private void Start(EventWaitHandle wake,EventWaitHandle giftWake,bool openedGift)
         {
             prefs.Load();
-            using (var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream("JakeFrost.Panel"))
-                panel=(Window)XamlReader.Load(stream);
+            panel=(Window)LoadComponent(new Uri("/JakeFrost;component/Panel.xaml",UriKind.Relative));
             using (var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream("JakeFrost.Icon"))
             using (var icon=new System.Drawing.Icon(stream)) appIcon=(System.Drawing.Icon)icon.Clone();
             panel.Icon=Imaging.CreateBitmapSourceFromHIcon(appIcon.Handle,Int32Rect.Empty,BitmapSizeOptions.FromEmptyOptions());
@@ -184,6 +183,8 @@ namespace Frostpane
             SetupStudio();
             ConnectControls();
             ApplyPreferences();
+            // Give the settings window its first layout before creating the full-screen windows.
+            if (!openedGift) OpenPanel();
             MakeTray();
             SyncMonitors();
             wakeHandler=ThreadPool.RegisterWaitForSingleObject(wake,delegate { Dispatcher.BeginInvoke(new Action(OpenPanel)); },null,-1,false);
@@ -205,8 +206,10 @@ namespace Frostpane
             animation.Tick += delegate { Frame(); };
             watch.Start(); poll.Start(); loading=false;
             weather.Configure(prefs.Schedule,prefs.City);
-            if(openedGift) OpenPage("Friends"); else OpenPanel();
+            if(openedGift) OpenPage("Friends");
             foreach (Overlay overlay in overlays) PollOverlay(overlay);
+            // Showing transparent topmost windows can put them above an already active panel.
+            SetWindowPos(panelHandle,new IntPtr(-1),0,0,0,0,0x0013); // TOPMOST, no move, size or activation
             SessionEnding+=delegate {
                 foreach (Overlay overlay in overlays) SaveDecorations(overlay);
                 if (save.IsEnabled) prefs.Save();
@@ -271,6 +274,7 @@ namespace Frostpane
         }
         private void ShowPage(string choice)
         {
+            if (choice=="Decor") EnsureDecorationGallery();
             string[] names={"WorkshopPane","WeatherPane","DecorPane","FriendsHost"};
             foreach (string name in names) Control<FrameworkElement>(name).Visibility=
                 name.StartsWith(choice,StringComparison.Ordinal)?Visibility.Visible:Visibility.Collapsed;

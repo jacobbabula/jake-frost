@@ -105,7 +105,10 @@ import AppKit
         for parcel in parcels {
             let x = max(18,min(bounds.width - 18,parcel.x))
             c.saveGState(); c.translateBy(x: x, y: groundY?(x) ?? bounds.maxY - 2)
-            if parcel.gift.kind == .tree { drawTree(parcel,c) } else { drawSnowman(parcel.gift,c) }
+            if parcel.gift.kind == .tree { drawTree(parcel,c) } else {
+                let g=parcel.gift
+                drawSnowman(base:CGFloat(g.size),middle:CGFloat(g.mid),head:CGFloat(g.head),style:g.style,facing:CGFloat(g.facing),in:c)
+            }
             c.restoreGState()
         }
         for train in trains {
@@ -188,13 +191,12 @@ import AppKit
         }
     }
 
-    private func drawSnowman(_ g:FrostGift,_ c:CGContext) {
-        let b=CGFloat(g.size),m=CGFloat(g.mid),h=CGFloat(g.head)
-        let base = -b, middle=base-0.78*(b+m), top=middle-0.78*(m+h), dir:CGFloat=g.facing<0 ? -1:1
+    func drawSnowman(base b:CGFloat,middle m:CGFloat,head h:CGFloat,style:Int,facing:CGFloat,in c:CGContext) {
+        let base = -b, middle=base-0.78*(b+m), top=middle-0.78*(m+h), dir:CGFloat=facing<0 ? -1:1
         for (r,y) in [(b,base),(m,middle),(h,top)] {
             dot(c,0xC1DCE6,0,y,r,r);dot(c,0xF4F9F8,-r*0.07,y-r*0.06,r*0.90,r*0.90)
         }
-        let scarf=[0xBA524B,0x467B73,0x577C9F][g.style % 3]
+        let scarf=[0xBA524B,0x467B73,0x577C9F][style % 3]
         rect(c,scarf,-h,top+h*0.55,2*h,h*0.36,h*0.15)
         rect(c,scarf,h*0.08,top+h*0.77,h*0.39,h*0.9)
         for y in [middle-m*0.20,middle+m*0.32,base-b*0.25] { dot(c,0x394548,0,y,max(0.8,m*0.12),max(0.8,m*0.12)) }

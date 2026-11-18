@@ -5,6 +5,7 @@ import AppKit
     private static let testMailbox=ProcessInfo.processInfo.environment["JAKE_FROST_TEST_MAILBOX"].map { URL(fileURLWithPath:$0,isDirectory:true) }
     private let settings=FrostApp.smoke || FrostApp.testMailbox != nil ? UserDefaults(suiteName:"io.jakefrost.test."+UUID().uuidString)! : UserDefaults.standard
     private let gifts=MacGifts(mailboxRoot:FrostApp.testMailbox)
+    private lazy var weatherControls = MacWeatherControls(settings:settings,onChange:{ [weak self] in self?.applyPreferences() })
     private lazy var visitorControls = MacVisitorControls(settings:settings,summon:{ [weak self] kind in
         guard let self = self, let canvas = self.currentScene?.view else { return }
         if kind == .train { canvas.giftTrain.visit() } else { canvas.visitors.summon(kind,in:canvas.world) }
@@ -16,8 +17,8 @@ import AppKit
     private var currentScene: ScreenScene? {
         let mouse = NSEvent.mouseLocation
         if let screen=NSScreen.screens.first(where: { $0.frame.contains(mouse) }),
-           let id=displayID(screen), let scene=scenes[id] { return scene }
-        return scenes.values.first
+           let id=displayID(screen), let scene=scenes[id],scene.panel.isVisible { return scene }
+        return scenes.values.first { $0.panel.isVisible }
     }
     private var status:NSStatusItem!
     private var timer:Timer?
@@ -27,12 +28,16 @@ import AppKit
     private var workshopActive = false
     private var receivedDocument=false
     private var awake=true
-    private var snowfall:Int {settings.integer(forKey:"snowfall")}
+    private var volume:Int {
+        if settings.object(forKey:"snowVolume") != nil {return min(400,max(0,settings.integer(forKey:"snowVolume")))}
+        return [45,100,220][min(2,max(0,settings.integer(forKey:"snowfall")))]
+    }
+    private var windowSnow: Bool { settings.bool(forKey:"windowSnow") }
     private var snowPlay:Bool {settings.bool(forKey:"snowPlay")}
     private var paused:Bool {settings.bool(forKey:"pauseSnow")}
 
     func applicationDidFinishLaunching(_ note:Notification) {
-        settings.register(defaults:["snowfall":1,"snowPlay":true,"pauseSnow":false])
+        settings.register(defaults:["snowfall":1,"snowPlay":true,"pauseSnow":false,"snowDepth":55,"windowSnow":true])
         NSApp.setActivationPolicy(.accessory)
         status=NSStatusBar.system.statusItem(withLength:NSStatusItem.squareLength)
         if let button=status.button {
@@ -44,10 +49,14 @@ import AppKit
         let menu=NSMenu(title:"Jake Frost");menu.delegate=self
         fill(menu);status.menu=menu
         synchronizeScreens()
+        gifts.localTemplate = { [weak self] kind in
+            guard let self=self, kind == .snowman else {return nil}
+            return self.currentScene?.view.world.latestSnowmanGift ??
+                self.scenes.values.lazy.compactMap { $0.view.world.latestSnowmanGift }.first
+        }
         gifts.deliver={ [weak self] gift, receipt in
             guard let self=self,self.awake else{return false}
-            let mouse=NSEvent.mouseLocation
-            guard let scene=self.scenes.values.first(where: { $0.panel.frame.contains(mouse) }) ?? self.scenes.values.first else{return false}
+            guard let scene=self.currentScene else{return false}
             return scene.view.giftTrain.start(gift,onArrival:receipt)
         }
         if !FrostApp.smoke {gifts.start()}
@@ -91,7 +100,7 @@ import AppKit
     }
     private func startFrames() {
         guard awake else{return}
-        let interval: TimeInterval = scenes.values.contains { $0.view.animating || $0.view.workshop.editing } ? 1/30 : 1/12
+        let interval: TimeInterval = scenes.values.contains { $0.panel.isVisible && ($0.view.animating || $0.view.workshop.editing) } ? 1/30 : 1/12
         if let timer=timer, timer.timeInterval==interval { return }
         timer?.invalidate()
         lastTick=ProcessInfo.processInfo.systemUptime
@@ -146,10 +155,10 @@ import AppKit
     }
     private func updateEdges(){
         guard let primary=NSScreen.screens.first else{return}
-        let windows=DesktopEdges.windows()
+        let windows=windowSnow ? DesktopEdges.windows() : []
         let windowsChanged = windows != previousWindows
         previousWindows = windows
-        for (id,scene) in scenes {
+        for (id,scene) in scenes where scene.panel.isVisible {
             let frame=scene.panel.frame
             let quartz=CGRect(x:frame.minX,y:primary.frame.maxY-frame.maxY,width:frame.width,height:frame.height)
             guard windowsChanged || previousScreens[id] != quartz else { continue }
@@ -161,32 +170,66 @@ import AppKit
     }
     @objc private func frame(_ timer:Timer) {
         let now=ProcessInfo.processInfo.systemUptime,dt=now-lastTick
-        lastTick=now;if now>=nextEdges {updateEdges();nextEdges=now+0.45}
+        lastTick=now;if now>=nextEdges {weatherControls.tick();updateEdges();nextEdges=now+0.45}
         let mouse=NSEvent.mouseLocation
-        for scene in scenes.values {scene.view.frameTick(dt,cursor:mouse)}
+        for scene in scenes.values where scene.panel.isVisible {scene.view.frameTick(dt,cursor:mouse)}
         startFrames()
     }
     private func applyPreferences(){
-        let amounts:[CGFloat]=[0.45,1,2.2]
-        for s in scenes.values {
-            s.view.world.amount=amounts[min(2,max(0,snowfall))]
+        let intensity=CGFloat(volume)/100
+        let chosen=settings.integer(forKey:"onlyDisplay")
+        let restrict=chosen>0 && scenes.keys.contains { Int($0)==chosen }
+        var interrupted=false
+        for (id,s) in scenes {
+            let visible = !restrict || chosen==Int(id)
+            if s.panel.isVisible != visible {
+                if visible {s.panel.orderFrontRegardless();previousScreens.removeValue(forKey:id)}
+                else {
+                    if s.view.giftTrain.cancel(){interrupted=true}
+                    s.view.workshop.finishEditing();s.view.releasePointer();s.panel.orderOut(nil)
+                }
+            }
+            let level:NSWindow.Level = settings.bool(forKey:"behindWindows") ?
+                NSWindow.Level(rawValue:Int(CGWindowLevelForKey(.desktopIconWindow))+1) : .floating
+            if s.panel.level != level {s.panel.level=level}
+            s.view.world.amount=intensity*(weatherControls.mode == .heavySnow ? 1.7 : 1)
+            s.view.world.snowEnabled=weatherControls.mode.isSnow
+            s.view.world.wind=weatherControls.wind
+            s.view.world.setAccumulation(CGFloat(settings.integer(forKey:"snowDepth")))
+            s.view.iceLevel=settings.integer(forKey:"windowIce")
+            s.view.weatherEffects.configure(mode:weatherControls.mode,wind:weatherControls.wind,lightning:weatherControls.lightning,intensity:intensity)
             s.view.world.paused=paused;s.view.allowTouch=snowPlay
             s.view.visitors.configure(visitorControls);s.view.giftTrain.configure(visitorControls)
             if !snowPlay {s.view.releasePointer()}
+            s.view.needsDisplay=true
         }
+        if interrupted {gifts.retryUndelivered()}
     }
     private func item(_ title:String,_ action:Selector,_ menu:NSMenu)->NSMenuItem {
         let i=NSMenuItem(title:title,action:action,keyEquivalent:"");i.target=self;menu.addItem(i);return i
     }
     private func fill(_ menu:NSMenu) {
         menu.removeAllItems()
-        let weather=NSMenuItem(title:"Snowfall",action:nil,keyEquivalent:"")
-        let amounts=NSMenu(title:"Snowfall")
-        for (i,name) in ["Light","Steady","Heavy"].enumerated(){
-            let option=item(name,#selector(setSnow(_:)),amounts);option.tag=i;option.state=i==snowfall ? .on : .off
+        weatherControls.append(to:menu)
+        let snow = NSMenu(title:"Snow and windows")
+        menu.addItem(withTitle:snow.title,action:nil,keyEquivalent:"").submenu=snow
+        func choices(_ title:String,_ key:String,_ values:[(Int,String)],_ current:Int) {
+            let list=NSMenu(title:title)
+            snow.addItem(withTitle:title,action:nil,keyEquivalent:"").submenu=list
+            for (value,label) in values {
+                let entry=item(label,#selector(setPreference(_:)),list)
+                entry.tag=value;entry.representedObject=key;entry.state=value==current ? .on:.off
+            }
         }
-        weather.submenu=amounts;menu.addItem(weather)
-        _=item(paused ? "Resume snowfall" : "Pause snowfall",#selector(togglePause),menu)
+        choices("Weather volume","snowVolume",[0,25,45,75,100,150,220,300,400].map {($0,"\($0)%")},volume)
+        choices("Accumulation depth","snowDepth",[24,40,55,80,110,140].map {($0,"\($0) pt")},settings.integer(forKey:"snowDepth"))
+        choices("Window ice","windowIce",[(0,"Off"),(1,"Light frost"),(2,"Icicles"),(3,"Heavy ice")],settings.integer(forKey:"windowIce"))
+        choices("Show effects on","onlyDisplay",[(0,"All displays")]+NSScreen.screens.compactMap { screen in
+            guard let id=displayID(screen) else {return nil};return (Int(id),screen.localizedName)
+        },settings.integer(forKey:"onlyDisplay"))
+        let edges=item("Collect snow on window edges",#selector(toggleWindows),snow);edges.state=windowSnow ? .on:.off
+        let layer=item("Show behind windows",#selector(toggleLayer),snow);layer.state=settings.bool(forKey:"behindWindows") ? .on:.off
+        _=item(paused ? "Resume weather" : "Pause weather",#selector(togglePause),menu)
         let play=item("Grab and throw snow",#selector(togglePlay),menu);play.state=snowPlay ? .on : .off
         _=item("Clear scene",#selector(clearScene),menu)
         menu.addItem(.separator())
@@ -197,13 +240,19 @@ import AppKit
         let quit=item("Quit Jake Frost",#selector(quitApp),menu);quit.keyEquivalent="q"
     }
     func menuNeedsUpdate(_ menu:NSMenu){fill(menu)}
-    @objc private func setSnow(_ item:NSMenuItem){settings.set(item.tag,forKey:"snowfall");applyPreferences()}
+    @objc private func setPreference(_ item:NSMenuItem){
+        guard let key=item.representedObject as? String else {return}
+        settings.set(item.tag,forKey:key);applyPreferences()
+        if key == "onlyDisplay" {updateEdges()}
+    }
+    @objc private func toggleWindows(){settings.set(!windowSnow,forKey:"windowSnow");previousWindows=nil;updateEdges()}
+    @objc private func toggleLayer(){settings.set(!settings.bool(forKey:"behindWindows"),forKey:"behindWindows");applyPreferences()}
     @objc private func togglePause(){settings.set(!paused,forKey:"pauseSnow");applyPreferences()}
     @objc private func togglePlay(){settings.set(!snowPlay,forKey:"snowPlay");applyPreferences()}
     @objc private func clearScene(){
         var interrupted=false
         for s in scenes.values {
-            s.view.world.clear();s.view.workshop.clear();s.view.visitors.clear();s.view.releasePointer()
+            s.view.world.clear();s.view.weatherEffects.clear();s.view.workshop.clear();s.view.visitors.clear();s.view.releasePointer()
             if s.view.giftTrain.clear(){interrupted=true}
             s.view.needsDisplay = true
         }
@@ -214,9 +263,9 @@ import AppKit
         settings.set(true,forKey:"welcomed")
         if let panel=welcome {NSApp.activate(ignoringOtherApps:true);panel.expand();panel.makeKeyAndOrderFront(nil);return}
         let panel=AnchoredPanel(contentRect:CGRect(x:0,y:0,width:380,height:190),title:"Jake Frost")
-        let header=NSTextField(labelWithString:"Snow is falling on your Mac.")
+        let header=NSTextField(labelWithString:"Play in the snow")
         header.font = .systemFont(ofSize:20,weight:.semibold)
-        let body=NSTextField(wrappingLabelWithString:"Grab a drift above the Dock or on a window edge. Drag to roll a snowball. Flick and release to throw it.\n\nUse the snowflake in the menu bar to send a gift, change the snowfall, or quit.")
+        let body=NSTextField(wrappingLabelWithString:"Grab snow above the Dock or on a window edge. Drag to roll a ball, then flick to throw it. Gently stack three balls to build a snowman.\n\nOpen the menu bar snowflake to send a gift, change the weather or decorate your desktop.")
         body.preferredMaxLayoutWidth=335
         let done=NSButton(title:"Got it",target:self,action:#selector(closeWelcome))
         done.keyEquivalent="\r";done.bezelStyle = .rounded

@@ -244,8 +244,9 @@ namespace Frostpane
             private static readonly Pen LeafVein=Stroke("#926D422B",.72);
             private static readonly Pen PetalVein=Stroke("#AAEFA6BF",.6);
             private static readonly Brush[] FireCore={Ink("#C8EA90"),Ink("#F2EB9C"),Ink("#E3FFB4")};
-            private static readonly Sprite[,] Petals=Foliage(false),Leaves=Foliage(true);
-            private static readonly Sprite[,] Glow=FireflySprites();
+            private static readonly Lazy<Sprite[,]> Petals=new Lazy<Sprite[,]>(delegate {return Foliage(false);});
+            private static readonly Lazy<Sprite[,]> Leaves=new Lazy<Sprite[,]>(delegate {return Foliage(true);});
+            private static readonly Lazy<Sprite[,]> Glow=new Lazy<Sprite[,]>(FireflySprites);
             private static readonly Pen[] StarCore={Stroke("#FFEBF2FF",1.6),Stroke("#FFFFE5B4",1.6),Stroke("#FFEDE3FF",1.6)};
             private static readonly Pen[] StarTrail={Stroke("#A290B9EC",1.21),Stroke("#ABBBA875",1.21),Stroke("#A7BA99DA",1.21)};
             private static readonly Pen[] StarWake={Stroke("#4B99B7E6",.81),Stroke("#53C4A076",.81),Stroke("#52AD99CD",.81)};
@@ -310,12 +311,12 @@ namespace Frostpane
                             int tilt=p.State==WeatherState.Resting?0:Math.Min(2,(int)(Math.Abs(Math.Cos(scene.Time*1.8+p.Phase))*3));
                             bool fading=p.State==WeatherState.Resting && p.Life<1.4;
                             if(fading)dc.PushOpacity(Math.Max(0,p.Life/1.4));
-                            (scene.Weather==WeatherMode.Leaves?Leaves:Petals)[p.Variant,angle+12*tilt].Draw(dc,p.X,p.Y,p.Size);
+                            (scene.Weather==WeatherMode.Leaves?Leaves:Petals).Value[p.Variant,angle+12*tilt].Draw(dc,p.X,p.Y,p.Size);
                             if(fading)dc.Pop();break;
                         case WeatherMode.Fireflies:
                             double pulse=.5+.5*Math.Sin(scene.Time*(1.6+p.Speed)+p.Phase);
                             int glow=(int)LimitGlow(pulse*Math.Min(1,p.Life/.9)*Math.Min(1,(p.Duration-p.Life)/.55));
-                            Glow[p.Variant,glow].Draw(dc,p.X,p.Y,p.Size);break;
+                            Glow.Value[p.Variant,glow].Draw(dc,p.X,p.Y,p.Size);break;
                         case WeatherMode.Starfall: DrawStar(dc,p);break;
                     }
                 }

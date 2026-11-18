@@ -18,7 +18,7 @@ try {
         $arguments += "/r:$framework\WPF\$name.dll"
     }
     $files = @(Get-ChildItem -LiteralPath $SourceDirectory -Filter '*.cs' | ForEach-Object FullName)
-    & (Join-Path $framework 'csc.exe') @arguments @files (Join-Path $PSScriptRoot 'WindowsPerformance.cs')
+    & (Join-Path $framework 'csc.exe') @arguments @files (Join-Path $PSScriptRoot 'WindowsPerformance.cs') (Join-Path $PSScriptRoot 'WindowsFrameProbe.cs')
     if ($LASTEXITCODE -ne 0) {throw 'Windows performance probe compilation failed.'}
     & $binary $scratch
     if ($LASTEXITCODE -ne 0) {throw 'Windows performance probe failed.'}

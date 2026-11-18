@@ -68,9 +68,10 @@ namespace Frostpane
                 {"#C5FFFB","#29E3EA","#0C8EAC","#B741FFF2"},
                 {"#FFDEF3","#FF5BAE","#B32175","#C9FF48AE"}
             };
-            private static readonly Sprite[] Bulbs = BuildBulbs();
-            private static readonly Sprite[,] Trees = BuildTrees();
-            private static readonly Sprite SledRight=new Sprite(PaintSled),SledLeft=new Sprite(PaintSled,true);
+            private static readonly Lazy<Sprite[]> Bulbs = new Lazy<Sprite[]>(BuildBulbs);
+            private static readonly Sprite[,] Trees = new Sprite[3,3];
+            private static readonly Lazy<Sprite> SledRight=new Lazy<Sprite>(delegate {return new Sprite(PaintSled);});
+            private static readonly Lazy<Sprite> SledLeft=new Lazy<Sprite>(delegate {return new Sprite(PaintSled,true);});
 
             private static Brush[] CreatePowder()
             {
@@ -119,14 +120,14 @@ namespace Frostpane
                 foreach (WinterTree tree in scene.Trees) {
                     if(tree.Hidden) continue;
                     if(tree.Angle!=0) dc.PushTransform(new RotateTransform(tree.Angle,tree.X,tree.Y));
-                    Trees[palette,Math.Abs(tree.Style%3)].Draw(dc,tree.X,tree.Y,tree.DisplaySize/96);
+                    TreeSprite(palette,Math.Abs(tree.Style%3)).Draw(dc,tree.X,tree.Y,tree.DisplaySize/96);
                     if(tree.Angle!=0) dc.Pop();
                 }
                 foreach (LightString strand in scene.Lights) if(!strand.Hidden) DrawString(dc,strand,palette);
                 foreach (WinterSled sled in scene.Sleds)
                 {
                     double y=sled.DisplayY;
-                    var sprite=sled.Facing<0?SledLeft:SledRight;
+                    var sprite=(sled.Facing<0?SledLeft:SledRight).Value;
                     if (sled.DisplayAngle==0) sprite.Draw(dc,sled.X,y,1);
                     else {
                         dc.PushTransform(new RotateTransform(sled.DisplayAngle,sled.X,y));
@@ -211,7 +212,7 @@ namespace Frostpane
                     double x=dx*t, y=dy*t+4*sag*t*(1-t);
                     double drop=(i%3==1 ? 5.4 : 3.1)*scale;
                     dc.DrawLine(PendantWire,new Point(x,y),new Point(x,y+drop));
-                    Bulbs[sequence[i%sequence.Length]].Draw(dc,x,y+drop,1.1*scale);
+                    Bulbs.Value[sequence[i%sequence.Length]].Draw(dc,x,y+drop,1.1*scale);
                 }
                 Dot(dc,Clamp,0,0,2.15,1.75); Dot(dc,ClampGlint,-.35,-.45,.68,.49);
                 Dot(dc,Clamp,dx,dy,2.15,1.75); Dot(dc,ClampGlint,dx-.35,dy-.45,.68,.49);
@@ -293,15 +294,14 @@ namespace Frostpane
                 }
             }
 
-            private static Sprite[,] BuildTrees()
+            private static Sprite TreeSprite(int palette,int style)
             {
-                Sprite[,] result=new Sprite[3,3];
-                for(int palette=0;palette<3;palette++)
-                    for(int style=0;style<3;style++){
-                        int p=palette,s=style;
-                        result[p,s]=new Sprite(delegate(DrawingContext dc){PaintTree(dc,p,s);});
-                    }
-                return result;
+                var tree=Trees[palette,style];
+                if(tree==null) {
+                    tree=new Sprite(delegate(DrawingContext dc){PaintTree(dc,palette,style);});
+                    Trees[palette,style]=tree;
+                }
+                return tree;
             }
 
             internal static void PaintTree(DrawingContext dc,int palette,int style)

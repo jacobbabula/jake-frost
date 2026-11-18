@@ -5,7 +5,6 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Shapes;
 
@@ -41,12 +40,6 @@ namespace Frostpane
             new Choice(PlayTool.Arrange,"Arrange","Drag a corner to resize or the circular arrow to rotate. Shift + scroll turns an item 15°. Drag the ends of a light string to tilt it.","#A4DECE","M2,7 L2,2 L7,2 M13,2 L18,2 L18,7 M18,13 L18,18 L13,18 M7,18 L2,18 L2,13 M6,14 L14,6 M9,6 L14,6 L14,11"),
             new Choice(PlayTool.Erase,"Remove","Click a decoration or a sled to take it down.","#E1C0B9","M3,12 L12,3 Q13,2 14,3 L18,7 Q19,8 18,9 L10,17 L7,17 Z M6,9 L13,15 M10,17 L19,17")
         };
-        private static readonly ControlTemplate Tile = (ControlTemplate)XamlReader.Parse(
-            "<ControlTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='RadioButton'>"+
-            "<Border x:Name='b' CornerRadius='5' Background='#22383B' BorderBrush='#344B4D' BorderThickness='1' Padding='6,6'><ContentPresenter HorizontalAlignment='Center' VerticalAlignment='Center'/></Border>"+
-            "<ControlTemplate.Triggers><Trigger Property='IsMouseOver' Value='True'><Setter TargetName='b' Property='Background' Value='#344C4D'/></Trigger>"+
-            "<Trigger Property='IsChecked' Value='True'><Setter TargetName='b' Property='Background' Value='#375249'/><Setter TargetName='b' Property='BorderBrush' Value='#9ABBA5'/></Trigger>"+
-            "<Trigger Property='IsKeyboardFocused' Value='True'><Setter TargetName='b' Property='BorderBrush' Value='#F2D19C'/></Trigger></ControlTemplate.Triggers></ControlTemplate>");
         private readonly Dictionary<PlayTool,RadioButton> buttons=new Dictionary<PlayTool,RadioButton>();
         private bool syncing;
         internal static void AddToolCommands(Action<PlayTool,string> add)
@@ -68,7 +61,8 @@ namespace Frostpane
                 var row=new StackPanel {Orientation=Orientation.Horizontal};
                 row.Children.Add(icon); row.Children.Add(new TextBlock {Text=item.Label,Foreground=Brushes.White,
                     FontFamily=new FontFamily("Segoe UI"),FontSize=12,Margin=new Thickness(5,0,0,0),VerticalAlignment=VerticalAlignment.Center});
-                var radio=new ToolButton {Template=Tile,Content=row,ToolTip=item.Hint,Cursor=Cursors.Hand,Margin=new Thickness(2)};
+                var radio=new ToolButton {Content=row,ToolTip=item.Hint,Cursor=Cursors.Hand,Margin=new Thickness(2)};
+                radio.SetResourceReference(Control.TemplateProperty,"ToolTile");
                 AutomationProperties.SetName(radio,item.Label); AutomationProperties.SetAutomationId(radio,"Tool_"+item.Tool);
                 PlayTool tool=item.Tool; radio.Checked+=delegate { if (!syncing) choose(tool); };
                 radio.Repeat=delegate { choose(tool); };

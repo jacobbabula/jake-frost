@@ -74,12 +74,17 @@ namespace Frostpane
         internal string SavedLayout;
         internal DesktopGrab Grab;
         internal Action<Overlay> GiftSelected;
-        private List<System.Drawing.Rectangle> clippedRects;
-        private double clippedScale;
+        private DesktopMap.WindowSnapshot appliedWindows;
+        private System.Drawing.Rectangle previousWork, previousBounds;
+        private Size previousSize;
+        private double previousScale;
+        private bool behindWindows, previousBehind, closed;
+        private readonly Action<DesktopMap.WindowSnapshot> applyWindows;
 
         internal Overlay(DesktopMonitor monitor,int seed)
         {
             MonitorInfo=monitor;
+            applyWindows=ApplyWindows;
             Title="Jake Frost snowfall"; WindowStyle=WindowStyle.None; ResizeMode=ResizeMode.NoResize;
             AllowsTransparency=true; Background=Brushes.Transparent; ShowActivated=false;
             Focusable=false; ShowInTaskbar=false; Topmost=true; WindowStartupLocation=WindowStartupLocation.Manual;
@@ -93,7 +98,7 @@ namespace Frostpane
                 Place();
             };
             Loaded += delegate { Place(); };
-            Closed+=delegate { if (Grab!=null) Grab.Close(); };
+            Closed+=delegate { closed=true; if (Grab!=null) Grab.Close(); };
             Surface.MouseRightButtonUp+=delegate(object obj,MouseButtonEventArgs e) {
                 var p=e.GetPosition(Surface); if (Surface.Scene.SelectGiftAt(p.X,p.Y) && GiftSelected!=null) { GiftSelected(this); e.Handled=true; }
             };
@@ -137,12 +142,22 @@ namespace Frostpane
                 if (hide && Grab!=null) Grab.Enable(false);
             }
             if (Suspended) return;
+            behindWindows=behind;
+            Surface.Scene.WindowSnowEnabled=windowSnow;
+            DesktopMap.RequestWindows(applyWindows);
+            if(Grab!=null && Grab.IsVisible) Grab.ClipSnow(Surface.Clip);
+        }
+        private void ApplyWindows(DesktopMap.WindowSnapshot windows)
+        {
+            if (closed || Suspended) return;
             var source=PresentationSource.FromVisual(this);
             double scale=source==null || source.CompositionTarget==null ? MonitorInfo.Scale : source.CompositionTarget.TransformToDevice.M11;
-            var bounds=behind?DesktopMap.AppBounds(MonitorInfo):new List<System.Drawing.Rectangle>();
-            if(clippedRects==null || scale!=clippedScale || !clippedRects.SequenceEqual(bounds) || (bounds.Count>0 && Surface.Clip==null)) {
-                clippedRects=bounds;clippedScale=scale;
-                Geometry clip=null;
+            bool sameGeometry=windows==appliedWindows && scale==previousScale && MonitorInfo.Work==previousWork &&
+                MonitorInfo.Bounds==previousBounds && previousSize==Surface.RenderSize;
+            if (sameGeometry && behindWindows==previousBehind) return;
+            Geometry clip=null;
+            if (behindWindows) {
+                var bounds=windows.AppBounds(MonitorInfo);
                 if(bounds.Count>0) {
                     var cuts=new GeometryGroup{FillRule=FillRule.Nonzero};
                     foreach(var r in bounds) cuts.Children.Add(new RectangleGeometry(new Rect((r.Left-MonitorInfo.Work.Left)/scale,
@@ -150,15 +165,20 @@ namespace Frostpane
                     clip=new CombinedGeometry(GeometryCombineMode.Exclude,new RectangleGeometry(new Rect(0,0,MonitorInfo.Work.Width/scale,MonitorInfo.Work.Height/scale)),cuts);
                     clip.Freeze();
                 }
-                Surface.Clip=clip;
             }
+            Surface.Clip=clip;
             if(Grab!=null && Grab.IsVisible) Grab.ClipSnow(Surface.Clip);
-            Surface.Scene.WindowSnowEnabled=windowSnow;
-            List<Ledge> edges=DesktopMap.Ledges(MonitorInfo,scale);
+            previousBehind=behindWindows;
+            if (sameGeometry) return;
+            List<Ledge> edges=windows.Ledges(MonitorInfo,scale);
             double offsetX=(MonitorInfo.Work.Left-MonitorInfo.Bounds.Left)/scale;
             double offsetY=(MonitorInfo.Work.Top-MonitorInfo.Bounds.Top)/scale;
             foreach (Ledge edge in edges) { edge.X-=offsetX; edge.Y-=offsetY; }
             Surface.Scene.SetLedges(edges);
+            if (Surface.Scene.Banks.Count>0) {
+                appliedWindows=windows; previousScale=scale; previousWork=MonitorInfo.Work;
+                previousBounds=MonitorInfo.Bounds; previousSize=Surface.RenderSize;
+            }
         }
         internal void Advance(double dt,int intensity,double wind)
         {

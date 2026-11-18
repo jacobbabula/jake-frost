@@ -4,6 +4,9 @@ enum WorkshopKind: String, CaseIterable, Codable {
     case tree = "Christmas tree", lights = "String lights", wreath = "Wreath", star = "Star"
     case present = "Wrapped gift", bauble = "Red bauble", candle = "Candle", candy = "Candy cane"
     case mitten = "Mitten"
+    case goldBauble = "Gold bauble", stocking = "Stocking", bells = "Bells"
+    case gingerbread = "Gingerbread", holly = "Holly", santaHat = "Santa hat"
+    case snowGlobe = "Snow globe", cocoa = "Cocoa", boat = "Boat"
 }
 
 // One silhouette serves both the art and snow contact, including when the item is tilted.
@@ -98,12 +101,75 @@ enum WorkshopKind: String, CaseIterable, Codable {
                 }
             }
             dot(0,-11,3.6,0xE6A85A)
-        case .bauble:
+        case .bauble, .goldBauble:
+            let gold = kind == .goldBauble
             stroke(0xD0A35C,1.5) { $0.addEllipse(in:CGRect(x:-3.3,y:-23,width:6.6,height:7)) }
-            oval(-16,-14,32,34,0x9F3B4A);oval(-15,-14,27,30,0xD7545B)
+            oval(-16,-14,32,34,gold ? 0xAD742B : 0x9F3B4A);oval(-15,-14,27,30,gold ? 0xF5BC4E : 0xD7545B)
             tile(-6,-17,12,5.5,1.5,0xDCB36C)
             stroke(0xF3C574,1.8) { p in p.move(to:.init(x:-15,y:1));p.addQuadCurve(to:.init(x:15,y:4),control:.init(x:0,y:11)) }
-            oval(-10,-9,5.5,8,0xF4AE9C);dot(5,10,1.6,0xFFD794)
+            oval(-10,-9,5.5,8,gold ? 0xFFF3B3 : 0xF4AE9C);dot(5,10,1.6,0xFFD794)
+        case .stocking:
+            let p=CGMutablePath()
+            p.move(to:.init(x:-7,y:-17));p.addLine(to:.init(x:11,y:-17));p.addLine(to:.init(x:12,y:9))
+            p.addQuadCurve(to:.init(x:4,y:19),control:.init(x:12,y:18))
+            p.addLine(to:.init(x:-11,y:24));p.addQuadCurve(to:.init(x:-20,y:13),control:.init(x:-26,y:25))
+            p.addLine(to:.init(x:-7,y:5));p.closeSubpath();paint(p,0xB53F4F)
+            tile(-10,-24,24,10,3,0xF6F1D9);tile(-7,-23,18,2,1,0xFFFFFF)
+            star(2,-1,5,0xF6CB89);oval(-18,15,8,5,0xDE6868)
+        case .bells:
+            for (offset,dy) in [(-9,1),(9,-3)] {
+                let x=CGFloat(offset), y=CGFloat(dy)
+                dot(x,y+13,3.2,0x8F602B)
+                let p=CGMutablePath();p.move(to:.init(x:x-12,y:y+10))
+                p.addQuadCurve(to:.init(x:x-7,y:y-5),control:.init(x:x-7,y:y+4))
+                p.addQuadCurve(to:.init(x:x+7,y:y-5),control:.init(x:x,y:y-19))
+                p.addQuadCurve(to:.init(x:x+12,y:y+10),control:.init(x:x+8,y:y+5))
+                p.closeSubpath();paint(p,0xEBB04D);oval(x-12,y+8,24,5,0xC68A37)
+                oval(x-5,y-6,3.3,8,0xFFE9A3)
+            }
+            shape(0xAD3747,[(0,-12),(-13,-21),(-13,-10),(-2,-9),(10,-6),(13,-19)])
+            dot(0,-12,3.4,0xE26763)
+        case .gingerbread:
+            stroke(0x98522F,10){p in p.move(to:.init(x:-10,y:18));p.addLine(to:.init(x:0,y:1));p.addLine(to:.init(x:10,y:18))}
+            stroke(0xBB7444,9){p in p.move(to:.init(x:-17,y:-6));p.addLine(to:.init(x:0,y:0));p.addLine(to:.init(x:17,y:-6))}
+            tile(-8,-8,16,22,6,0xB87140);dot(0,-16,10,0xC4804D)
+            dot(-3.4,-18,1.2,0xFFF4DB);dot(3.4,-18,1.2,0xFFF4DB)
+            stroke(0xFFF4DB,1.4){p in p.move(to:.init(x:-3,y:-13));p.addQuadCurve(to:.init(x:3,y:-13),control:.init(x:0,y:-10))}
+            dot(0,-2,1.8,0x9D3042);dot(0,4,1.8,0xFFF4DB)
+            for x:CGFloat in [-12,12] {tile(x-2,13,4,2,1,0xF8E9CC)}
+        case .holly:
+            for side:CGFloat in [-1,1] {
+                shape(side<0 ? 0x24634B : 0x39865A,[(0,6),(side*9,9),(side*10,5),(side*18,6),(side*17,0),(side*23,-9),(side*15,-9),(side*14,-15),(side*8,-11),(side*3,-14)])
+                stroke(0x81B37C,1.15){p in p.move(to:.init(x:0,y:6));p.addLine(to:.init(x:side*17,y:-8))}
+            }
+            for (xx,yy) in [(-4,7),(4,6),(0,12)] { let x=CGFloat(xx),y=CGFloat(yy);dot(x,y,4.4,0xB63E4B);dot(x-1,y-1.3,1.1,0xFFAE95) }
+        case .santaHat:
+            let p=CGMutablePath();p.move(to:.init(x:-23,y:11))
+            p.addQuadCurve(to:.init(x:2,y:-20),control:.init(x:-10,y:-17))
+            p.addQuadCurve(to:.init(x:23,y:-2),control:.init(x:14,y:-23))
+            p.addQuadCurve(to:.init(x:9,y:-8),control:.init(x:13,y:-10));p.addLine(to:.init(x:12,y:11))
+            p.closeSubpath();paint(p,0xB8444D)
+            stroke(0xD9605E,2.5){p in p.move(to:.init(x:-15,y:5));p.addQuadCurve(to:.init(x:2,y:-16),control:.init(x:-9,y:-9))}
+            tile(-24,8,39,11,5,0xF3EBD8);oval(-20,10,7,3,0xFFFAEF);dot(22,-1,5.8,0xF5EDDB)
+        case .snowGlobe:
+            oval(-18,-25,36,38,0x80BACA);oval(-15,-22,30,31,0xBCE3DF)
+            shape(0x35735D,[(3,-15),(-4,-4),(-2,-4),(-7,3),(12,3),(7,-5),(9,-5)])
+            oval(-13,2,27,8,0xF9F6E8)
+            for (x,y) in [(-8,-13),(-10,-6),(9,-11),(12,-3)]{dot(CGFloat(x),CGFloat(y),1.3,0xFFFFFF)}
+            shape(0x9E5839,[(-13,9),(13,9),(18,21),(-18,21)]);tile(-18,18,36,5,2,0x87503A);tile(-12,12,24,3,1,0xCCA36D)
+        case .cocoa:
+            stroke(0xC65B56,4){p in p.addEllipse(in:CGRect(x:10,y:-5,width:12,height:15))}
+            tile(-16,-8,32,27,6,0xBA4C50);oval(-16,-12,32,10,0xF1D1A3);oval(-13,-10,26,6,0x674537)
+            for xx:CGFloat in [-8,1] {
+                stroke(0xDEE9E4,1.5){p in p.move(to:.init(x:xx,y:-14));p.addCurve(to:.init(x:xx+2,y:-26),control1:.init(x:xx-4,y:-20),control2:.init(x:xx+6,y:-19))}
+            }
+            star(-2,6,5.5,0xF9DEC0);tile(-15,14,28,2,1,0xDB6862)
+        case .boat:
+            tile(-1,-25,2,36,0.8,0x83553D)
+            shape(0xF5DDAC,[(-3,-24),(-18,0),(-3,-1)]);shape(0xC35853,[(2,-21),(16,-1),(2,-2)])
+            shape(0xDEB05F,[(1,-25),(13,-23),(1,-19)])
+            shape(0x9E4D42,[(-24,3),(24,3),(16,15),(-13,15)]);tile(-23,2,47,4,1,0xDBAC6D)
+            for xx:CGFloat in [-9,0,9] {dot(xx,9,1.4,0xF3CA87)}
         case .candle:
             oval(-15,14,30,8,0xA57747);oval(-15,12,30,6,0xD7AC68)
             tile(-9,-10,18,27,2,0xD65853);tile(-7,-11,8,27,2,0xED7567)

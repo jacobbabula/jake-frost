@@ -123,6 +123,14 @@ public static class WindowsPanel
         try {
             IntPtr window = IntPtr.Zero;
             Until(delegate { window = FindVisible(processId, "Jake Frost"); return window != IntPtr.Zero; }, "settings window", 10);
+            Select(window, "DecorTab");
+            string[] decorations = { "Tree", "Lights", "Candle", "RedBauble", "GoldBauble", "Star", "Wreath",
+                "Stocking", "CandyCane", "Gift", "Bells", "Gingerbread", "Holly", "SantaHat", "SnowGlobe", "Cocoa", "Boat" };
+            foreach (string kind in decorations) Control(window, "Decor" + kind);
+            Select(window, "WeatherTab");
+            Select(window, "DecorTab");
+            Control(window, "DecorLights");
+            Console.WriteLine("PASS all 17 decorations load on opening the gallery and remain available on return");
             Select(window, "WorkshopTab");
             Control(window, "Tool_Pile");
             var work = Screen.FromHandle(window).WorkingArea;
