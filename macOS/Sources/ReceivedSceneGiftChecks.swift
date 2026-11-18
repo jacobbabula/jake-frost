@@ -77,6 +77,21 @@ import AppKit
     let reopenedFull=canvas(9)
     check(reopenedFull.giftTrain.containsParcel(tooLarge.id) && MacSceneMemory.containsGift(tooLarge.id,in:settings,excluding:[4,5]),
           "overflow presents survive reopening and are discoverable on disconnected displays")
+    let nearlyFull=canvas(10)
+    var crowded=FrostGift();crowded.kind = .tree;crowded.size=95
+    crowded.dress=Array(repeating:"5,0,-0.5",count:98).joined(separator:";")
+    _=deliver(crowded,to:nearlyFull);_=deliver(tree,to:nearlyFull)
+    let overflow=settings.data(forKey:"parcels.v1.10")
+    nearlyFull.workshop.clear()
+    check(overflow != nil && deliver(tree,to:nearlyFull) && !nearlyFull.giftTrain.containsParcel(tree.id) &&
+          nearlyFull.workshop.pieces.count==3,"a replay can make an overflow gift editable after space is available")
+    if let overflow=overflow {
+        settings.set(overflow,forKey:"parcels.v1.10")
+        let recovered=canvas(10)
+        recovered.frameTick(1.0/30,cursor:.zero)
+        check(recovered.workshop.containsReceivedGift(tree.id) && !recovered.giftTrain.containsParcel(tree.id),
+              "reopening after an interrupted parcel promotion keeps only the editable copy")
+    }
     MacSceneMemory.setRemember(false,settings:settings)
     let fresh=canvas(4)
     check(!fresh.containsReceivedGift(tree.id) && !fresh.containsReceivedGift(snowman.id) && !canvas(9).containsReceivedGift(tooLarge.id),

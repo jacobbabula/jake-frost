@@ -45,6 +45,7 @@ import AppKit
     var unload: ((Parcel, CGPoint) -> Bool)?
     private var trains: [Delivery] = [], parcels: [Parcel] = []
     private var nextDrop = 0
+    private(set) var needsParcelReconciliation = false
     private struct SavedParcel: Codable {
         let giftID: String, bytes: Data, x: CGFloat
     }
@@ -52,7 +53,7 @@ import AppKit
     func configureParcelStorage(settings: UserDefaults, displayID: UInt32) {
         let key = "parcels.v1.\(displayID)"
         guard settings !== storage || key != storageKey else { return }
-        storage=settings;storageKey=key;parcels.removeAll();nextDrop=0
+        storage=settings;storageKey=key;parcels.removeAll();nextDrop=0;needsParcelReconciliation=false
         guard MacSceneMemory.remembers(settings), let data=settings.data(forKey:key), data.count<1_400_000,
               let records=try? JSONDecoder().decode([SavedParcel].self,from:data) else { return }
         var seen=Set<String>()
@@ -62,6 +63,14 @@ import AppKit
             parcels.append(Parcel(gift,x:record.x))
         }
         nextDrop=parcels.count%5
+        needsParcelReconciliation = !parcels.isEmpty
+    }
+    func reconcileParcels(withEditableGift exists: (String) -> Bool) {
+        guard needsParcelReconciliation else { return }
+        needsParcelReconciliation = false
+        let oldCount=parcels.count
+        parcels.removeAll { exists($0.gift.id) }
+        if parcels.count != oldCount { rememberParcelsNow() }
     }
     func rememberParcelsNow() {
         guard let settings=storage, MacSceneMemory.remembers(settings) else { return }

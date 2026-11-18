@@ -46,6 +46,11 @@ final class SnowCanvas: NSView {
 
     func frameTick(_ dt:TimeInterval, cursor:CGPoint) {
         let redraw = animating
+        if giftTrain.needsParcelReconciliation && world.size.width > 1 {
+            // Recover if the app closed after an overflow gift was saved to the workshop
+            // and before its old train parcel was removed from preferences.
+            giftTrain.reconcileParcels { workshop.containsReceivedGift($0) || world.containsReceivedGift($0) }
+        }
         world.step(dt)
         visitors.step(dt,world:world)
         giftTrain.step(dt,bounds:bounds)
