@@ -26,6 +26,26 @@ function Check([bool]$ok, [string]$message) {
 function RegistryDefault([string]$key) {
     (Get-Item -LiteralPath $key).GetValue('')
 }
+function New-NoteGift([string]$path) {
+    $lines = @('FROSTPANE-GIFT-1',[guid]::NewGuid().ToString('N'),'','','QSBmcmllbmQ=','Note','SGVsbG8h','0','18','13','9','1','','END')
+    [IO.File]::WriteAllText($path,($lines -join [char]10),[Text.UTF8Encoding]::new($false))
+}
+function Wait-GiftArrival([string]$path, [Diagnostics.Process]$desktop) {
+    # The app writes Received only when its train reaches the delivery point.
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    while (!(Test-Path -LiteralPath $path)) {
+        if ($desktop.HasExited) {throw "Jake Frost exited during delivery ($($desktop.ExitCode))."}
+        if ($timer.Elapsed.TotalSeconds -gt 150) {throw "Timed out waiting for the train to deliver $path."}
+        Start-Sleep -Milliseconds 250
+    }
+}
+function Open-WhileRunning([string]$path, [Diagnostics.Process]$desktop) {
+    $opener = Start-Process -FilePath $path -Verb Open -PassThru
+    Check ($null -ne $opener -and $opener.Id -ne $desktop.Id -and
+        $opener.WaitForExit(20000) -and $opener.ExitCode -eq 0) 'shell forwarded the file and its transient process exited successfully'
+    $remaining = @(Get-Process -Name JakeFrost -ErrorAction SilentlyContinue | Where-Object Path -eq $installed)
+    Check ($remaining.Count -eq 1 -and $remaining[0].Id -eq $desktop.Id) 'the original desktop instance continues running alone'
+}
 function Run-Installer([string]$path, [string]$action, [switch]$ExpectRefusal) {
     $log = Join-Path $scratch ($action+'.log')
     $argsForSetup = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/LOG="{0}"' -f $log))
@@ -68,23 +88,34 @@ if ($GiftPath) {
     $gift = (Resolve-Path -LiteralPath $GiftPath).Path
 } else {
     $gift = Join-Path $scratch 'Gift from a friend.fpgift'
-    $lines = @('FROSTPANE-GIFT-1',[guid]::NewGuid().ToString('N'),'','','QSBmcmllbmQ=','Note','SGVsbG8h','0','18','13','9','1','','END')
-    [IO.File]::WriteAllText($gift,($lines -join [char]10),[Text.UTF8Encoding]::new($false))
+    New-NoteGift $gift
 }
 $giftId = [IO.File]::ReadAllLines($gift)[1]
 Check ($giftId -match '^[A-Fa-f0-9]{32}$') 'gift fixture contains a valid ID'
-$pending = Join-Path $frostData "GiftPost\Pending\$giftId.fpgift"
-$received = Join-Path $frostData "GiftPost\Received\$giftId.fpgift"
+$pendingDir = Join-Path $frostData 'GiftPost\Pending'
+$receivedDir = Join-Path $frostData 'GiftPost\Received'
+$received = Join-Path $receivedDir "$giftId.fpgift"
 # This goes through the Explorer association, including any path quoting.
-Start-Process -FilePath $gift -Verb Open
-for ($i=0; $i -lt 150; $i++) {
-    if ((Test-Path -LiteralPath $pending) -or (Test-Path -LiteralPath $received)) {break}
-    Start-Sleep -Milliseconds 200
-}
-Check ((Test-Path -LiteralPath $pending) -or (Test-Path -LiteralPath $received)) 'opening a gift from the shell imports it into the recipient inbox'
-$ours = @(Get-Process -Name JakeFrost -ErrorAction SilentlyContinue | Where-Object Path -eq $installed)
-Check ($ours.Count -eq 1) 'shell launched one copy of the installed app'
-foreach ($process in $ours) {$process.Kill(); $process.WaitForExit()}
+$desktop = Start-Process -FilePath $gift -Verb Open -PassThru
+Check ($null -ne $desktop -and $desktop.Path -eq $installed) 'opening a gift from the shell launches the installed app'
+Wait-GiftArrival $received $desktop
+$sourceGift = [IO.File]::ReadAllLines($gift)
+$archivedGift = [IO.File]::ReadAllLines($received)
+Check ($archivedGift[1] -eq $sourceGift[1] -and $archivedGift[4] -ceq $sourceGift[4] -and
+    $archivedGift[5] -ceq $sourceGift[5] -and $archivedGift[6] -ceq $sourceGift[6]) 'the train delivers the original gift, sender and message'
+
+$nextGift = Join-Path $scratch 'A second gift for the open app.fpgift'
+New-NoteGift $nextGift
+$nextReceived = Join-Path $receivedDir ([IO.File]::ReadAllLines($nextGift)[1]+'.fpgift')
+Open-WhileRunning $nextGift $desktop
+Wait-GiftArrival $nextReceived $desktop
+$firstWrite = [IO.File]::GetLastWriteTimeUtc($received)
+Open-WhileRunning $gift $desktop
+Check (@(Get-ChildItem -LiteralPath $pendingDir -Filter '*.fpgift').Count -eq 0 -and
+    @(Get-ChildItem -LiteralPath $receivedDir -Filter '*.fpgift').Count -eq 2 -and
+    [IO.File]::GetLastWriteTimeUtc($received) -eq $firstWrite) 'opening the first gift again leaves both deliveries intact without queuing another'
+$desktop.Kill()
+$desktop.WaitForExit()
 
 Set-Item -LiteralPath $extKey -Value 'SetupTest.OtherGift'
 Run-Installer $setup 'repair'
@@ -95,7 +126,7 @@ Run-Installer $uninstaller[0].FullName 'uninstall'
 Check (!(Test-Path -LiteralPath $installed) -and !(Test-Path -LiteralPath $shortcut) -and
     !(Test-Path -LiteralPath $uninstallKey) -and !(Test-Path -LiteralPath $classKey)) 'uninstall removes program, shortcut, registration and its own gift handler'
 Check ((RegistryDefault $extKey) -eq 'SetupTest.OtherGift') 'uninstall leaves another file handler alone'
-Check ((Test-Path -LiteralPath $pending) -or (Test-Path -LiteralPath $received)) 'uninstall preserves saved gifts'
+Check ((Test-Path -LiteralPath $received) -and (Test-Path -LiteralPath $nextReceived)) 'uninstall preserves both delivered gifts'
 
 # Verify first install and cleanup again from a genuinely unclaimed file type.
 $extension = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Classes\.fpgift',$true)

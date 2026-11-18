@@ -16,7 +16,7 @@ for arch in arm64 x86_64; do
     -framework AppKit -framework CoreGraphics "$root"/Sources/*.swift -o "$tmp/JakeFrost-$arch"
 done
 xcrun lipo -create "$tmp/JakeFrost-arm64" "$tmp/JakeFrost-x86_64" -output "$app/Contents/MacOS/JakeFrost"
-xcrun lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/JakeFrost"
+xcrun lipo "$app/Contents/MacOS/JakeFrost" -verify_arch arm64 x86_64
 xcrun swift "$root/tools/MakeIcon.swift" "$tmp/icon.png"
 iconset="$tmp/JakeFrost.iconset"
 mkdir "$iconset"

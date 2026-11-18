@@ -73,7 +73,7 @@ jobs:
           test "$(readlink "$mount/Applications")" = /Applications
           app="$mount/Jake Frost.app"
           codesign --verify --deep --strict "$app"
-          lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/JakeFrost"
+          lipo "$app/Contents/MacOS/JakeFrost" -verify_arch arm64 x86_64
           "$app/Contents/MacOS/JakeFrost" --scene-self-test
           "$app/Contents/MacOS/JakeFrost" --app-smoke-test
 

@@ -3,3 +3,7 @@
 /*.zip
 /bin/
 /obj/
+/dist/
+/macOS/dist/
+/Jake-Frost-Setup.exe
+.DS_Store

@@ -24,7 +24,7 @@ if (!$CompilerPath) {
         }
     }
 }
-if (!$CompilerPath) {throw 'Install Inno Setup 7, or provide the path to ISCC.exe with -CompilerPath.'}
+if (!$CompilerPath) {throw 'Install Inno Setup 6.2 or later, or provide the path to ISCC.exe with -CompilerPath.'}
 $compiler = (Resolve-Path -LiteralPath $CompilerPath).Path
 $output = (New-Item -ItemType Directory -Force -Path $OutputDirectory).FullName
 $version = [Reflection.AssemblyName]::GetAssemblyName($exe).Version
