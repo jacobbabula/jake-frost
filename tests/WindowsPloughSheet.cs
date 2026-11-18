@@ -21,10 +21,10 @@ internal static class PloughSheet
                     new Typeface("Segoe UI"),size,ink,1.0),new Point(x,y));
     }
 
-    static SnowScene Setup(int dir,bool ridge) {
+    static SnowScene Setup(int dir,bool ridge,int size) {
         var scene=new SnowScene(49);
         scene.SnowVolume=0; scene.DriftDepth=100; scene.Resize(W,H); scene.Clear();
-        scene.SetVisitorSize(VisitorSizeTarget.Snowplow,160);
+        scene.SetVisitorSize(VisitorSizeTarget.Snowplow,size);
         if(dir<0) {scene.SendSnowplough();scene.Clear();}
         var bank=scene.Banks[0];
         for(int i=0;i<bank.Heights.Length;i++) {
@@ -45,12 +45,12 @@ internal static class PloughSheet
         return scene;
     }
 
-    static void Row(DrawingContext dc,int row,int dir,bool ridge) {
-        var s=Setup(dir,ridge); var p=s.Plough;
+    static void Row(DrawingContext dc,int row,int dir,bool ridge,int size) {
+        var s=Setup(dir,ridge,size); var p=s.Plough;
         double[] checkpoints={94,188,289};
         double peak=0, maxGap=0;
         double y=62+row*RowH;
-        Label(dc,(ridge?"High bank":"Flat blanket")+(dir>0?"   →  left to right":"   ←  right to left"),12,y-22,14,Light);
+        Label(dc,(ridge?"High bank":"Flat blanket")+"   "+size+"%"+(dir>0?"   →  left to right":"   ←  right to left"),12,y-22,14,Light);
         for(int col=0;col<checkpoints.Length;col++) {
             double target=checkpoints[col]; int ticks=0;
             while ((dir>0?p.X:W-p.X)<target) {
@@ -82,11 +82,13 @@ internal static class PloughSheet
 
     [STAThread] static void Main(string[] args) {
         var dv=new DrawingVisual();
-        int width=CellW*3+12, height=4*RowH+39;
+        int width=CellW*3+12, height=6*RowH+39;
         using(var dc=dv.RenderOpen()){
             dc.DrawRectangle(Paper,null,new Rect(0,0,width,height));
             Label(dc,"Jake Frost  /  "+args[1]+"  /  native Windows snowplow",12,7,19,Light);
-            Row(dc,0,1,false);Row(dc,1,-1,false);Row(dc,2,1,true);Row(dc,3,-1,true);
+            Row(dc,0,1,false,160);Row(dc,1,-1,false,160);
+            Row(dc,2,1,true,75);Row(dc,3,-1,true,75);
+            Row(dc,4,1,true,225);Row(dc,5,-1,true,225);
         }
         var bmp=new RenderTargetBitmap(width,height,96,96,PixelFormats.Pbgra32);bmp.Render(dv);
         var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(bmp));

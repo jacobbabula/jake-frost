@@ -74,7 +74,7 @@ if ($Mode -eq 'Send') {
     $pending = $postType.GetMethod('Receive',$instance).Invoke($post,@())
     if ($pending.Count -ne 1) {throw "Expected one addressed snowman from Mac, got $($pending.Count)."}
     $gift = $pending[0]
-    $expected = @{Kind='Snowman';Sender='Mac friend';SenderId=$macID;RecipientId=$winID;Note='Mac to Windows';Size='12';Mid='32';Head='19'}
+    $expected = @{Kind='Snowman';Sender='Mac friend';SenderId=$macID;RecipientId=$winID;Note='Mac to Windows';Size='44';Mid='76';Head='59'}
     foreach ($name in $expected.Keys) {
         $actual = $giftType.GetField($name,$instance).GetValue($gift)
         if ([string]$actual -cne $expected[$name]) {throw "Wrong shared gift field $name ($actual)."}

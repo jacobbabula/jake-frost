@@ -123,6 +123,18 @@ public static class WindowsPanel
         try {
             IntPtr window = IntPtr.Zero;
             Until(delegate { window = FindVisible(processId, "Jake Frost"); return window != IntPtr.Zero; }, "settings window", 10);
+            Select(window,"WorkshopTab");
+            Click(window,"DecorateTreeButton");
+            Control(window,"TreeChoice");
+            Click(window,"HangTreeOrnament");
+            Click(window,"RemoveTreeOrnament");
+            var baubles=(TogglePattern)Control(window,"TreeBaubles").GetCurrentPattern(TogglePattern.Pattern);
+            var previousBaubles=baubles.Current.ToggleState;
+            baubles.Toggle();
+            Until(delegate{return baubles.Current.ToggleState!=previousBaubles;},"tree bauble switch",3);
+            baubles.Toggle();
+            ((ExpandCollapsePattern)Control(window,"TreeDesignBox").GetCurrentPattern(ExpandCollapsePattern.Pattern)).Collapse();
+            Console.WriteLine("PASS Workshop opens the live tree editor directly. It hangs and removes an ornament and changes baubles on the chosen desktop tree.");
             Select(window, "DecorTab");
             string[] decorations = { "Tree", "Lights", "Candle", "RedBauble", "GoldBauble", "Star", "Wreath",
                 "Stocking", "CandyCane", "Gift", "Bells", "Gingerbread", "Holly", "SantaHat", "SnowGlobe", "Cocoa", "Boat" };

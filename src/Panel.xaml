@@ -163,6 +163,7 @@
           <TextBlock Style="{StaticResource SectionHeading}" Text="Desktop tools"/>
           <TextBlock Text="Choose a tool to use on your desktop. Press Esc to finish." TextWrapping="Wrap" Foreground="#476479" Margin="0,0,0,7"/>
           <Border x:Name="ToolsHost"/>
+          <Button x:Name="DecorateTreeButton" Content="Decorate a tree" HorizontalAlignment="Left" Margin="2,6,0,0" Padding="11,5" ToolTip="Choose a desktop tree, change its lights, and hang ornaments."/>
         </StackPanel></Border>
         <Border Style="{StaticResource SectionCard}" Margin="0,8,0,0"><StackPanel>
         <TextBlock Text="Visitors and events" Style="{StaticResource SectionHeading}"/>
@@ -248,7 +249,7 @@
           <Slider x:Name="Volume" Grid.Column="1" Minimum="0" Maximum="400" TickFrequency="25" SmallChange="25" LargeChange="100" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Snow volume" ToolTip="Amount of new snowfall. 100% is the original rate."/>
           <TextBlock x:Name="VolumeLabel" Grid.Column="2" TextAlignment="Right" Foreground="#32536B" VerticalAlignment="Center"/>
           <TextBlock Grid.Row="1" Text="Drift depth" Style="{StaticResource Label}" VerticalAlignment="Center"/>
-          <Slider x:Name="Depth" Grid.Row="1" Grid.Column="1" Minimum="24" Maximum="140" TickFrequency="4" SmallChange="4" LargeChange="20" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Maximum drift depth" ToolTip="Maximum height for accumulated and hand-piled snow."/>
+          <Slider x:Name="Depth" Grid.Row="1" Grid.Column="1" Minimum="24" Maximum="320" TickFrequency="4" SmallChange="4" LargeChange="20" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Maximum drift depth" ToolTip="Maximum ground drift height in desktop units (1 DIP is 1 pixel at 100% display scaling). Window ledges hold shallower drifts."/>
           <TextBlock x:Name="DepthLabel" Grid.Row="1" Grid.Column="2" TextAlignment="Right" Foreground="#32536B" VerticalAlignment="Center"/>
           <TextBlock Grid.Row="2" Text="Wind" Style="{StaticResource Label}" VerticalAlignment="Center"/>
           <Slider x:Name="Wind" Grid.Row="2" Grid.Column="1" Minimum="-80" Maximum="80" TickFrequency="10" SmallChange="10" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="Wind direction and strength"/>
@@ -274,31 +275,37 @@
         </Expander>
       </StackPanel>
       <StackPanel x:Name="DecorPane" Visibility="Collapsed" Margin="17,12,17,1">
-        <TextBlock Style="{StaticResource SectionHeading}" Text="Decorations"/>
-        <TextBlock Text="Choose a piece to place it. Use Arrange to move, resize, or turn it later." Foreground="#476479" TextWrapping="Wrap" Margin="0,0,0,7"/>
-        <Border x:Name="DecorGalleryHost"/>
-        <CheckBox x:Name="TwinkleLightsOption" Content="Twinkle string and tree lights" Foreground="#264A62" Margin="2,8,0,1"
-                  ToolTip="Switch off to keep all desktop lights steady. Each tree keeps its own design."/>
-        <Expander Header="Tree design" Margin="1,8,1,0" FontWeight="SemiBold">
+        <Expander x:Name="TreeDesignBox" Header="Decorate a tree" Margin="1,8,1,0" FontWeight="SemiBold">
           <Border Style="{StaticResource SectionCard}" Margin="0,4,0,0"><Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="82"/><ColumnDefinition/></Grid.ColumnDefinitions>
             <Border Background="#EBF6FD" CornerRadius="8" Padding="8" Margin="0,0,10,0">
               <Image x:Name="TreePreview" Height="87" Stretch="Uniform" AutomationProperties.Name="Tree design preview"/>
             </Border>
             <StackPanel Grid.Column="1">
+              <TextBlock Text="Tree to decorate"/><ComboBox x:Name="TreeChoice" AutomationProperties.Name="Tree to decorate" Margin="0,2,0,5"/>
               <DockPanel><TextBlock Text="Tree colors" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <ComboBox x:Name="TreePalette" AutomationProperties.Name="Tree colors"><ComboBoxItem Content="Candlelight"/><ComboBoxItem Content="Festive"/><ComboBoxItem Content="Aurora"/></ComboBox>
               </DockPanel>
               <WrapPanel Margin="0,7,0,4"><CheckBox x:Name="TreeBaubles" FontWeight="Normal" Content="Baubles" Margin="0,0,8,3"/>
                 <CheckBox x:Name="TreeLights" FontWeight="Normal" Content="Lights" Margin="0,0,8,3"/>
-                <CheckBox x:Name="TreeTwinkle" FontWeight="Normal" Content="Twinkle" IsEnabled="{Binding IsChecked,ElementName=TreeLights}" Margin="0,0,0,3"/>
+                <CheckBox x:Name="TreeTwinkle" FontWeight="Normal" Content="Twinkle" Margin="0,0,0,3"/>
               </WrapPanel>
-              <WrapPanel><Button x:Name="PlantTreeButton" Content="Plant a tree" Padding="8,5" Margin="0,0,5,3"/>
+              <StackPanel x:Name="TreeOrnaments">
+                <DockPanel Margin="0,2,0,3"><TextBlock Text="Ornament" VerticalAlignment="Center" Margin="0,0,6,0"/><ComboBox x:Name="TreeOrnament" AutomationProperties.Name="Tree ornament"/></DockPanel>
+                <WrapPanel><Button x:Name="HangTreeOrnament" Content="Hang ornament" Margin="0,0,5,3"/><Button x:Name="RemoveTreeOrnament" Content="Remove last" Margin="0,0,0,3"/></WrapPanel>
+              </StackPanel>
+              <TextBlock x:Name="TreeEditorStatus" Foreground="#476479" TextWrapping="Wrap" Margin="0,2,0,4"/>
+              <WrapPanel><Button x:Name="PickTreeButton" Content="Pick on desktop" Padding="8,5" Margin="0,0,5,3"/><Button x:Name="PlantTreeButton" Content="Plant a tree" Padding="8,5" Margin="0,0,5,3"/>
                 <Button x:Name="RestyleTreeButton" Content="Apply to a tree" Padding="8,5" Margin="0,0,0,3" ToolTip="Click a planted tree on your desktop to apply this design."/>
               </WrapPanel>
             </StackPanel>
           </Grid></Border>
         </Expander>
+        <TextBlock Style="{StaticResource SectionHeading}" Text="Decorations"/>
+        <TextBlock Text="Choose a piece to place it. Use Arrange to move, resize, or turn it later." Foreground="#476479" TextWrapping="Wrap" Margin="0,0,0,7"/>
+        <Border x:Name="DecorGalleryHost"/>
+        <CheckBox x:Name="TwinkleLightsOption" Content="Twinkle string and tree lights" Foreground="#264A62" Margin="2,8,0,1"
+                  ToolTip="Switch off to keep all desktop lights steady. Each tree keeps its own design."/>
         <Border Style="{StaticResource SectionCard}" Margin="0,8,0,0"><StackPanel>
           <TextBlock Text="String lights" Style="{StaticResource SectionHeading}"/>
           <TextBlock Text="Drag the ends to stretch or tilt a string. Use + or − on the string to resize its bulbs." TextWrapping="Wrap" Foreground="#476479" Margin="0,0,0,7"/>

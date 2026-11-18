@@ -13,10 +13,19 @@ namespace Frostpane
             using(var g=group.Open()) WinterArt.PaintTree(g,0);
             group.Freeze();return group;
         }
-        internal static ImageSource TreePreview(TreeTrim trim,int palette)
+        internal static ImageSource TreePreview(TreeTrim trim,int palette,WinterTree tree=null,SnowScene scene=null)
         {
             var group=new DrawingGroup();
-            using(var dc=group.Open()) WinterArt.DrawTree(dc,0,0,1,palette,0,trim,0);
+            using(var dc=group.Open()) {
+                WinterArt.DrawTree(dc,0,0,1,palette,tree==null?0:Math.Abs(tree.Style%3),trim,0);
+                if(tree!=null && scene!=null)foreach(var item in scene.Decorations) {
+                    if(item.Tree!=tree)continue;
+                    double size=44*item.Scale*96/tree.Size,x=item.LocalX*96,y=item.LocalY*96;
+                    if(item.Angle!=0)dc.PushTransform(new RotateTransform(item.Angle,x,y));
+                    dc.DrawImage(DecorationArt.Icon(item.Kind),new Rect(x-size*.5,y-size*.5,size,size));
+                    if(item.Angle!=0)dc.Pop();
+                }
+            }
             var image=new DrawingImage(group);image.Freeze();return image;
         }
         private static class WinterArt

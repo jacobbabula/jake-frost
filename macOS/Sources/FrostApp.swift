@@ -262,7 +262,7 @@ import AppKit
             }
         }
         choices("Weather volume","snowVolume",[0,25,45,75,100,150,220,300,400].map {($0,"\($0)%")},volume)
-        choices("Accumulation depth","snowDepth",[24,40,55,80,110,140].map {($0,"\($0) pt")},settings.integer(forKey:"snowDepth"))
+        choices("Accumulation depth","snowDepth",[24,40,55,80,110,140,180,240,320].map {($0,"\($0) pt")},settings.integer(forKey:"snowDepth"))
         choices("Window ice","windowIce",[(0,"Off"),(1,"Light frost"),(2,"Icicles"),(3,"Heavy ice")],settings.integer(forKey:"windowIce"))
         choices("Show effects on","onlyDisplay",[(0,"All displays")]+NSScreen.screens.compactMap { screen in
             guard let id=displayID(screen) else {return nil};return (Int(id),screen.localizedName)
@@ -300,7 +300,7 @@ import AppKit
               choose("Weather","Heavy snow"),scene.view.world.snowEnabled,scene.view.world.amount>1,
               choose("Snow and windows","Weather volume","300%"),scene.view.world.amount>5,
               choose("Snow and windows","Window ice","Heavy ice"),scene.view.iceLevel==3,
-              choose("Snow and windows","Accumulation depth","110 pt"),scene.view.world.depthLimit==110,
+              choose("Snow and windows","Accumulation depth","320 pt"),scene.view.world.depthLimit==320,
               choose("Snow and windows","Show behind windows"),scene.panel.level.rawValue<NSWindow.Level.normal.rawValue,
               choose("Pause weather"),scene.view.world.paused else{return false}
         return true

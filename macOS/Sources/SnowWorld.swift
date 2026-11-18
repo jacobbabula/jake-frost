@@ -136,9 +136,7 @@ final class BuiltSnowman {
     init(bottom: PackedBall, middleBall: PackedBall, headBall: PackedBall) {
         x = bottom.x; foot = bottom.y + bottom.radius
         support = bottom.support; supportFraction = bottom.supportFraction
-        base = min(42, max(14, max(bottom.radius, max(middleBall.radius, headBall.radius))))
-        middle = min(base * 0.8, max(base * 0.66, middleBall.radius))
-        head = min(base * 0.59, max(base * 0.46, headBall.radius))
+        base = bottom.radius; middle = middleBall.radius; head = headBall.radius
         style = Int.random(in:0..<3); facing = Bool.random() ? 1 : -1
     }
 
@@ -189,7 +187,7 @@ final class SnowWorld {
     }
     private(set) var depthLimit: CGFloat = 55
     func setAccumulation(_ value: CGFloat) {
-        let limit = min(140,max(24,value))
+        let limit = min(320,max(24,value))
         guard limit != depthLimit else { return }
         depthLimit = limit
         for bank in banks { bank.setDepthLimit(limit) }
@@ -500,9 +498,9 @@ final class SnowWorld {
             let n=min(32,max(1,Int(abs(dx)/4)))
             for j in 1...n {
                 let f=CGFloat(j)/CGFloat(n),x=last.x+dx*f,y=last.y+(p.y-last.y)*f
-                if let d=banks.first(where:{ $0.edge.contains(x) && abs($0.surface(x)-y)<b.radius+11 }) {
+                if b.radius < 76, let d=banks.first(where:{ $0.edge.contains(x) && abs($0.surface(x)-y)<b.radius+11 }) {
                     let taken = -d.add(at:x,amount:-min(2,abs(dx)/CGFloat(n)*0.12),spread:1)
-                    b.radius=min(42,sqrt(b.radius*b.radius+taken*6))
+                    b.radius=min(76,sqrt(b.radius*b.radius+taken*6))
                 }
             }
         }

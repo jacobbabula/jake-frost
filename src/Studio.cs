@@ -80,34 +80,6 @@ namespace Frostpane
             UpdateTreePreview();
         }
 
-        private void ConnectTreeDesigner()
-        {
-            var palette=Control<ComboBox>("TreePalette");
-            palette.SelectedIndex=prefs.TreePalette;
-            palette.SelectionChanged+=delegate {
-                if(palette.SelectedIndex<0) return;
-                prefs.TreePalette=palette.SelectedIndex;
-                UpdateTreePreview();ApplyPreferences();SaveSoon();
-            };
-            BindTreeTrim("TreeBaubles",TreeTrim.Baubles);
-            BindTreeTrim("TreeLights",TreeTrim.Lights);
-            BindTreeTrim("TreeTwinkle",TreeTrim.Twinkle);
-            Control<Button>("PlantTreeButton").Click+=delegate{ActivateTool(PlayTool.Tree);};
-            Control<Button>("RestyleTreeButton").Click+=delegate{ActivateTool(PlayTool.StyleTree);};
-        }
-
-        private void BindTreeTrim(string name,TreeTrim flag)
-        {
-            SetupOption(name,(prefs.TreeTrimOptions&flag)!=0,delegate(bool enabled) {
-                if(enabled) prefs.TreeTrimOptions|=flag;else prefs.TreeTrimOptions&=~flag;
-                UpdateTreePreview();ApplyPreferences();
-            });
-        }
-
-        private void UpdateTreePreview()
-        {
-            Control<Image>("TreePreview").Source=SnowArtwork.TreePreview(prefs.TreeTrimOptions,prefs.TreePalette);
-        }
         private void SetupOption(string id,bool initial,Action<bool> set)
         {
             var box=Control<CheckBox>(id);box.IsChecked=initial;BindToggle(box,set);
@@ -141,6 +113,7 @@ namespace Frostpane
         private void SetWeather(WeatherMode value,bool manual)
         {
             if(manual) CancelBlizzard();
+            else if(overlays.Exists(o=>o.Surface.Scene.BlizzardActive)) return;
             updatingWeather=true;
             try {
                 if (manual && prefs.Schedule!=WeatherSchedule.Manual) {
@@ -159,6 +132,7 @@ namespace Frostpane
         }
         private void SetSchedule(WeatherSchedule schedule)
         {
+            CancelBlizzard();
             prefs.Schedule=schedule; updatingWeather=true;
             try { Control<RadioButton>("Schedule"+schedule).IsChecked=true; } finally {updatingWeather=false;}
             Control<StackPanel>("LocalWeatherBox").Visibility=schedule==WeatherSchedule.Local?Visibility.Visible:Visibility.Collapsed;

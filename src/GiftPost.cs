@@ -36,11 +36,12 @@ namespace Frostpane
         internal string Encode() {
             string appearance=Dress??"";
             double bottom=Size,middle=Mid,top=Head;
-            if(Kind==GiftType.Snowman && (middle>bottom || top>middle)) {
+            bool large=Math.Max(bottom,Math.Max(middle,top))>50;
+            if(Kind==GiftType.Snowman && (large || middle>bottom || top>middle)) {
                 var radii=new[]{bottom,middle,top};
-                // v3 reads the three fields in decreasing size. v4 restores the placed order.
-                appearance="stack1,"+Number(bottom)+","+Number(middle)+","+Number(top)+";"+appearance;
-                Array.Sort(radii);bottom=radii[2];middle=radii[1];top=radii[0];
+                // Older apps read a conventional stack up to radius 50. Current apps restore the full sculpture.
+                appearance=(large?"stack2,":"stack1,")+Number(bottom)+","+Number(middle)+","+Number(top)+";"+appearance;
+                Array.Sort(radii);bottom=Math.Min(50,radii[2]);middle=Math.Min(50,radii[1]);top=Math.Min(50,radii[0]);
             }
             if(appearance.Length>8192) throw new InvalidDataException("Gift appearance is too large.");
             string result=string.Join("\n",new[]{ "FROSTPANE-GIFT-1",Id,SenderId,RecipientId,B64(Name(Sender)),Kind.ToString(),
@@ -63,14 +64,17 @@ namespace Frostpane
                 Kind=kind,Note=Plain(Decode(l[6],280),280),Style=style,Size=ReadNumber(l[8],3,160),
                 Mid=ReadNumber(l[9],1,64),Head=ReadNumber(l[10],1,64),Facing=ReadNumber(l[11],-1,1),Dress=Decode(l[12],8192) };
             if(g.Kind==GiftType.Snowman && (g.Size>50||g.Mid>50||g.Head>50))throw new InvalidDataException("Invalid snowman proportions.");
-            if(g.Kind==GiftType.Snowman && g.Dress.StartsWith("stack1,",StringComparison.Ordinal)) {
+            bool largeStack=g.Dress.StartsWith("stack2,",StringComparison.Ordinal);
+            if(g.Kind==GiftType.Snowman && (largeStack || g.Dress.StartsWith("stack1,",StringComparison.Ordinal))) {
                 int end=g.Dress.IndexOf(';');
                 if(end<0) throw new InvalidDataException("Invalid snowman stack.");
                 var parts=g.Dress.Substring(0,end).Split(',');
                 if(parts.Length!=4) throw new InvalidDataException("Invalid snowman stack.");
-                double bottom=ReadNumber(parts[1],3,50),middle=ReadNumber(parts[2],1,50),top=ReadNumber(parts[3],1,50);
+                double limit=largeStack?SnowBall.MaximumRadius:50;
+                double bottom=ReadNumber(parts[1],3,limit),middle=ReadNumber(parts[2],1,limit),top=ReadNumber(parts[3],1,limit);
                 var radii=new[]{bottom,middle,top};Array.Sort(radii);
-                if(g.Size!=radii[2] || g.Mid!=radii[1] || g.Head!=radii[0]) throw new InvalidDataException("Inconsistent snowman stack.");
+                if(g.Size!=Math.Min(50,radii[2]) || g.Mid!=Math.Min(50,radii[1]) || g.Head!=Math.Min(50,radii[0]))
+                    throw new InvalidDataException("Inconsistent snowman stack.");
                 g.Size=bottom;g.Mid=middle;g.Head=top;g.Dress=g.Dress.Substring(end+1);
             }
             return g;

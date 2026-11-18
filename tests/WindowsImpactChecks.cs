@@ -127,11 +127,59 @@ internal static class WindowsImpactChecks
               "rolling off deposits snow on the ground below the landing, away from the source window");
     }
 
+    private static SnowBall RollForStack(SnowScene scene,SnowBank floor,double wantedRadius,double placeX,SnowBall support)
+    {
+        double x=130,dir=1;
+        scene.Tool=PlayTool.Roll;
+        scene.PlayDown(x,floor.Y-floor.HeightAt(x));
+        var ball=scene.Balls.Single(b=>b.Held);
+        // Follow the changing crest as the same roll tool used on the desktop packs snow.
+        for(int i=0;i<320 && ball.Radius<wantedRadius;i++) {
+            x+=dir*26;
+            if(x>900 || x<145)dir=-dir;
+            scene.PlayMove(x,floor.Y-floor.HeightAt(x));
+        }
+        double y=support==null?floor.Y-floor.HeightAt(placeX)-ball.Radius:support.Y-support.Radius;
+        scene.PlayMove(placeX,y);scene.PlayUp(placeX,y);
+        return ball;
+    }
+
+    private static void DeepDriftsAndBigSnowmen()
+    {
+        var scene=Empty(null);
+        var floor=scene.Banks.Single();
+        scene.DriftDepth=320;
+        scene.Tool=PlayTool.Pile;
+        scene.PlayDown(Width/2,Height-1);
+        for(int i=0;i<500;i++)scene.Step(.085,0,0);
+        scene.PlayUp(Width/2,Height-1);
+        Check(floor.MaxDepth==320 && floor.Heights.Max()>285 && floor.Heights.Max()<=320.01,
+              "the pile brush builds a drift above 285 px under the 320 px setting");
+        for(int i=0;i<floor.Heights.Length;i++)floor.Heights[i]=145;
+        floor.Revision++;
+        const double spot=1100;
+        SnowBall bottom=RollForStack(scene,floor,76,spot,null);
+        SnowBall middle=RollForStack(scene,floor,43,spot,bottom);
+        SnowBall head=RollForStack(scene,floor,62,spot,middle);
+        var man=scene.Snowmen.Single();
+        Check(Math.Abs(bottom.Radius-76)<.01 && middle.Radius>31 && head.Radius>50 && head.Radius>middle.Radius &&
+              man.BaseRadius==bottom.Radius && man.MidRadius==middle.Radius && man.HeadRadius==head.Radius,
+              "rolling grows a 76 px base and stacking keeps the actual oversized, non-monotone ball radii");
+        var restored=Empty(null);restored.ImportDecorations(scene.ExportDecorations());
+        var saved=restored.Snowmen.Single();
+        var gift=GiftPayload.DecodeGift(scene.CaptureSnowmanGift(man,"").Encode());
+        Check(Math.Abs(saved.BaseRadius-man.BaseRadius)<.0001 && Math.Abs(saved.MidRadius-man.MidRadius)<.0001 &&
+              Math.Abs(saved.HeadRadius-man.HeadRadius)<.0001 && Math.Abs(gift.Size-man.BaseRadius)<.001 &&
+              Math.Abs(gift.Mid-man.MidRadius)<.001 && Math.Abs(gift.Head-man.HeadRadius)<.001,
+              "scene persistence and portable gifts retain all three large hand-rolled sizes in order");
+    }
+
     internal static void Run()
     {
         ThrowFigure(true);ThrowFigure(false);MidairCollision();RollOff();
         double small=DropBall(10),big=DropBall(24);
         Check(big>small*2,"larger rolled snowballs leave proportionally more settled snow");
         Console.WriteLine("Settled window cross-section for 10 and 24 px balls: {0:F1}, {1:F1} square DIP",small,big);
+        DeepDriftsAndBigSnowmen();
     }
 }

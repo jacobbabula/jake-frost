@@ -130,11 +130,11 @@ import AppKit
     edge.x+=25;edge.y+=9;edge.visible=[185...355]
     world.setDesktop(size:size,edges:[edge]);world.step(1.0/30)
     check(abs(middle.x-center-25)<0.1 && middle.x==bottom.x,"both stacked balls follow a moved window")
-    guard roll(until:{ _ in CGPoint(x:bottom.x,y:middle.y-middle.radius-63) },time:5) != nil else {return false}
+    guard let top=roll(until:{ _ in CGPoint(x:bottom.x,y:middle.y-middle.radius-63) },time:5) else {return false}
     for _ in 0..<70 {world.step(1.0/30)}
     guard let figure=world.snowmen.first else {check(false,"third falling ball completes a snowman");return false}
-    check(world.balls.isEmpty && world.snowmen.count==1 && figure.base>=figure.middle && figure.middle>=figure.head,
-          "a third falling ball makes one proportioned snowman")
+    check(world.balls.isEmpty && world.snowmen.count==1 && figure.base==bottom.radius && figure.middle==middle.radius && figure.head==top.radius,
+          "a third falling ball preserves all three placed radii")
     check(world.hit(CGPoint(x:figure.x,y:figure.foot-figure.base)) && !world.hit(CGPoint(x:figure.x+figure.base+3,y:figure.foot-figure.base)),
           "only the visible snowman catches desktop clicks")
     let artwork=NSImage(size:size,flipped:true) { _ in canvas.draw(canvas.bounds);return true }

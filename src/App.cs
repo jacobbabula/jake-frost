@@ -30,6 +30,7 @@ namespace Frostpane
         internal bool TwinkleLights=true;
         internal TreeTrim TreeTrimOptions=TreeTrim.All;
         internal int TreePalette=1;
+        internal string LastTreeMonitor="";
         // In saved-file order: snowplow, Yeti, Santa, elf train, visiting snowmen.
         internal readonly int[] VisitorSizes={100,100,100,100,100};
         internal bool PauseFullscreen=true,ClickPuffs=true,RememberDecorations=true,DirectGrab=true,Lightning=false,SaveBattery=true;
@@ -57,7 +58,7 @@ namespace Frostpane
                 Intensity=Number(values,0,Intensity,1,3); Wind=Number(values,1,Wind,-80,80);
                 bool flag;
                 if (values.Length>2 && bool.TryParse(values[2],out flag)) PauseFullscreen=flag;
-                Volume=Number(values,3,Volume,0,400); Depth=Number(values,4,Depth,24,140);
+                Volume=Number(values,3,Volume,0,400); Depth=Number(values,4,Depth,24,SnowScene.MaximumDriftDepth);
                 Ice=Number(values,5,Ice,0,3); Palette=Number(values,6,Palette,0,2);
                 if (values.Length>7 && bool.TryParse(values[7],out flag)) ClickPuffs=flag;
                 PlayTool tool;
@@ -80,6 +81,7 @@ namespace Frostpane
                 if(values.Length>29 && bool.TryParse(values[29],out flag)) TwinkleLights=flag;
                 TreeTrimOptions=(TreeTrim)Number(values,30,(int)TreeTrim.All,0,7);
                 TreePalette=Number(values,31,Palette,0,2);
+                if(values.Length>32 && values[32].Length<128)LastTreeMonitor=values[32];
             } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
         private static T Choice<T>(string[] values,int index,T fallback) where T:struct
@@ -106,7 +108,7 @@ namespace Frostpane
                     VisitorSpeed.ToString(CultureInfo.InvariantCulture)}.Concat(
                     VisitorSizes.Select(size=>size.ToString(CultureInfo.InvariantCulture))).Concat(
                     new[]{BulbSize.ToString(CultureInfo.InvariantCulture),TwinkleLights.ToString(),
-                        ((int)TreeTrimOptions).ToString(CultureInfo.InvariantCulture),TreePalette.ToString(CultureInfo.InvariantCulture)}));
+                        ((int)TreeTrimOptions).ToString(CultureInfo.InvariantCulture),TreePalette.ToString(CultureInfo.InvariantCulture),LastTreeMonitor}));
                 if (File.Exists(path)) File.Replace(temp,path,null); else File.Move(temp,path);
             } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
@@ -253,7 +255,7 @@ namespace Frostpane
             SetUpChoices(new[]{"IceOff","IceFrost","IceIcicles","IceDeep"},prefs.Ice,delegate(int n){ prefs.Ice=n; });
             SetUpChoices(new[]{"Warm","Festive","Aurora"},prefs.Palette,delegate(int n){ prefs.Palette=n; });
             SetUpSlider("BulbSize",prefs.BulbSize,delegate(int n){prefs.BulbSize=n;},"%");
-            SetupOption("TwinkleLightsOption",prefs.TwinkleLights,delegate(bool v){prefs.TwinkleLights=v;ApplyPreferences();});
+            SetupOption("TwinkleLightsOption",prefs.TwinkleLights,delegate(bool v){prefs.TwinkleLights=v;ApplyPreferences();UpdateTreePreview();});
             ConnectTreeDesigner();
             SetUpChoices(new[]{"VisitorSpeed0","VisitorSpeed1","VisitorSpeed2"},prefs.VisitorSpeed,delegate(int n){ prefs.VisitorSpeed=n; });
             foreach (VisitorSizeTarget target in Enum.GetValues(typeof(VisitorSizeTarget))) {
@@ -261,7 +263,7 @@ namespace Frostpane
                 SetUpSlider("Size"+target,prefs.VisitorSizes[index],delegate(int n){prefs.VisitorSizes[index]=n;},"%");
             }
             SetUpSlider("Volume",prefs.Volume,delegate(int n) { prefs.Volume=n; },"%");
-            SetUpSlider("Depth",prefs.Depth,delegate(int n) { prefs.Depth=n; }," px");
+            SetUpSlider("Depth",prefs.Depth,delegate(int n) { prefs.Depth=n; }," DIP");
             var wind=Control<Slider>("Wind");
             wind.Value=prefs.Wind; ShowWind();
             wind.ValueChanged += delegate { prefs.Wind=(int)wind.Value; ShowWind(); SaveSoon(); };
@@ -463,6 +465,8 @@ namespace Frostpane
                 if (o==null) {
                     o=new Overlay(monitor,unchecked(Environment.TickCount+monitor.Id.GetHashCode()));
                     o.GiftSelected=OpenGift;
+                    var treeDisplay=o;
+                    o.Surface.Scene.TreePicked=tree=>Dispatcher.BeginInvoke(new Action(delegate {OpenTreeStudio(treeDisplay,tree);}));
                     o.Surface.Scene.RedeemDailyGift=RedeemPresent;
                     o.Surface.Scene.GiftArrived=friends.GiftArrived;
                     o.Surface.Scene.IsMountWindowAlive=DesktopMap.WindowAlive;

@@ -81,6 +81,7 @@ namespace Frostpane
             // Keep the original tree rows readable by older versions.
             for(int i=0;i<Trees.Count;i++) {
                 var tree=Trees[i];
+                if(tree==DesignedTree)text.Append("\nEditTree\t").Append(i);
                 if(tree.Palette>=0 || tree.Trim!=TreeTrim.All)
                     text.Append("\nTrim\t").Append(i).Append('\t').Append((int)tree.Trim).Append('\t').Append(tree.Palette);
             }
@@ -145,6 +146,7 @@ namespace Frostpane
                 oldWidth < 1 || oldWidth > 100000 || oldHeight < 1 || oldHeight > 100000) return;
             double sx = width / oldWidth, sy = height / oldHeight;
             var trees = new List<WinterTree>();
+            int designIndex=-1;
             var lights = new List<LightString>();
             var catalog = new List<PlacedDecoration>();
             var figures = new List<Snowman>();
@@ -152,6 +154,11 @@ namespace Frostpane
             {
                 if (lines[i].Length > 1024) continue;
                 string[] row = lines[i].TrimEnd('\r').Split('\t');
+                if(row[0]=="EditTree") {
+                    int index;
+                    if(row.Length==2 && int.TryParse(row[1],out index) && index>=0 && index<trees.Count)designIndex=index;
+                    continue;
+                }
                 if(row[0]=="D") {ReadCatalogRow(row,sx,sy,trees,catalog);continue;}
                 if(row[0]=="Trim") {
                     int index;
@@ -171,8 +178,8 @@ namespace Frostpane
                         if(!mount.Support.IsFloor) x=mount.Support.X+mount.Anchor*mount.Support.Width;
                         y=SnowSurfaceY(mount.Support,x);
                     }
-                    figures.Add(new Snowman{X=x,Y=y,BaseRadius=Limit(b,8,50),MidRadius=Limit(m,5,50),
-                        HeadRadius=Limit(h,4,50),Style=(int)Limit(style,0,2),Facing=f<0?-1:1});
+                    figures.Add(new Snowman{X=x,Y=y,BaseRadius=Limit(b,3,SnowBall.MaximumRadius),MidRadius=Limit(m,1,SnowBall.MaximumRadius),
+                        HeadRadius=Limit(h,1,SnowBall.MaximumRadius),Style=(int)Limit(style,0,63),Facing=f<0?-1:1});
                 }
                 else if (row[0] == "T" && (row.Length == 10 || row.Length == 11) && trees.Count < 40)
                 {
@@ -216,13 +223,16 @@ namespace Frostpane
                     lights.Add(strand);
                 }
             }
-            if (trees.Count + lights.Count + catalog.Count + figures.Count > 0) ReplaceDecorations(trees, lights,catalog,figures);
+            if (trees.Count + lights.Count + catalog.Count + figures.Count > 0) {
+                ReplaceDecorations(trees,lights,catalog,figures);
+                if(designIndex>=0)DesignedTree=trees[designIndex];
+            }
         }
 
         private void ReplaceDecorations(List<WinterTree> trees, List<LightString> lights,List<PlacedDecoration> catalog,List<Snowman> figures)
         {
             if (draggingProps) PropsCancel();
-            Trees.Clear(); Trees.AddRange(trees);
+            DesignedTree=null;Trees.Clear(); Trees.AddRange(trees);
             Lights.Clear(); Lights.AddRange(lights);
             Decorations.Clear(); Decorations.AddRange(catalog); ClearPropSelection();
             if(heldMan!=null) {heldMan.Held=false;heldMan=null;}

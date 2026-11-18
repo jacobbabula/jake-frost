@@ -35,18 +35,30 @@ internal static class WindowsPloughChecks
         ground.Revision++;
         scene.SendSnowplough();
         Check(scene.Plough != null && scene.Plough.Facing == direction, "requested plough direction " + direction);
-        double maxPitch=0, maxUnderTruck=0, maxToeExcess=0;
+        double maxPitch=0,maxUnderTruck=0,maxWheelGap=0,minContact=1,maxCrestOffset=0,maxTail=0;
+        int windrowSamples=0;
         bool crossedRidge=false;
         for (int frame=0; scene.Plough!=null && frame<1300; frame++) {
             scene.Step(frame%4==0 ? 0.08 : 1.0/60,0,0);
             var p=scene.Plough;
             if (p==null || p.X<100 || p.X>Width-100) continue;
             maxPitch=Math.Max(maxPitch,Math.Abs(p.Incline));
-            double angle=p.Incline*Math.PI/180,tipX=p.X+direction*37*p.Scale*Math.Cos(angle);
-            double tipDepth=ground.Y-(p.Y+direction*37*p.Scale*Math.Sin(angle));
-            int ahead=direction>0 ? (int)Math.Floor(tipX/spacing)+1 : (int)Math.Ceiling(tipX/spacing)-1;
-            if (ahead>=0 && ahead<ground.Heights.Length)
-                maxToeExcess=Math.Max(maxToeExcess,ground.Heights[ahead]-tipDepth-0.45*Math.Abs(ahead*spacing-tipX));
+            var lip=SnowScene.TruckPoint(p,WinterPlough.LipX,0);
+            foreach(double axle in new[]{-20.0,14.0}) {
+                var hub=SnowScene.TruckPoint(p,axle,-6.4);
+                maxWheelGap=Math.Max(maxWheelGap,ground.Y-ground.PaintedHeightAt(hub.X)-hub.Y-6.4*p.Scale);
+            }
+            if(p.Roll.Count>=4 && p.RollDepth>1 && lip.X>80 && lip.X<Width-80) {
+                var crest=p.Roll.OrderByDescending(s=>s.Added).First();
+                double offset=(ground.X+crest.Bin*spacing-lip.X)*direction;
+                double contact=p.Roll[0].Added/crest.Added;
+                var tail=p.Roll.FirstOrDefault(s=>(ground.X+s.Bin*spacing-lip.X)*direction>=p.RollReach*.75);
+                if(tail.Added>0) {
+                    windrowSamples++;minContact=Math.Min(minContact,contact);
+                    maxCrestOffset=Math.Max(maxCrestOffset,offset/Math.Max(2*spacing,10*p.Scale));
+                    maxTail=Math.Max(maxTail,tail.Added/crest.Added);
+                }
+            }
             if (p.X>=320 && p.X<=470) {
                 crossedRidge=true;
                 for (double dx=-17;dx<=12;dx+=3)
@@ -55,7 +67,10 @@ internal static class WindowsPloughChecks
         }
         Check(scene.Plough==null && crossedRidge && maxPitch<=8.1 && maxUnderTruck<5,
             String.Format("plough clears a tall squared ridge at {0}% size in direction {1} (maximum pitch {2:F2} degrees, snow under chassis {3:F2} px)",size,direction,maxPitch,maxUnderTruck));
-        Check(maxToeExcess<1.2,"the first snow ahead of the steel lip forms a sloping mound rather than a cliff");
+        double bladeRake=Math.Atan2(Math.Abs(WinterPlough.LipX-WinterPlough.CrownX),-WinterPlough.CrownY)*180/Math.PI;
+        Check(bladeRake<7 && maxWheelGap<2.5,"the nearly upright moldboard grades ahead of the grounded tires");
+        Check(windrowSamples>4 && minContact>.77 && maxCrestOffset<=1 && maxTail<.46,
+              String.Format("rounded windrow stays against the steel, with a nearby crest and tapered apron (contact {0:P0}, outer apron {1:P0})",minContact,maxTail));
         Check(ground.HeightAt(180)<4 && ground.HeightAt(405)<4 && ground.HeightAt(625)<4,
               "an entire pass clears both a flat snow blanket and the piled ridge");
     }

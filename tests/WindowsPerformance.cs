@@ -154,6 +154,7 @@ internal static class WindowsPerformance
 #if CHECK_PLOUGH
         WindowsPloughChecks.Run();
         WindowsImpactChecks.Run();
+        WinterEventChecks.Run();
 #endif
         MeasurePhysics(0, false);
         MeasurePhysics(4, false);

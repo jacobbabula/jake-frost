@@ -4,10 +4,11 @@ using System.Diagnostics;
 
 namespace Frostpane
 {
-    internal enum PlayTool { Roll, Puff, Pile, Throw, Tree, Lights, Sled, Erase, Decorate, Arrange, StyleTree }
+    internal enum PlayTool { Roll, Puff, Pile, Throw, Tree, Lights, Sled, Erase, Decorate, Arrange, StyleTree, PickTree }
 
     internal sealed partial class SnowScene
     {
+        internal const int MaximumDriftDepth=320;
         internal int SnowVolume = 100, DriftDepth = 48, IceLevel;
         private int appliedDepth = -1;
         private PlayTool tool;
@@ -40,12 +41,12 @@ namespace Frostpane
         }
         private double BankDepth(bool ground)
         {
-            double setting = Limit(DriftDepth,24,140);
+            double setting = Limit(DriftDepth,24,MaximumDriftDepth);
             return ground ? setting : setting * (22.0 / 48.0);
         }
         private void ApplyDepth()
         {
-            int setting=(int)Limit(DriftDepth,24,140);
+            int setting=(int)Limit(DriftDepth,24,MaximumDriftDepth);
             if (setting==appliedDepth) return;
             appliedDepth=setting;
             supportBandsDirty = true;
@@ -445,7 +446,7 @@ namespace Frostpane
         private void ScatterSnow(double x,double y,double radius,double vx,double speed,SnowBank contact=null)
         {
             double power=Limit(.65+speed/820+radius/85,.75,1.85);
-            double area=1.65*radius*radius;
+            double area=SnowBall.PackedAreaFactor*radius*radius;
             if (contact!=null && !contact.Bare) {
                 SettleImpact(contact,x,area*.65);
                 area*=.35;

@@ -52,15 +52,15 @@ import Foundation
         try await post.confirm([tree],at:share)
         try files.removeItem(at:wrongURL); try files.removeItem(at:mismatch)
         var draft = try FrostGift.make(.snowman,sender:"Mac friend",note:"Mac to Windows",senderID:macID,template:nil)
-        draft.size=12;draft.mid=32;draft.head=19
+        draft.size=44;draft.mid=76;draft.head=59
         try await post.send(draft,to:peers[0]); try await post.send(draft,to:peers[0])
         let windowsBox = share.appendingPathComponent("Frostpane Post/Mail/" + windowsID)
         let sent = try files.contentsOfDirectory(at:windowsBox,includingPropertiesForKeys:nil).filter { $0.pathExtension == "fpgift" }
         try check(sent.count == 1, "send one addressed Mac gift across retries")
         let response = try FrostGift.read(sent[0])
         let oldFields=try String(contentsOf:sent[0],encoding:.utf8).components(separatedBy:"\n")[8...10].compactMap(Double.init)
-        try check(oldFields == [32,19,12] && response.size==12 && response.mid==32 && response.head==19,
-                  "v3 receives descending sizes while v4 preserves the original placed order")
+        try check(oldFields == [50,50,44] && response.size==44 && response.mid==76 && response.head==59,
+                  "older apps receive a smaller stack while current apps recover a full-size gift")
         try check(response.sender == "Mac friend" && response.senderID == macID && response.recipientID == windowsID && response.note == "Mac to Windows" && response.kind == .snowman, "emit Windows-compatible addressed snowman")
         var collision = draft
         collision.note = "Different gift with a reused ID"

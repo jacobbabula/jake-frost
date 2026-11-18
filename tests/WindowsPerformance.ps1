@@ -22,6 +22,7 @@ try {
     if ($CheckPlough) {
         $arguments+='/define:CHECK_PLOUGH'
         $files+=(Join-Path $PSScriptRoot 'WindowsPloughChecks.cs')
+        $files+=(Join-Path $PSScriptRoot 'WinterEventChecks.cs')
         $files+=(Join-Path $PSScriptRoot 'WindowsImpactChecks.cs')
     }
     & (Join-Path $framework 'csc.exe') @arguments @files (Join-Path $PSScriptRoot 'WindowsPerformance.cs') (Join-Path $PSScriptRoot 'WindowsFrameProbe.cs')

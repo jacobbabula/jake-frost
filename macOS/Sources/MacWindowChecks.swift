@@ -18,7 +18,8 @@ import AppKit
     world.snowEnabled=false
     check(world.particles.count==5 && world.particles.allSatisfy { $0.powder },"switching weather preserves snowball powder")
     guard let ledge=world.banks.last else {return false}
-    world.setAccumulation(140)
+    world.setAccumulation(320)
+    check(world.banks.first?.maximumDepth==320 && ledge.maximumDepth==157,"the largest drift setting reaches the floor and window ledges")
     for _ in 0..<30 {ledge.add(at:45,amount:9,spread:0)}
     world.setAccumulation(24)
     check(ledge.maximumDepth==12 && (ledge.depth.max() ?? 0)<=12 &&

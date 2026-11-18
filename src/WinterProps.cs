@@ -213,6 +213,11 @@ namespace Frostpane
                 if(tree!=null) {tree.Palette=NewTreePalette;tree.Trim=NewTreeTrim;}
                 return;
             }
+            if(tool==PlayTool.PickTree) {
+                var tree=TreeAt(x,y)??PlantForEditor(x,y);
+                if(tree!=null && TreePicked!=null)TreePicked(tree);
+                return;
+            }
             if(tool==PlayTool.Decorate && SelectedDecoration==DecorationKind.Tree) tool=PlayTool.Tree;
             if(tool==PlayTool.Decorate && SelectedDecoration==DecorationKind.Lights) tool=PlayTool.Lights;
             propTool = tool;

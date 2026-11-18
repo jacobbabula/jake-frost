@@ -8,7 +8,11 @@ namespace Frostpane
     internal sealed class WinterPlough
     {
         internal int Facing;
-        internal double X, Y, Scale, Incline, Time, WheelTurn, Powder, LastSpray, Carry;
+        internal double X, Y, Scale, Incline, Time, WheelTurn, Powder, LastSpray, Carry, RollDepth, RollReach;
+        internal const double LipX=35.8, CrownX=34.6, CrownY=-14.2;
+        internal double[] LastFloor;
+        internal readonly List<RolledSnow> Roll=new List<RolledSnow>(24);
+        internal struct RolledSnow {internal int Bin;internal double Bed,Added;}
     }
 
     internal sealed partial class SnowScene
@@ -56,7 +60,7 @@ namespace Frostpane
                          TireBed(p.X+c*front+s*r,p.Scale)-s*front)-r*(1-c);
         }
 
-        private static Point TruckPoint(WinterPlough p,double x,double y)
+        internal static Point TruckPoint(WinterPlough p,double x,double y)
         {
             var offset=TurnOffset(x*p.Facing*p.Scale,y*p.Scale,p.Incline);
             return new Point(p.X+offset.X,p.Y+offset.Y);
@@ -69,11 +73,12 @@ namespace Frostpane
             StepLeavingDecorations(travel);
             WinterPlough p=Plough;
             if(p==null) return;
-            Point oldLip=TruckPoint(p,37,0), oldTop=TruckPoint(p,30,-18);
+            bool shifted=LiftMovingSnow(p);
+            Point oldLip=TruckPoint(p,WinterPlough.LipX,0), oldTop=TruckPoint(p,WinterPlough.CrownX,WinterPlough.CrownY);
             Point oldHeel=TruckPoint(p,-25,0);
             p.Time+=dt;p.X+=p.Facing*travel;p.WheelTurn+=travel/(6.4*p.Scale);
             GroundPlough(p,dt);
-            Point lip=TruckPoint(p,37,0),top=TruckPoint(p,30,-18),heel=TruckPoint(p,-25,0);
+            Point lip=TruckPoint(p,WinterPlough.LipX,0),top=TruckPoint(p,WinterPlough.CrownX,WinterPlough.CrownY),heel=TruckPoint(p,-25,0);
             double cell=floor.Width/(floor.Heights.Length-1);
             double farGround=VisitorGround(lip.X+p.Facing*cell);
             // Grade every cell between the cutting edge and the rear tire. A resized
@@ -91,7 +96,8 @@ namespace Frostpane
             }
             p.Carry+=removed*.94; p.Powder+=removed*.20;
             bool deposited=SpreadPloughedSnow(p,lip,cell);
-            if(deposited || removed>.00001)floor.Revision++;
+            if(shifted || deposited || removed>.00001)floor.Revision++;
+            farGround=Math.Min(farGround,VisitorGround(lip.X+p.Facing*cell));
             PushBladeLoad(p,oldTop,oldLip,top,lip,farGround,travel/dt);
             if(p.Powder>=1 && p.Time-p.LastSpray>=.10 && lip.X>=0 && lip.X<=width) {
                 int amount=(int)Math.Min(9,p.Powder);
@@ -155,7 +161,7 @@ namespace Frostpane
             double high=Math.Min(oldTop.Y,top.Y)-p.Scale,low=Math.Max(oldLip.Y,lip.Y)+p.Scale;
             double loadTop=Math.Min(high,snowTop);
             double back=Math.Min(Math.Min(oldTop.X*f,top.X*f),Math.Min(oldLip.X*f,lip.X*f))-4*p.Scale;
-            Point bend=TruckPoint(p,32.75,-11.25),nose=TruckPoint(p,39,-3);
+            Point bend=TruckPoint(p,31.6,-8),nose=TruckPoint(p,33.4,-2.6);
             bladeContacts.Clear();
             foreach(SnowBall b in Balls) {
                 if(b.Held || b.InFlight || b.Below!=null || OnWindow(b.X,b.Y+b.Radius))continue;
@@ -318,42 +324,97 @@ namespace Frostpane
             gift.X=Limit(gift.X+dx,12,Math.Max(12,width-12));gift.Y=Math.Min(gift.Y,VisitorGround(gift.X));
         }
 
+        // Only pick back up the snow the blade is still carrying. The floor may have
+        // been edited, relaxed, or resized since the previous sample.
+        private bool LiftMovingSnow(WinterPlough p)
+        {
+            bool changed=false;
+            if(p.LastFloor==floor.Heights) {
+                foreach(var sample in p.Roll) {
+                    double lift=Math.Min(sample.Added,Math.Max(0,floor.Heights[sample.Bin]-sample.Bed));
+                    floor.Heights[sample.Bin]-=lift;p.Carry+=lift;changed|=lift>0;
+                }
+            }
+            p.Roll.Clear();p.LastFloor=floor.Heights;
+            return changed;
+        }
+
+        internal static double RollProfile(double distance,double crest,double reach)
+        {
+            if(distance<=crest) {
+                double t=Limit(distance/crest,0,1);
+                return .82+.18*t*t*(3-2*t);
+            }
+            double u=Limit((distance-crest)/(reach-crest),0,1);
+            return (1-u)*(1-u)*(1+2*u);
+        }
+
         private bool SpreadPloughedSnow(WinterPlough p,Point lip,double cell)
         {
-            // Cut only the face touching the blade. Distant, unworked terrain keeps its contour.
-            int first=p.Facing>0 ? (int)Math.Floor((lip.X-floor.X)/cell)+1 : (int)Math.Ceiling((lip.X-floor.X)/cell)-1;
+            int f=p.Facing,first=f>0?(int)Math.Floor((lip.X-floor.X)/cell)+1:(int)Math.Ceiling((lip.X-floor.X)/cell)-1;
+            double baseDepth=Math.Max(0,floor.Y-lip.Y);
+            // A deep blanket needs a much longer approach than a dusting; a short
+            // fixed cut makes tall snow look like the face of a ramp.
+            double incoming=0;
+            for(int j=first;j>=0 && j<floor.Heights.Length;j+=f) {
+                double d=(floor.X+j*cell-lip.X)*f;
+                if(d>Math.Max(16*cell,95*p.Scale) || (d>2*cell && floor.Heights[j]<.25))break;
+                incoming=Math.Max(incoming,floor.Heights[j]);
+            }
+            double bite=Math.Max(cell*7,3.15*incoming+18*p.Scale);
             bool changed=false;
-            double lipDepth=Math.Max(0,floor.Y-lip.Y);
-            double bite=Math.Max(3*cell,25*p.Scale);
-            for(int j=first;j>=0 && j<floor.Heights.Length;j+=p.Facing) {
-                double distance=(j*cell+floor.X-lip.X)*p.Facing;
-                if(distance>=bite)break;
-                double cap=lipDepth+.28*distance;
-                if(floor.Heights[j]<=cap)break;
-                double t=Limit((distance-cell)/(bite-cell),0,1);
-                double cut=(floor.Heights[j]-cap)*(1-t*t*(3-2*t));
+            for(int j=first;j>=0 && j<floor.Heights.Length;j+=f) {
+                double d=(floor.X+j*cell-lip.X)*f;
+                if(d>=bite)break;
+                double t=Limit(d/bite,0,1);
+                double cap=baseDepth+incoming*t*t*(3-2*t);
+                double cut=Math.Max(0,floor.Heights[j]-cap);
+                if(cut<=.001 && d>2*cell)break;
+                if(cut<=0)continue;
                 p.Carry+=cut;floor.Heights[j]-=cut;changed=true;
             }
-            if(p.Carry<.001)return changed;
-            // Loose snow rolls over in a broad, rounded bank; heavier loads spread further ahead.
-            double reach=Math.Max(cell*7,Math.Min(120*p.Scale,42*p.Scale+Math.Sqrt(p.Carry*cell)*1.3));
-            double load=p.Carry, peak=Math.Min(.115*reach,18*p.Scale);
-            double blanket=floor.HeightAt(lip.X+p.Facing*reach);
-            int count=(int)Math.Ceiling(reach/cell);
+            // In side view the blade rolls a low bank against its face. Snow that
+            // spills sideways leaves the narrow track sampled by the desktop floor.
+            double maxDepth=10.4*p.Scale;
+            p.RollDepth=Math.Min(maxDepth,Math.Sqrt(p.Carry*cell*.36));
+            p.RollReach=Math.Max(4.5*cell,19*p.Scale+3.7*p.RollDepth);
+            double crest=Math.Max(.78*cell,5.2*p.Scale);
+            double capacity=maxDepth*p.RollReach*.61/cell;
+            double sideSpill=Math.Max(0,p.Carry-capacity*1.35);
+            p.Carry-=sideSpill;p.Powder+=Math.Min(4,sideSpill*.04);
+            if(p.Carry<.005 || first<0 || first>=floor.Heights.Length){p.RollDepth=0;return changed;}
+            int count=(int)Math.Ceiling(p.RollReach/cell);
+            double total=0;
             for(int n=0;n<count;n++) {
-                int index=first+n*p.Facing;
-                if(index<0 || index>=floor.Heights.Length)continue;
-                double distance=(index*cell+floor.X-lip.X)*p.Facing;
-                double t=Limit(distance/reach,0,1), weight=Math.Sin(Math.PI*t);
-                weight*=weight;
-                double bed=lipDepth+(blanket-lipDepth)*t*t*(3-2*t);
-                double cap=Math.Min(floor.Maximum(index),bed+peak*weight);
-                if(distance<=cell)cap=Math.Min(cap,lipDepth+.4*distance);
-                double lift=Math.Min(Math.Max(0,cap-floor.Heights[index]),load*2*weight/(count+1));
-                lift=Math.Min(lift,p.Carry);
-                if(lift<=.00001)continue;
-                floor.Heights[index]+=lift;p.Carry-=lift;changed=true;
+                int j=first+n*f;if(j<0 || j>=floor.Heights.Length)break;
+                total+=RollProfile((floor.X+j*cell-lip.X)*f,crest,p.RollReach);
             }
+            // One partially covered cell continues the pile underneath the steel lip.
+            // This keeps the contact and the rest of the snow in the same continuous surface.
+            int behind=first-f;double backWeight=0;
+            if(behind>=0 && behind<floor.Heights.Length) {
+                double gap=(lip.X-floor.X-behind*cell)*f;
+                backWeight=.82*Math.Max(0,1-gap/(7.2*p.Scale));
+                total+=backWeight;
+            }
+            if(total<=0)return changed;
+            p.RollDepth=Math.Min(p.RollDepth,p.Carry/total);
+            for(int n=0;n<count;n++) {
+                int j=first+n*f;if(j<0 || j>=floor.Heights.Length)break;
+                double d=(floor.X+j*cell-lip.X)*f,bed=floor.Heights[j];
+                double added=Math.Min(floor.Maximum(j)-bed,p.RollDepth*RollProfile(d,crest,p.RollReach));
+                if(added<=.00001)continue;
+                p.Roll.Add(new WinterPlough.RolledSnow {Bin=j,Bed=bed,Added=added});
+                floor.Heights[j]+=added;p.Carry-=added;changed=true;
+            }
+            if(backWeight>0) {
+                double bed=floor.Heights[behind],added=Math.Min(floor.Maximum(behind)-bed,backWeight*p.RollDepth);
+                if(added>0) {
+                    floor.Heights[behind]+=added;p.Carry-=added;changed=true;
+                    p.Roll.Add(new WinterPlough.RolledSnow {Bin=behind,Bed=bed,Added=added});
+                }
+            }
+            p.Carry=Math.Max(0,p.Carry);
             return changed;
         }
     }
@@ -391,12 +452,15 @@ namespace Frostpane
                 dc.DrawRoundedRectangle(Ink("#D65C3D"),null,new Rect(-32,-17,2.8,3.5),.7,.7);
                 Path(dc,Ink("#666E67"),null,"M-4,-34 L3,-34 3,-32 -4,-32 Z");
                 dc.DrawRoundedRectangle(Ink("#FFC056"),Stroke("#975B2F",.60),new Rect(-2.6,-37.7,4.6,4.4),1.5,1.5);
-                dc.DrawLine(Stroke("#55666A",2.3),new Point(19,-6),new Point(34,-7));
-                dc.DrawLine(Stroke("#AC7749",1.7),new Point(21,-13),new Point(32,-6));
-                Path(dc,Vertical("#DBEEEF","#8EAFBA","#47727F"),outline,
-                    "M30,-18 Q31,-12 39,-3 L37,0 Q30,-3 26,-12 L27,-18 Z");
-                dc.DrawLine(Stroke("#D3DADC",1.4),new Point(30,-3.5),new Point(37.5,-.6));
-                dc.DrawLine(Stroke("#EDAC5D",1.5),new Point(27.3,-18),new Point(30.3,-18));
+                // Short push frame and hydraulic lift attach behind the concave moldboard.
+                dc.DrawLine(Stroke("#465961",2.4),new Point(19,-6),new Point(30.6,-6.6));
+                dc.DrawLine(Stroke("#B18055",1.6),new Point(21,-12),new Point(29.7,-7.2));
+                dc.DrawEllipse(Ink("#9BADA8"),seam,new Point(29.9,-7.1),1.7,1.7);
+                Path(dc,Vertical("#CFDDE0","#85A1AC","#536D78"),outline,
+                    "M30.6,-14 Q32.2,-15.3 34.6,-14.2 C32.7,-12.7 31.3,-10.1 31.6,-8 Q31.8,-4.7 33.4,-2.6 L35.8,-.75 35.8,-.3 31.9,-.3 Q28.8,-3.4 28.5,-7.7 Q28.2,-11.4 30.6,-14 Z");
+                Path(dc,Ink("#E1E9E8"),null,"M32.1,-13.8 Q34,-14.6 34.6,-14.2 Q32.2,-12.1 31.7,-9.2 Q31.1,-11.4 32.1,-13.8 Z");
+                dc.DrawLine(Stroke("#B5C8CB",1.15),new Point(31.9,-.65),new Point(35.8,-.65));
+                dc.DrawLine(Stroke("#E4B46D",1.2),new Point(30.8,-14.1),new Point(33.8,-14.5));
                 foreach(double wx in new double[]{-20,14}) {
                     dc.DrawEllipse(rubber,Stroke("#1F292D",1),new Point(wx,-6.4),6.4,6.4);
                     dc.DrawEllipse(steel,Stroke("#41565E",.9),new Point(wx,-6.4),3.9,3.9);

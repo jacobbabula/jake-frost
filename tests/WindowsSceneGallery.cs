@@ -65,51 +65,6 @@ internal static class WindowsSceneGallery
         return scene;
     }
 
-    private static void CheckStorm()
-    {
-        foreach(WeatherMode mode in new[]{WeatherMode.Off,WeatherMode.Rain,WeatherMode.HeavySnow,WeatherMode.Clouds}) {
-            var scene=Fresh(73);
-            scene.Weather=mode;scene.SnowVolume=0;scene.LightningEnabled=true;
-            var tree=Plant(scene,250,115,1);
-            scene.StartBlizzard();
-            int largest=0;
-            for(int i=0;i<115;i++) {
-                scene.Step(.085,1,-60);int before=scene.StormCount;
-                scene.Step(0,1,70);
-                if(scene.StormCount!=before)throw new InvalidOperationException("Paused storm advanced.");
-                largest=Math.Max(largest,scene.StormCount);
-            }
-            scene.StartBlizzard();
-            for(int i=0;i<154;i++)scene.Step(.085,1,20);
-            if(largest<175 || largest>900 || scene.BlizzardActive || scene.StormCount!=0 ||
-               scene.Weather!=mode || scene.SnowVolume!=0 || !scene.LightningEnabled ||
-               scene.Visitors.Any(v=>v.Wild) || !scene.Trees.Contains(tree))
-                throw new InvalidOperationException("The event did not finish under the original settings.");
-            scene.StartBlizzard();scene.Step(.1,2,0);scene.Clear();
-            if(scene.BlizzardActive || scene.StormCount!=0 || scene.Visitors.Any(v=>v.Wild) || scene.Weather!=mode)
-                throw new InvalidOperationException("Clear failed to stop the storm.");
-        }
-    }
-
-    private static void CheckWakingSnowmen()
-    {
-        var scene=Fresh(80);
-        if(scene.StartFight())throw new InvalidOperationException("An empty scene started a battle.");
-        var first=new Snowman{X=355,Y=Height-10,BaseRadius=18,MidRadius=21,HeadRadius=13};
-        scene.Snowmen.Add(first);
-        string original=scene.ExportDecorations();
-        if(!scene.StartFight() || scene.Fight.Players.Count<3 || !scene.Fight.Players.Any(p=>p.Man==first))
-            throw new InvalidOperationException("A solo builder did not get snowman opponents.");
-        if(scene.ExportDecorations()!=original)throw new InvalidOperationException("Temporary players entered the saved scene.");
-        int count=scene.Snowmen.Count;
-        if(!scene.StartFight() || scene.Snowmen.Count!=count)throw new InvalidOperationException("Restart doubled the cast.");
-        scene.Balls.Add(new SnowBall{X=first.X-60,Y=first.Y-first.BaseRadius-10,Radius=10,Vx=770,InFlight=true});
-        for(int i=0;i<30 && scene.Snowmen.Contains(first);i++)scene.Step(1.0/60,0,0);
-        if(scene.Snowmen.Contains(first))throw new InvalidOperationException("A thrown ball did not crumble an active player.");
-        scene.Clear();
-        if(scene.Fight!=null || scene.FriendlyShots.Count!=0 || scene.Snowmen.Count!=0)
-            throw new InvalidOperationException("Clear left a match or one of its players behind.");
-    }
 
     private static void FightPreview(string path,BitmapSource background)
     {
@@ -117,7 +72,11 @@ internal static class WindowsSceneGallery
         for(int i=0;i<4;i++)scene.Snowmen.Add(new Snowman{X=230+i*141,Y=Height,BaseRadius=22+2*i,MidRadius=19-i,HeadRadius=12,Style=i});
         if(!scene.StartFight())throw new InvalidOperationException("Could not start the hand-built snowman battle.");
         var fight=scene.Fight;var gif=new GifBitmapEncoder();
+        int impactFrame=-1;
         for(int i=0;i<92;i++) {
+            if(impactFrame<0 && fight.Breaks>0)impactFrame=i+1;
+            if(i==impactFrame)Capture(Path.Combine(Path.GetDirectoryName(path),"04-switchback-snowman-impact.png"),
+                                      WallpaperScene.Switchback,WallpaperTime.Midday,scene);
             var visual=new DrawingVisual();
             using(var dc=visual.RenderOpen()) {
                 dc.PushTransform(new MatrixTransform(.92,0,0,.92,-104,-320));
@@ -297,7 +256,6 @@ internal static class WindowsSceneGallery
 
     [STAThread] public static void Main(string[] args)
     {
-        CheckWakingSnowmen();
         string output=Path.GetFullPath(args[0]);Directory.CreateDirectory(output);
         Capture(Path.Combine(output,"01-switchback-yeti.png"),WallpaperScene.Switchback,WallpaperTime.Midday,Woodcutting());
         var storm=StormAtNight();
@@ -305,7 +263,6 @@ internal static class WindowsSceneGallery
         var clouds=Fresh(81);clouds.Weather=WeatherMode.Clouds;
         for(int i=0;i<240;i++)clouds.Step(1.0/30,2,20);
         Capture(Path.Combine(output,"03-switchback-clouds.png"),WallpaperScene.Switchback,WallpaperTime.Midday,clouds);
-        CheckStorm();
         var background=DaytimeBackground();
         FightPreview(Path.Combine(output,"snowman-battle.gif"),background);
         YetiPreview(Path.Combine(output,"yeti-woodcutting.gif"),background);

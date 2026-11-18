@@ -49,6 +49,7 @@ namespace Frostpane
         internal static string Hint(PlayTool tool)
         {
             if(tool==PlayTool.StyleTree) return "Click a planted tree to apply your colors, baubles and lights.";
+            if(tool==PlayTool.PickTree) return "Click the tree you want to decorate, or click empty snow to plant one.";
             foreach (Choice item in Choices) if (item.Tool==tool) return item.Hint;
             return "Click to place your decoration. Drag it to move it or hang it on a tree.";
         }

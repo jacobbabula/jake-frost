@@ -75,6 +75,8 @@ namespace Frostpane
 
     internal sealed class SnowBall
     {
+        internal const double MaximumRadius = 76;
+        internal const double PackedAreaFactor = 1.65;
         public double X, Y, Radius, Rotation;
         public bool Held;
         internal double Vx, Vy;
@@ -606,24 +608,30 @@ namespace Frostpane
             {
                 SnowBall b = heldBall;
                 double dx = x - pointerX;
-                SnowBank bank = NearbyBank(x, y);
-                if (bank != null && Math.Abs(dx) >= .25)
+                SnowBank bank = NearbyBank(x, y) ?? NearbyBank(x, y - grabY + b.Radius);
+                if (bank != null && b.Radius < SnowBall.MaximumRadius && Math.Abs(dx) >= .25)
                 {
                     double from = Math.Max(Math.Min(pointerX, x), bank.X);
                     double to = Math.Min(Math.Max(pointerX, x), bank.X + bank.Width);
                     int first = (int)Limit(Math.Floor((from - bank.X) * (bank.Heights.Length - 1) / bank.Width), 0, bank.Heights.Length - 1);
                     int last = (int)Limit(Math.Ceiling((to - bank.X) * (bank.Heights.Length - 1) / bank.Width), first, bank.Heights.Length - 1);
-                    double growth = Math.Min(180, Math.Max(0, to - from));
-                    double take = Math.Min(2.2, growth * .22);
+                    double spacing = bank.Width / (bank.Heights.Length - 1);
+                    double capacity = (SnowBall.MaximumRadius * SnowBall.MaximumRadius - b.Radius * b.Radius)
+                        * SnowBall.PackedAreaFactor / spacing;
+                    double take = Math.Min(2.2, Math.Max(0, to - from) * .22);
                     double collected = 0;
-                    for (int i = first; i <= last; i++)
+                    for (int i = first; i <= last && collected < capacity; i++)
                     {
-                        double swept = Math.Min(bank.Heights[i], take);
+                        double swept = Math.Min(bank.Heights[i], Math.Min(take, capacity - collected));
                         bank.Heights[i] -= swept;
                         collected += swept;
                     }
-                    b.Radius = Math.Min(31, b.Radius + growth * .034 + collected * .095);
-                    bank.Revision++;
+                    if (collected > 0)
+                    {
+                        b.Radius = Math.Min(SnowBall.MaximumRadius, Math.Sqrt(b.Radius * b.Radius +
+                            collected * spacing / SnowBall.PackedAreaFactor));
+                        bank.Revision++;
+                    }
                 }
                 b.Rotation += dx / b.Radius;
                 b.X = Limit(x - grabX, b.Radius, Math.Max(b.Radius, width - b.Radius));
