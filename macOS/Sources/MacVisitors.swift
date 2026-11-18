@@ -18,7 +18,7 @@ enum MacVisitorKind: String, CaseIterable {
         case .snowplow: return 41
         case .yeti: return 31
         case .santa: return 58
-        case .snowmen: return 34
+        case .snowmen: return 48
         case .train: return 64
         }
     }
@@ -145,9 +145,11 @@ enum MacVisitorKind: String, CaseIterable {
         var powderBudget: CGFloat = 0
         let direction:CGFloat,load=MacPlowLoad()
         var yeti:MacYeti?,dropped=false
+        var landingX:CGFloat=0,age:CGFloat=0
         init(_ kind: MacVisitorKind, x: CGFloat,direction:CGFloat) { self.kind = kind; self.x = x;self.direction=direction }
     }
     private var active = [Visit]()
+    private static let snowmanArt=GiftTrain()
     private var scales = [MacVisitorKind:CGFloat]()
     private var speeds = [MacVisitorKind:CGFloat]()
     private var nextPlow:CGFloat=1,nextYeti:CGFloat=1
@@ -190,6 +192,10 @@ enum MacVisitorKind: String, CaseIterable {
             x=direction>0 ? min(x,last.x-margin):max(x,last.x+margin)
         }
         let visit = Visit(kind,x:x,direction:direction)
+        if kind == .snowmen {
+            visit.landingX=world.size.width*CGFloat.random(in:0.22...0.78)
+            visit.x=visit.landingX;visit.y = -2;active.append(visit);return
+        }
         if kind == .yeti {visit.yeti=MacYeti(x:x,facing:direction,wild:wild)}
         position(visit,world:world,scale:scale)
         active.append(visit)
@@ -229,9 +235,18 @@ enum MacVisitorKind: String, CaseIterable {
         for v in active {
             let scale = scales[v.kind] ?? 1
             let displacement = v.kind.pointsPerSecond * (speeds[v.kind] ?? 1) * dt
+            if v.kind == .snowmen,let floor=world.banks.first {
+                v.age+=dt;v.x=v.landingX+9*sin(v.age*1.05);v.y+=displacement
+                if v.y>=floor.surface(v.x) {
+                    v.dropped=true;world.dropVisitorSnowman(at:v.x,scale:scale)
+                }
+                continue
+            }
             let old = CGPoint(x:v.x,y:v.y), oldAngle = v.angle
             if let yeti=v.yeti {
-                yeti.step(dt,scale:scale,pace:speeds[.yeti] ?? 1,world:world,workshop:workshop)
+                yeti.step(dt,scale:scale,pace:speeds[.yeti] ?? 1,world:world,workshop:workshop) {
+                    Set(active.compactMap { $0 !== v ? $0.yeti?.tree:nil })
+                }
                 v.x=yeti.x;v.y=yeti.y;continue
             }
             v.x += displacement*v.direction; v.distance += displacement
@@ -262,11 +277,11 @@ enum MacVisitorKind: String, CaseIterable {
             if !v.dropped && v.x>=world.size.width*0.48 {
                 v.dropped=true
                 if v.kind == .santa {onSantaDrop?(CGPoint(x:v.x,y:v.y))}
-                if v.kind == .snowmen {world.dropVisitorSnowman(at:v.x,scale:scale)}
             }
         }
         let hadPlow=plowPose != nil
         active.removeAll { visit in
+            if visit.kind == .snowmen && visit.dropped {return true}
             let margin = -visit.kind.spriteBounds.minX*(scales[visit.kind] ?? 1)
             return visit.direction>0 ? visit.x-margin>world.size.width:visit.x+margin<0
         }
@@ -280,6 +295,12 @@ enum MacVisitorKind: String, CaseIterable {
         for visitor in active {
             let scale = scales[visitor.kind] ?? 1
             if let yeti=visitor.yeti {yeti.draw(in:c,scale:scale);continue}
+            if visitor.kind == .snowmen {
+                c.saveGState();c.translateBy(x:visitor.x,y:visitor.y)
+                c.rotate(by:sin(visitor.age*1.05)*0.035)
+                Self.snowmanArt.drawSnowman(base:19*scale,middle:14*scale,head:10*scale,style:1,facing:1,in:c)
+                c.restoreGState();continue
+            }
             // One complete gait per stride. Treads and boots keep pace as their size changes.
             let stride: CGFloat = visitor.kind == .snowplow ? 42 : visitor.kind == .santa ? 47 : 27
             let frame = Int(visitor.distance * 8 / (stride * scale)) % 8
@@ -318,7 +339,7 @@ enum MacVisitorKind: String, CaseIterable {
             case .snowplow: art.plow(phase)
             case .yeti: return // The planted feet and upper body render independently.
             case .santa: art.sleigh(phase)
-            case .snowmen: art.snowmen(phase)
+            case .snowmen: return
             case .train: return
             }
             sprite = bitmap.makeImage()
@@ -416,28 +437,5 @@ enum MacVisitorKind: String, CaseIterable {
         poly(0x933E3F,[(-58,-25),(-49,-20),(-25,-17),(-15,-19),(-10,-24),(-5,-25),(-8,-16),(-17,-9),(-44,-9),(-54,-14)])
         poly(0xC05145,[(-51,-19),(-26,-15),(-14,-18),(-18,-12),(-43,-12)])
         stroke(0xE9BE71,1.4,[(-57,-24),(-49,-20),(-26,-17),(-15,-19),(-9,-25),(-5,-25)])
-    }
-    private func snowmen(_ p:CGFloat) {
-        snowFriend(at:-14,scale:0.72,phase:p + .pi,scarf:0xC65D54)
-        snowFriend(at:9,scale:1,phase:p,scarf:0x447F81)
-    }
-    private func snowFriend(at x:CGFloat,scale:CGFloat,phase:CGFloat,scarf:Int) {
-        c.saveGState(); c.translateBy(x:x,y:0); c.scaleBy(x:scale,y:scale)
-        let swing=sin(phase)*3
-        oval(0x48555C,-5+swing,-2,4.6,1.9); oval(0x48555C,5-swing,-2,4.6,1.9)
-        c.translateBy(x:0,y:-abs(cos(phase)))
-        stroke(0x705C49,1.8,[(-6,-20),(-13,-23+swing),(-15,-27+swing)])
-        stroke(0x705C49,1.4,[(-13,-23+swing),(-16,-23+swing)])
-        stroke(0x705C49,1.8,[(6,-20),(11,-21-swing),(15,-25-swing)])
-        for (r,y): (CGFloat,CGFloat) in [(10,-11),(8,-23),(6.7,-33.5)] {
-            oval(0xB8D3DC,0,y,r,r); oval(0xF2F6EE,-0.6,y-0.5,r*0.90,r*0.91)
-        }
-        for y:CGFloat in [-24,-20,-13] { oval(0x43535C,1,y,1,1) }
-        rect(scarf,-6.9,-29.6,14.3,3.4,1.4)
-        poly(scarf,[(-1,-28),(-3,-21),(-6,-22),(-5,-28)])
-        oval(0x3F4D52,1,-34.7,0.8,1); oval(0x3F4D52,4.7,-34.7,0.75,1)
-        poly(0xD98B48,[(3,-33.5),(10,-32.6),(4,-31.8)])
-        rect(0x3A505C,-5.4,-47,9.4,9,1); rect(scarf,-5.4,-41,9.4,2,0)
-        rect(0x374852,-8,-39,15,2.1,0.9); c.restoreGState()
     }
 }

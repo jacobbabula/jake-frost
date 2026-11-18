@@ -646,8 +646,12 @@ final class SnowWorld {
     }
     func removeGuests() {snowmen.removeAll{$0.guest && $0 !== heldSnowman}}
     func dropVisitorSnowman(at x:CGFloat,scale:CGFloat) {
-        guard let m=addGuest(at:CGPoint(x:x,y:size.height),radius:19*scale,style:Int.random(in:0...4)) else{return}
-        m.guest=false;rememberSnowmenNow()
+        guard let floor=byID[0],balls.count+snowmen.count<55 else{return}
+        var gift=FrostGift();gift.kind = .snowman;gift.style=1;gift.facing=1
+        gift.size=Double(19*scale);gift.mid=Double(14*scale);gift.head=Double(10*scale)
+        let m=BuiltSnowman(gift:gift,foot:CGPoint(x:x,y:floor.surface(x)));m.giftID=nil
+        settle(m,on:floor);snowmen.append(m);rememberSnowmenNow()
+        burst(CGPoint(x:x,y:m.foot-2),count:20,strength:0.90)
     }
     private func advanceFigure(_ m:BuiltSnowman,_ dt:CGFloat)->Bool {
         m.vy=min(850,m.vy+(m.thrown ? 565:400)*dt)

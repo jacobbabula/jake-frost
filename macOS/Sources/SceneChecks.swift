@@ -84,23 +84,23 @@ import AppKit
         _=train.clear()
         check(!train.hasActivity,"clearing removes delivered scenery")
     } else { check(false,"portable dressed tree creation") }
-    let snowmenOK=runBuiltSnowmanChecks()
-    let visitorsOK=runMacVisitorChecks()
-    let santaOK=runMacSantaChecks()
-    let workshopOK=runWorkshopChecks()
-    let panelsOK=runAnchoredPanelChecks()
+    check(runBuiltSnowmanChecks(),"snowman building and impact checks")
+    check(runMacVisitorChecks(),"visitor controls, motion and rendering checks")
+    check(runMacSantaChecks(),"daily present checks")
+    check(runWorkshopChecks(),"desktop workshop checks")
+    check(runAnchoredPanelChecks(),"anchored panel checks")
     check(runMacStudioChecks(),"native studio controls and anchored desktop tools")
     check(MacGifts.checkComposer(),"online invitation, gift and shared-folder controls fit in the Mac gift composer")
-    let atmosphereOK=runMacAtmosphereChecks()
-    let impactOK=runMacSnowImpactChecks()
-    let weatherOK=runMacWeatherChecks() && atmosphereOK && impactOK
-    let windowsOK=runMacWindowChecks()
-    let dressingOK=runMacTreeDressingChecks()
-    let memoryOK=runMacSceneMemoryChecks()
-    let playOK=runMacPlayChecks()
-    let deliveryOK=runReceivedSceneGiftChecks()
-    let plowOK=runMacPlowContactChecks()
-    return failures==0 && snowmenOK && visitorsOK && santaOK && workshopOK && panelsOK && weatherOK && windowsOK && dressingOK && memoryOK && playOK && deliveryOK && plowOK
+    check(runMacAtmosphereChecks(),"wallpaper, clouds and blizzard checks")
+    check(runMacSnowImpactChecks(),"snow physics and snowball fight checks")
+    check(runMacWeatherChecks(),"weather and scheduling checks")
+    check(runMacWindowChecks(),"desktop window checks")
+    check(runMacTreeDressingChecks(),"tree design checks")
+    check(runMacSceneMemoryChecks(),"scene restoration checks")
+    check(runMacPlayChecks(),"desktop play checks")
+    check(runReceivedSceneGiftChecks(),"received gift placement and persistence checks")
+    check(runMacPlowContactChecks(),"snowplough contact checks")
+    return failures==0
 }
 
 @MainActor private func runBuiltSnowmanChecks() -> Bool {

@@ -90,6 +90,7 @@ struct WorkshopPiece: Codable {
     private var carriedByBlade:[UUID:BladeLoad]=[:]
     private var leavingDisplay:[UUID:CGFloat]=[:]
     private var snowGesture=false, pickingTree=false
+    private var pickedDesign:(trim:Int,palette:Int)?
     private var clock:TimeInterval=0
     private var falling:[(tree:WorkshopPiece,ornaments:[WorkshopPiece],age:TimeInterval)]=[]
     var twinkleEnabled=true {didSet {invalidate?()}}
@@ -431,7 +432,7 @@ struct WorkshopPiece: Codable {
         if kind == .tree {onPlantTree?()}
         resetTools();pending=kind;editing=true;invalidate?()
     }
-    private func resetTools() {cancelGesture();playTool=nil;pending=nil;selected=nil;pickingTree=false}
+    private func resetTools() {cancelGesture();playTool=nil;pending=nil;selected=nil;pickingTree=false;pickedDesign=nil}
     func arrange() {resetTools();editing=true;invalidate?()}
     func finishEditing() {resetTools();editing=false;invalidate?()}
     @objc func beginPiling() {resetTools();playTool = .pile;editing=true;invalidate?()}
@@ -443,7 +444,7 @@ struct WorkshopPiece: Codable {
     func clear() {
         pending=nil;gesture=nil;editing=false;selected=nil;lastTree=nil;playTool=nil;brushPoint=nil;sleds.clear()
         pieces.removeAll();mounts.removeAll();extents.removeAll();wires.removeAll()
-        falling.removeAll();carriedByBlade.removeAll();leavingDisplay.removeAll();pickingTree=false;snowGesture=false;treeEditor?.refresh()
+        falling.removeAll();carriedByBlade.removeAll();leavingDisplay.removeAll();pickingTree=false;pickedDesign=nil;snowGesture=false;treeEditor?.refresh()
         save();invalidate?()
     }
     private func removeSelected() {
@@ -511,7 +512,10 @@ struct WorkshopPiece: Codable {
     @discardableResult func down(_ point:CGPoint)->Bool {
         if pickingTree {
             guard let p=pieces.last(where:{$0.kind == .tree && body($0,hits:point)}) else{return false}
-            finishEditing();selectTree(p.id);openTreeEditor();return true
+            let design=pickedDesign
+            finishEditing();selectTree(p.id)
+            if let design=design {setTreeDesign(trim:design.trim,color:design.palette)}
+            openTreeEditor();return true
         }
         if let tool=playTool,let w=world {
             switch tool {
@@ -924,12 +928,14 @@ extension MacWorkshop {
 
     var trees:[WorkshopPiece] {pieces.filter{$0.kind == .tree}}
     var designedTree:WorkshopPiece? {pieces.first{$0.kind == .tree && $0.id==lastTree}}
-    func nearestTreeForYeti(to x:CGFloat)->WorkshopPiece? {
-        pieces.filter{$0.kind == .tree && $0.onFloor && gesture?.piece.id != $0.id && carriedByBlade[$0.id]==nil && leavingDisplay[$0.id]==nil}
+    func nearestTreeForYeti(to x:CGFloat,excluding claimed:Set<UUID>=[])->WorkshopPiece? {
+        pieces.filter{ $0.kind == .tree && $0.onFloor && !claimed.contains($0.id) && gesture?.piece.id != $0.id &&
+            carriedByBlade[$0.id]==nil && leavingDisplay[$0.id]==nil }
             .min{abs($0.center.x-x)<abs($1.center.x-x)}
     }
     @discardableResult func chopTree(_ id:UUID)->Bool {
-        guard let tree=pieces.first(where:{$0.id==id && $0.kind == .tree && $0.onFloor && gesture?.piece.id != id}) else{return false}
+        guard carriedByBlade[id]==nil,leavingDisplay[id]==nil,
+              let tree=pieces.first(where:{$0.id==id && $0.kind == .tree && $0.onFloor && gesture?.piece.id != id}) else{return false}
         let ornaments=pieces.filter{$0.attachment?.tree==id}
         falling.append((tree,ornaments,0));removeFamily([id]);save();invalidate?();return true
     }
@@ -946,9 +952,16 @@ extension MacWorkshop {
         guard pieces.contains(where:{$0.id==id && $0.kind == .tree}) else{return}
         lastTree=id;save();treeEditor?.refresh();invalidate?()
     }
-    func pickTreeOnDesktop() {
+    func pickTreeOnDesktop(applyDesign:Bool=false) {
         guard !trees.isEmpty else{return}
-        resetTools();pickingTree=true;editing=true;treeEditor?.setPicking(true);invalidate?()
+        let source=designedTree
+        if applyDesign && source==nil {return}
+        resetTools()
+        if applyDesign,let source=source {
+            rememberTreeDefaults()
+            pickedDesign=(source.trim,source.displayedTreePalette)
+        }
+        pickingTree=true;editing=true;treeEditor?.setPicking(true);invalidate?()
     }
     func plantForEditor() {
         guard pieces.count<Self.limit,let floor=world?.banks.first,size.width>0 else{return}

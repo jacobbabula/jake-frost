@@ -1,34 +1,49 @@
 import AppKit
 
 @MainActor final class MacYeti {
-    let wild:Bool,facing:CGFloat
+    let wild:Bool,entry:CGFloat
+    private(set) var facing:CGFloat
     private(set) var x:CGFloat,y:CGFloat=0,carrying=false,greeted=false
     private var travel:CGFloat=0,age:CGFloat=0,dwell:CGFloat=0,walking=true,finishedVisit=false
-    private var tree:UUID?,friend:BuiltSnowman?,strikes=0,selected=false
+    private(set) var tree:UUID?
+    private weak var friend:BuiltSnowman?
+    private var strikes=0,selectionClock:CGFloat=0,approach:CGFloat=1
     private var feet=[CGPoint.zero,CGPoint.zero]
     private var phase:CGFloat=0,bob:CGFloat=0
-    init(x:CGFloat,facing:CGFloat,wild:Bool) {self.x=x;self.facing=facing;self.wild=wild}
+    init(x:CGFloat,facing:CGFloat,wild:Bool) {self.x=x;self.facing=facing;entry=facing;self.wild=wild;approach=facing}
 
-    func step(_ dt:CGFloat,scale:CGFloat,pace:CGFloat,world:SnowWorld,workshop:MacWorkshop?) {
+    func step(_ dt:CGFloat,scale:CGFloat,pace:CGFloat,world:SnowWorld,workshop:MacWorkshop?,claimed:()->Set<UUID>) {
         guard let floor=world.banks.first else{return}
         age+=dt
-        if !wild && !selected {
-            selected=true
-            if let target=workshop?.nearestTreeForYeti(to:x) {tree=target.id}
-            else {friend=world.snowmen.filter{!$0.guest && $0.support==0}.min{abs($0.x-x)<abs($1.x-x)}}
+        selectionClock-=dt
+        if !wild && !finishedVisit && selectionClock<=0 {
+            selectionClock=0.32
+            let old=tree,oldFriend=friend
+            let target=workshop?.nearestTreeForYeti(to:x,excluding:claimed())
+            tree=target?.id
+            if tree != nil {friend=nil}
+            else if friend.map({!world.availableForPlay($0)}) ?? true {
+                func distance(_ man:BuiltSnowman)->CGFloat {abs(man.x-x)+abs(man.foot-y)*0.17}
+                friend=world.snowmen.filter{!$0.guest && world.availableForPlay($0)}.min{distance($0)<distance($1)}
+            }
+            if old != tree || oldFriend !== friend {
+                let targetX=target?.center.x ?? friend?.x ?? x
+                approach=targetX>=x ? 1:-1;dwell=0;strikes=0
+            }
         }
         var destination:CGFloat?
-        if !finishedVisit {
-            if let id=tree,let prop=workshop?.pieces.first(where:{$0.id==id}) {destination=prop.center.x-facing*24*scale}
-            else if let pal=friend,world.availableForPlay(pal) {destination=pal.x-facing*(pal.base+21*scale)}
+        if !wild && !finishedVisit {
+            if let id=tree,let prop=workshop?.pieces.first(where:{$0.id==id}) {destination=prop.center.x-approach*24*scale}
+            else if let pal=friend,world.availableForPlay(pal) {destination=pal.x-approach*(pal.base+17*scale)}
+            else {destination=world.size.width*(entry>0 ? 0.62:0.38)}
         }
         walking=true
         let speed=(wild ? 103:31)*pace*(wild ? sqrt(scale):1)
         var distance=speed*dt
         if let mark=destination {
-            let gap=(mark-x)*facing
-            if gap < -30*scale {finishedVisit=true}
-            else if gap<=0.5 {
+            let gap=abs(mark-x)
+            if gap<=0.5 {
+                if tree != nil || friend != nil {facing=approach}
                 walking=false;distance=0;dwell+=dt
                 if let id=tree {
                     let hits=min(3,Int((dwell+0.21)/0.74))
@@ -38,9 +53,13 @@ import AppKit
                         world.burst(point,count:hits==3 ? 18:7,strength:hits==3 ? 1:0.45)
                     }
                     if strikes==3, dwell>=2.25 {carrying=workshop?.chopTree(id) ?? false;finishedVisit=true}
-                } else if dwell>=2.6 {greeted=true;finishedVisit=true}
-            } else {distance=min(gap,distance)}
-        }
+                } else if dwell>=(friend==nil ? 1.2:2.6) {greeted=friend != nil;finishedVisit=true}
+                else if let pal=friend,dwell<=dt {world.burst(CGPoint(x:pal.x,y:pal.foot-pal.hitBounds.height*0.57),count:10,strength:0.5)}
+            } else {
+                if dwell>0 && gap>6*scale {dwell=0;strikes=0}
+                facing=mark>=x ? 1:-1;distance=min(gap,distance*min(1,max(0.36,gap/(15*scale))))
+            }
+        } else {facing=entry}
         x+=distance*facing;travel+=distance
         let stride=(wild ? 30:23)*scale,cycle=travel/stride
         phase=cycle*2*CGFloat.pi

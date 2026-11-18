@@ -77,7 +77,7 @@ import AppKit
     check(view.world.snowmen.contains{!$0.guest && $0.support==0},"visiting snowmen leave a playable figure in the scene")
     visitors.clear();visitors.summon(.yeti,in:view.world)
     var waved=false
-    for _ in 0..<620 {
+    for _ in 0..<820 {
         visitors.step(1.0/30,world:view.world)
         waved=waved || visitors.yetis.contains{$0.greeted}
     }

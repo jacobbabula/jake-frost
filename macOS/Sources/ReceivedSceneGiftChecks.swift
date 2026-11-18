@@ -59,7 +59,8 @@ import AppKit
     let wide=BuiltSnowman(gift:wideGift,foot:CGPoint(x:120,y:240))
     let edge=CGPoint(x:wide.x+wide.middle-1,y:wide.foot-wide.base-0.78*(wide.base+wide.middle))
     check(wide.hitBounds.contains(edge) && wide.contains(edge,padding:0),"a gifted snowman's widest middle is playable and reachable by the plough")
-    let grab=CGPoint(x:figure.x,y:figure.foot-figure.base), destination=CGPoint(x:350,y:220)
+    let grab=CGPoint(x:figure.x,y:figure.foot-figure.base)
+    let destination=CGPoint(x:350,y:scene.world.banks[0].surface(350)-figure.base-4)
     _=scene.world.down(grab,at:1);scene.world.up(destination,at:2)
     for _ in 0..<95 { scene.world.step(1.0/30) }
     check(abs(figure.x-destination.x)<0.05 && figure.support==0 && figure.style==7 && figure.head==8,

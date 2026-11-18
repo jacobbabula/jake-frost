@@ -147,6 +147,14 @@ import AppKit
         print("FAIL: selecting trim or hanging an ornament changed the wrong desktop tree");return false
     }
     choose.selectItem(at:0);_=NSApp.sendAction(choose.action!,to:choose.target,from:choose)
+    guard workshop.hang(.star),let original=workshop.pieces.last,original.attachment?.tree==first.id,
+          let copyTrim=button("Apply to a tree…") else{return false}
+    workshop.selectTree(second.id);copyTrim.performClick(nil)
+    guard workshop.editing,workshop.down(first.center),!workshop.editing,
+          workshop.designedTree?.id==first.id,workshop.designedTree?.trim==6,workshop.designedTree?.displayedTreePalette==2,
+          workshop.pieces.filter({$0.attachment?.tree==first.id}).map(\.id)==[original.id] else{
+        print("FAIL: applying a design on the desktop must preserve the target’s existing ornaments");return false
+    }
     workshop.pickTreeOnDesktop()
     guard workshop.down(second.center),workshop.designedTree?.id==second.id,!workshop.editing else {return false}
     guard let gift=workshop.treeGiftTemplate(),let checked=try? FrostGift.decode(gift.encoded()),

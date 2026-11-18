@@ -47,20 +47,26 @@ private struct WallpaperLight: Equatable {
     }
 }
 
-@MainActor private final class WallpaperMotion: NSView {
+@MainActor private final class WallpaperMotion: NSObject, CALayerDelegate {
     var scene=MacLandscape.switchback, dark:CGFloat=0, seconds:CGFloat=0
-    override var isFlipped:Bool {true}
+    let layer=CALayer()
+    override init(){
+        super.init()
+        layer.delegate=self;layer.needsDisplayOnBoundsChange=true
+        layer.actions=["contents":NSNull()]
+    }
     private static let colors=CGColorSpaceCreateDeviceRGB()
     private static func glow(_ r:CGFloat,_ g:CGFloat,_ b:CGFloat)->CGGradient {
         CGGradient(colorsSpace:colors,colors:[CGColor(red:r,green:g,blue:b,alpha:1),CGColor(red:r,green:g,blue:b,alpha:0)] as CFArray,locations:[0,1])!
     }
     private static let mist=glow(0.90,0.93,0.97), lamp=glow(1,0.83,0.49)
-    override func draw(_ dirtyRect:NSRect) {
-        guard let c=NSGraphicsContext.current?.cgContext else{return}
-        NSColor.clear.setFill();dirtyRect.fill(using:.copy)
+    func draw(_ layer:CALayer,in c:CGContext) {
+        let bounds=layer.bounds
+        c.clear(bounds)
         let w:CGFloat=1672,h:CGFloat=941,k=max(bounds.width/w,bounds.height/h)
         guard k>0 else{return}
         c.saveGState();defer{c.restoreGState()}
+        c.translateBy(x:0,y:bounds.height);c.scaleBy(x:1,y:-1)
         c.translateBy(x:(bounds.width-w*k)/2,y:(bounds.height-h*k)/2);c.scaleBy(x:k,y:k)
         let t=seconds
         if scene == .switchback {
@@ -107,20 +113,19 @@ private struct WallpaperLight: Equatable {
         wash.colors=[CGColor(red:0.58,green:0.34,blue:0.62,alpha:0.24),CGColor(red:1,green:0.64,blue:0.37,alpha:0.48),
                      CGColor(red:0.96,green:0.67,blue:0.51,alpha:0.15),CGColor(red:0.45,green:0.30,blue:0.44,alpha:0.11)]
         wash.locations=[0,0.33,0.66,1];wash.startPoint=CGPoint(x:0,y:1);wash.endPoint=CGPoint(x:0.15,y:0)
-        for child in [day,night,wash] {layer?.addSublayer(child)}
-        motion.wantsLayer=true;motion.frame=bounds;motion.autoresizingMask=[.width,.height];addSubview(motion)
+        for child in [day,night,wash,motion.layer] {layer?.addSublayer(child)}
     }
     required init?(coder:NSCoder){fatalError("Programmatic view")}
     override func layout() {
         super.layout();CATransaction.begin();CATransaction.setDisableActions(true)
-        for child in [day,night,wash] {child.frame=bounds}
+        for child in [day,night,wash,motion.layer] {child.frame=bounds}
         CATransaction.commit()
     }
     func paint(_ scene:MacLandscape,_ painting:LandscapePainting,_ light:WallpaperLight) {
         CATransaction.begin();CATransaction.setDisableActions(true)
         day.contents=painting.day;night.contents=painting.night;night.opacity=Float(light.dark);wash.opacity=Float(light.warmth)
         CATransaction.commit()
-        motion.scene=scene;motion.dark=light.dark;motion.needsDisplay=true
+        motion.scene=scene;motion.dark=light.dark;motion.layer.setNeedsDisplay()
     }
 }
 
@@ -138,7 +143,7 @@ private struct WallpaperLight: Equatable {
         guard let surface=surfaces.values.first else{return nil}
         let view=surface.view
         view.layoutSubtreeIfNeeded()
-        view.displayIfNeeded();view.motion.displayIfNeeded()
+        view.displayIfNeeded();view.motion.layer.displayIfNeeded()
         let w=800,h=max(1,Int(800*view.bounds.height/view.bounds.width))
         guard let context=CGContext(data:nil,width:w,height:h,bitsPerComponent:8,bytesPerRow:w*4,
                 space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue) else{return nil}
@@ -218,6 +223,6 @@ private struct WallpaperLight: Equatable {
         pending+=min(0.12,max(0,dt))
         guard pending >= (lowPower ? 0.16 : 0.08) else{return}
         elapsed+=CGFloat(pending);pending=0
-        for surface in surfaces.values {surface.view.motion.seconds=elapsed;surface.view.motion.needsDisplay=true}
+        for surface in surfaces.values {surface.view.motion.seconds=elapsed;surface.view.motion.layer.setNeedsDisplay()}
     }
 }

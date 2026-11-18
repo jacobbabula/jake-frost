@@ -77,6 +77,7 @@ import AppKit
     private lazy var remove=NSButton(title:"Remove last",target:self,action:#selector(unhang))
     private lazy var hang=NSButton(title:"Hang ornament",target:self,action:#selector(attach))
     private lazy var pick=NSButton(title:"Pick on desktop",target:self,action:#selector(pickTree))
+    private lazy var apply=NSButton(title:"Apply to a tree…",target:self,action:#selector(applyToTree))
     private let kinds=WorkshopKind.allCases.filter{$0.giftOrnamentID != nil}
     init(workshop:MacWorkshop) {
         self.workshop=workshop
@@ -101,7 +102,7 @@ import AppKit
         NSLayoutConstraint.activate([preview.widthAnchor.constraint(equalToConstant:136),preview.heightAnchor.constraint(equalToConstant:123)])
         let branch=NSTextField(labelWithString:"Ornaments");branch.font = .boldSystemFont(ofSize:13)
         count.textColor = .secondaryLabelColor;count.font = .systemFont(ofSize:11)
-        let stack=NSStackView(views:[heading,row([choice,pick,plant]),drawing,branch,row([ornaments,hang,remove]),count,defaults])
+        let stack=NSStackView(views:[heading,row([choice,pick,plant]),drawing,branch,row([ornaments,hang,remove]),count,row([defaults,apply])])
         stack.orientation = .vertical;stack.alignment = .leading;stack.spacing=11
         stack.translatesAutoresizingMaskIntoConstraints=false
         if let content=panel.contentView {
@@ -132,7 +133,7 @@ import AppKit
         twinkle.toolTip=owner.twinkleEnabled ? nil:"Enable Twinkle string and tree lights in the Decorate menu."
         let n=tree.map{t in owner.pieces.filter{$0.attachment?.tree==t.id}.count} ?? 0
         count.stringValue=tree==nil ? "Plant or select a tree." : "\(n) hand-hung ornament\(n==1 ? "" : "s")"
-        for control:NSControl in [palette,baubles,lights,hang,ornaments]{control.isEnabled=tree != nil}
+        for control:NSControl in [palette,baubles,lights,hang,ornaments,apply]{control.isEnabled=tree != nil}
         pick.isEnabled = !trees.isEmpty;remove.isEnabled=n>0
         preview.needsDisplay=true
     }
@@ -145,5 +146,6 @@ import AppKit
     @objc private func unhang(){workshop?.unhang()}
     @objc private func plantTree(){workshop?.plantForEditor()}
     @objc private func pickTree(){workshop?.pickTreeOnDesktop()}
+    @objc private func applyToTree(){workshop?.pickTreeOnDesktop(applyDesign:true)}
     @objc private func saveDefaults(){workshop?.rememberTreeDefaults()}
 }

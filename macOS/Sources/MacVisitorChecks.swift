@@ -44,7 +44,7 @@ import AppKit
     func sample(_ kind:MacVisitorKind) -> (count:Int,center:CGFloat) {
         let world=makeWorld(), visitors=MacVisitors()
         visitors.configure(controls); visitors.summon(kind,in:world)
-        for _ in 0..<120 { visitors.step(1.0/30,world:world) }
+        for _ in 0..<(kind == .snowmen ? 77:120) { visitors.step(1.0/30,world:world) }
         return raster(visitors)
     }
     for kind in MacVisitorKind.allCases where kind != .train {
