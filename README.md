@@ -22,7 +22,7 @@ You can also exchange a small gift file between any two installations.
 1. **On Windows**, open **Friends**, choose your gift, and select **Copy gift to send**. Paste it into a chat that accepts files, or choose **Save gift file…** and attach the file. **On Mac**, open the snowflake menu, choose **Send a Gift…**, then **Share…** or **Save Gift File…**.
 2. **Your friend** downloads the `.fpgift` attachment and double-clicks it. The elf train delivers it on their desktop. They can also open the file from inside Jake Frost, including when using the portable Windows ZIP.
 
-For automatic deliveries, connect the same shared or synced folder on both computers. On Windows, open **Friends → Shared-folder delivery**. On Mac, open **Send a Gift… → Connect Folder…**. Enter a display name on each computer. Once your friend appears in the recipient list, choose a gift and click **Send to friend**. The train arrives when the recipient runs Jake Frost and the folder syncs. Everyone with access to that folder can read its gifts.
+For automatic deliveries, connect the same shared or synced folder on both computers. On Windows, open **Friends → Shared-folder delivery**. On Mac, open **Send a Gift… → Shared folder → Connect Folder…**. Enter a display name on each computer. Once your friend appears in the recipient list, choose a gift and click **Send to friend**. The train arrives when the recipient runs Jake Frost and the folder syncs. Everyone with access to that folder can read its gifts.
 
 ## Play on the desktop
 

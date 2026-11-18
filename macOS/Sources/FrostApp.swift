@@ -397,14 +397,24 @@ import IOKit.ps
         applyPreferences();updateEdges()
     }
     @objc private func adjustWeather(){
-        MacWeatherTuning().open(volume:volume,depth:settings.integer(forKey:"snowDepth"),wind:Int(weatherControls.wind)) { values in
+        let rows:[MacSceneSliders.Row]=[("Weather volume","snowVolume","%",volume,0,400),
+            ("Drift depth","snowDepth"," pt",settings.integer(forKey:"snowDepth"),24,320),
+            ("Wind","weatherWind","",Int(weatherControls.wind),-80,80)]
+        MacSceneSliders().open("Adjust weather",rows:rows) { values in
             for (key,value) in values {self.settings.set(value,forKey:key)}
             self.applyPreferences()
         }
     }
     @objc private func wakeSnowmen(){
         guard let scene=currentScene else{return}
-        _=scene.view.world.wakeSnowmen();scene.view.needsDisplay=true;startFrames()
+        if !scene.view.world.wakeSnowmen() {
+            let notice=NSAlert();notice.messageText="Bring a snowman to the fight"
+            notice.informativeText="Stack three snowballs, open a snowman gift, or send visiting snowmen. When a snowman is standing on your desktop, choose Wake the snowmen."
+            notice.addButton(withTitle:"Send snowmen");notice.addButton(withTitle:"Close")
+            NSApp.activate(ignoringOtherApps:true)
+            if notice.runModal() == .alertFirstButtonReturn {scene.view.visitors.summon(.snowmen,in:scene.view.world)}
+        }
+        scene.view.needsDisplay=true;startFrames()
     }
     @objc private func blizzard(){
         for scene in scenes.values where scene.panel.isVisible {

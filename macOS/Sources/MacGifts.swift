@@ -2,7 +2,7 @@ import AppKit
 
 extension SnowWorld {
     var latestSnowmanGift: FrostGift? {
-        guard let figure=snowmen.last else {return nil}
+        guard let figure=preferredSnowman else {return nil}
         var gift=FrostGift()
         gift.kind = .snowman;gift.style=figure.style;gift.facing=Double(figure.facing)
         gift.size=Double(figure.base);gift.mid=Double(figure.middle);gift.head=Double(figure.head)

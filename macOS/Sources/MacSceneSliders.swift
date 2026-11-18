@@ -1,6 +1,7 @@
 import AppKit
 
-@MainActor final class MacWeatherTuning: NSObject {
+@MainActor final class MacSceneSliders: NSObject {
+    typealias Row=(label:String,key:String,suffix:String,initial:Int,minimum:Int,maximum:Int)
     private final class Setting {
         let key:String, suffix:String
         let slider:NSSlider, value=NSTextField(labelWithString:"")
@@ -11,13 +12,9 @@ import AppKit
         var current:Int {Int(slider.doubleValue.rounded())}
     }
     private var fields=[Setting]()
-    func open(volume:Int,depth:Int,wind:Int,save:([String:Int])->Void) {
+    func open(_ title:String,rows:[Row],save:([String:Int])->Void) {
         let form=NSStackView();form.orientation = .vertical;form.alignment = .leading;form.spacing=8
-        for (label,key,suffix,initial,lo,hi) in [
-            ("Weather volume","snowVolume","%",volume,0,400),
-            ("Drift depth","snowDepth"," pt",depth,24,320),
-            ("Wind","weatherWind","",wind,-80,80)
-        ] {
+        for (label,key,suffix,initial,lo,hi) in rows {
             let field=Setting(key:key,suffix:suffix,value:initial,minimum:lo,maximum:hi)
             fields.append(field);field.slider.target=self;field.slider.action=#selector(changed(_:))
             field.slider.isContinuous=true;field.slider.setAccessibilityLabel(label)
@@ -31,7 +28,7 @@ import AppKit
             field.value.widthAnchor.constraint(equalToConstant:58).isActive=true
         }
         defer{fields.removeAll()}
-        let prompt=NSAlert();prompt.messageText="Adjust weather";prompt.addButton(withTitle:"Apply");prompt.addButton(withTitle:"Cancel")
+        let prompt=NSAlert();prompt.messageText=title;prompt.addButton(withTitle:"Apply");prompt.addButton(withTitle:"Cancel")
         form.frame=NSRect(origin:.zero,size:form.fittingSize);prompt.accessoryView=form
         NSApp.activate(ignoringOtherApps:true)
         if prompt.runModal() == .alertFirstButtonReturn {

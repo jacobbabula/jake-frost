@@ -52,8 +52,8 @@ enum MacVisitorKind: String, CaseIterable {
     private func value(_ kind: MacVisitorKind, _ setting: String) -> Int {
         let key = "visitors.\(kind.rawValue).\(setting)"
         if let stored = settings.object(forKey:key) as? NSNumber {
-            let options = setting == "size" ? Self.sizes : [0,1,2]
-            if options.contains(stored.intValue) { return stored.intValue }
+            let allowed = setting == "size" ? 50...250 : 0...2
+            if allowed.contains(stored.intValue) { return stored.intValue }
         }
         return setting == "size" ? 100 : 0
     }
@@ -86,10 +86,21 @@ enum MacVisitorKind: String, CaseIterable {
         visitors.addItem(automatic)
         for setting in ["size","speed"] {
             let section = submenu(setting == "size" ? "Visitor sizes" : "Visitor speeds", in:visitors)
+            if setting=="size" {
+                section.addItem(withTitle:"Adjust sizes…",action:#selector(adjustSizes),keyEquivalent:"").target=self
+            } else {
+                let all=submenu("All visitors",in:section)
+                for (index,label) in Self.speeds.enumerated() {
+                    let item=all.addItem(withTitle:label,action:#selector(setAllSpeeds(_:)),keyEquivalent:"")
+                    item.target=self;item.tag=index
+                    item.state=MacVisitorKind.allCases.allSatisfy{value($0,"speed")==index} ? .on:.off
+                }
+            }
+            section.addItem(.separator())
             for kind in MacVisitorKind.allCases {
                 let options = submenu(kind.rawValue, in:section)
                 let selected = value(kind,setting)
-                for index in (setting == "size" ? Self.sizes : [0,1,2]) {
+                for index in (setting == "size" ? Set(Self.sizes+[selected]).sorted() : [0,1,2]) {
                     let title = setting == "size" ? "\(index)%" : Self.speeds[index]
                     let entry = NSMenuItem(title:title, action:#selector(selectOption(_:)), keyEquivalent:"")
                     entry.target = self
@@ -103,12 +114,26 @@ enum MacVisitorKind: String, CaseIterable {
     @objc private func send(_ item:NSMenuItem) {
         if let kind = item.representedObject as? MacVisitorKind { summon(kind);onManualVisit?() }
     }
+    @objc private func adjustSizes() {
+        let rows:[MacSceneSliders.Row]=MacVisitorKind.allCases.map { kind in
+            (kind.rawValue,"visitors."+kind.rawValue+".size","%",value(kind,"size"),50,250)
+        }
+        MacSceneSliders().open("Visitor sizes",rows:rows) { values in
+            for (key,size) in values {self.settings.set(size,forKey:key)}
+            self.visitorItem=nil;self.onChange()
+        }
+    }
+    @objc private func setAllSpeeds(_ item:NSMenuItem) {
+        for kind in MacVisitorKind.allCases {settings.set(item.tag,forKey:"visitors."+kind.rawValue+".speed")}
+        visitorItem=nil;onChange()
+    }
     @objc private func selectOption(_ item:NSMenuItem) {
         guard let choice = item.representedObject as? Choice else { return }
         settings.set(choice.value,forKey:"visitors.\(choice.kind.rawValue).\(choice.setting)")
         if let siblings = item.menu?.items {
             for sibling in siblings { sibling.state = sibling === item ? .on : .off }
         }
+        visitorItem=nil
         onChange()
     }
 }
@@ -198,6 +223,7 @@ enum MacVisitorKind: String, CaseIterable {
     }
     func step(_ seconds: TimeInterval, world: SnowWorld) {
         world.battlePace=speeds[.snowmen] ?? 1
+        world.battleScale=scales[.snowmen] ?? 1
         guard !active.isEmpty else { return }
         let dt = CGFloat(max(0,min(0.1,seconds)))
         for v in active {

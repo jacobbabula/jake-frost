@@ -220,6 +220,12 @@ final class SnowWorld {
     private(set) var fragments = [MacSnowFragment]()
     let battle = MacSnowBattle()
     var battlePace:CGFloat = 1
+    var battleScale:CGFloat = 1
+    private weak var lastTouched:BuiltSnowman?
+    var preferredSnowman:BuiltSnowman? {
+        if let m=lastTouched,!m.guest,snowmen.contains(where:{$0===m}) {return m}
+        return snowmen.last{!$0.guest}
+    }
     var hasMotion: Bool {
         (!paused && snowEnabled && (amount > 0 || !particles.isEmpty)) || powderCount > 0 ||
             (!paused && battle.active) || !fragments.isEmpty || balls.contains { ($0.support == nil || $0.vx != 0) && $0.below == nil } || snowmen.contains { $0.support == nil }
@@ -539,7 +545,7 @@ final class SnowWorld {
     @discardableResult func down(_ p:CGPoint,at t:TimeInterval)->Bool {
         cancel()
         if let figure=snowmen.reversed().first(where:{$0.contains(p)}) {
-            heldSnowman=figure;start=p;ballOffset=CGPoint(x:figure.x-p.x,y:figure.foot-p.y)
+            heldSnowman=figure;lastTouched=figure;start=p;ballOffset=CGPoint(x:figure.x-p.x,y:figure.foot-p.y)
             figure.support=nil;figure.vy=0;figure.vx=0;figure.thrown=false;last=p;samples=[(p,t)];return true
         }
         let b=ball(p), d=snowyBank(p)
@@ -667,6 +673,7 @@ final class SnowWorld {
     func crumble(_ m:BuiltSnowman,vx:CGFloat,vy:CGFloat,contact:Drift?=nil) {
         guard let i=snowmen.firstIndex(where:{$0===m}) else{return}
         snowmen.remove(at:i)
+        if lastTouched===m {lastTouched=nil}
         let floor=contact ?? intercept(x:m.x,previous:m.foot-2,next:m.foot+2)
         let base=m.foot-m.base,middle=base-0.78*(m.base+m.middle),head=middle-0.78*(m.middle+m.head)
         let speed=hypot(vx,vy)

@@ -83,18 +83,26 @@ import AppKit
     let suspendedSled=sleds.add(at:CGPoint(x:400,y:306),world:world)
     view.visitors.pushWorkshop={ blade in workshop.plow(blade);sleds.plow(blade,world:world) }
     view.visitors.summon(.snowplow,in:world)
-    for _ in 0..<450 {
-        world.step(1.0/30);view.visitors.step(1.0/30,world:world);_=sleds.step(1.0/30,world:world);workshop.sync(world:world)
+    func advance(_ n:Int) {
+        for _ in 0..<n {
+            world.step(1.0/30);view.visitors.step(1.0/30,world:world)
+            _=sleds.step(1.0/30,world:world);workshop.step(1.0/30);workshop.sync(world:world)
+        }
     }
-    func piece(_ old:WorkshopPiece) -> WorkshopPiece {workshop.pieces.first(where:{$0.id==old.id})!}
-    let movedTree=piece(tree),onTree=piece(ornament)
+    advance(355)
+    func piece(_ old:WorkshopPiece) -> WorkshopPiece? {workshop.pieces.first(where:{$0.id==old.id})}
     check(ball.x>150 && figure.x>190 && sled.x>432,"the blade pushes loose snowballs, completed snowmen and desktop sleds")
-    check(movedTree.center.x>220 && piece(present).center.x>275 && onTree.attachment?.tree==tree.id &&
-          abs((onTree.center.x-movedTree.center.x)-(ornament.center.x-tree.center.x))<0.05,
-          "trees move with their ornaments and the plow pushes standalone ground decorations")
-    check(piece(lowWire).center.x>lowWire.center.x+10 && piece(highWire).center==highWire.center,
+    if let movedTree=piece(tree),let onTree=piece(ornament),let movedPresent=piece(present) {
+        check(movedTree.center.x>220 && movedPresent.center.x>275 && onTree.attachment?.tree==tree.id &&
+              abs((onTree.center.x-movedTree.center.x)-(ornament.center.x-tree.center.x))<0.05,
+              "trees move with their ornaments and the plow pushes standalone ground decorations")
+    } else {check(false,"the plow keeps swept decorations visible along the lane")}
+    check((piece(lowWire)?.center.x ?? 0)>lowWire.center.x+10 && piece(highWire)?.center==highWire.center,
           "contact with the visible lower wire moves the strand while overhead lights stay put")
-    check(piece(mounted).center==mounted.center && piece(floating).center==floating.center && abs(suspendedSled.x-400)<0.1,
+    advance(330)
+    check([tree,ornament,present,lowWire].allSatisfy{piece($0)==nil},
+          "the plow drives contacted ground decorations and attached ornaments completely off screen")
+    check(piece(mounted)?.center==mounted.center && piece(floating)?.center==floating.center && abs(suspendedSled.x-400)<0.1,
           "window-mounted decorations and sleds and floating artwork outside the blade remain in place")
     return passed
 }

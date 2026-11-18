@@ -45,6 +45,7 @@ struct WorkshopPiece: Codable {
     var firstPin: WirePin?
     var lastPin: WirePin?
     var trim: Int { treeTrim ?? 7 }
+    var displayedTreePalette: Int { treePalette.flatMap { (0...2).contains($0) ? $0 : nil } ?? 1 }
 
     func wirePoint(_ t: CGFloat) -> CGPoint {
         let u = (t - 0.5) * span
@@ -969,7 +970,7 @@ extension MacWorkshop {
     }
     func rememberTreeDefaults() {
         guard let p=designedTree else{return}
-        settings?.set(p.trim,forKey:"newTreeTrim");settings?.set(p.treePalette ?? 1,forKey:"newTreePalette")
+        settings?.set(p.trim,forKey:"newTreeTrim");settings?.set(p.displayedTreePalette,forKey:"newTreePalette")
     }
     @discardableResult func hang(_ kind:WorkshopKind)->Bool {
         guard pieces.count<Self.limit,kind.giftOrnamentID != nil,let tree=designedTree else{return false}
@@ -987,7 +988,7 @@ extension MacWorkshop {
     private func drawSymbol(_ piece:WorkshopPiece,in c:CGContext) {
         WorkshopSymbol.forKind(piece.kind).draw()
         if piece.kind == .tree {
-            MacTreeLights.draw(trim:piece.trim,palette:piece.treePalette ?? 1,time:twinkleEnabled ? clock:nil,in:c)
+            MacTreeLights.draw(trim:piece.trim,palette:piece.displayedTreePalette,time:twinkleEnabled ? clock:nil,in:c)
         }
     }
     func drawPreview(in rect:CGRect) {

@@ -30,11 +30,11 @@ final class MacSnowBattle {
     }
     func start(in world:SnowWorld)->Bool {
         end(in:world)
-        guard let anchor=world.snowmen.last(where:world.availableForPlay) else{return false}
+        guard let anchor=world.preferredSnowman.flatMap({world.availableForPlay($0) ? $0:nil}) ?? world.snowmen.last(where:world.availableForPlay) else{return false}
         let local=world.snowmen.filter{world.availableForPlay($0) && abs($0.x-anchor.x)<850 && abs($0.foot-anchor.foot)<240}
             .sorted{abs($0.x-anchor.x)<abs($1.x-anchor.x)}
         var cast=Array(local.prefix(6))
-        let radius=max(14,min(36,anchor.base*0.42+15)),center=max(min(world.size.width/2,200),min(anchor.x,max(world.size.width/2,world.size.width-200)))
+        let radius=max(14,min(36,(anchor.base*0.42+15)*world.battleScale)),center=max(min(world.size.width/2,200),min(anchor.x,max(world.size.width/2,world.size.width-200)))
         let span=min(world.size.width*0.43,285)
         while cast.count<4 {
             var bestSpace:CGFloat = -1,bestX=center

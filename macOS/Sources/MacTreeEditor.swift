@@ -125,7 +125,7 @@ import AppKit
         }
         if tree==nil {choice.select(nil)}
         let trim=tree?.trim ?? 7
-        palette.selectItem(at:max(0,min(2,tree?.treePalette ?? 1)))
+        palette.selectItem(at:tree?.displayedTreePalette ?? 1)
         baubles.state=trim & 1 != 0 ? .on:.off; lights.state=trim & 2 != 0 ? .on:.off
         twinkle.state=trim & 4 != 0 ? .on:.off
         twinkle.isEnabled=tree != nil && owner.twinkleEnabled && lights.state == .on

@@ -39,6 +39,15 @@ import AppKit
     man.support=nil;man.foot-=130;advance(fall,230)
     check(fall.snowmen.isEmpty && fall.banks[0].depth.reduce(0,+)>65,
           "a long fall fractures each of the snowman's original three sections into snow")
+    let throwMan=scene([shelf]);throwMan.dropVisitorSnowman(at:330,scale:1.5)
+    guard let thrown=throwMan.snowmen.first else{return false}
+    let grip=CGPoint(x:thrown.x,y:thrown.foot-thrown.base),raised=CGPoint(x:345,y:115)
+    _=throwMan.down(grip,at:0);throwMan.drag(raised,at:0.9)
+    throwMan.up(CGPoint(x:360,y:154),at:0.95)
+    check(thrown.thrown,"releasing a lifted snowman quickly supplies throw velocity")
+    advance(throwMan,275)
+    check(throwMan.snowmen.isEmpty && throwMan.banks[1].depth.reduce(0,+)>shelfMass*4,
+          "a thrown full-size snowman builds a deeper drift on impact than a single ball")
     let fight=scene();fight.dropVisitorSnowman(at:300,scale:1)
     let awake=fight.wakeSnowmen()
     check(awake && fight.battle.players.count>=4 && fight.snowmen.filter{!$0.guest}.count==1,
@@ -66,5 +75,12 @@ import AppKit
     visitors.clear();visitors.summon(.snowmen,in:view.world)
     for _ in 0..<410 {visitors.step(1.0/30,world:view.world)}
     check(view.world.snowmen.contains{!$0.guest && $0.support==0},"visiting snowmen leave a playable figure in the scene")
+    visitors.clear();visitors.summon(.yeti,in:view.world)
+    var waved=false
+    for _ in 0..<620 {
+        visitors.step(1.0/30,world:view.world)
+        waved=waved || visitors.yetis.contains{$0.greeted}
+    }
+    check(waved && view.world.snowmen.count==1,"a Yeti coming the other way stops to greet an existing snowman")
     return runMacSnowGalleryIfRequested() && passed
 }
