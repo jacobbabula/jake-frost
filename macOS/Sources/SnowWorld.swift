@@ -81,8 +81,7 @@ final class SnowWorld {
         let first = size == .zero
         size = newSize
         let floor = SnowEdge(id: 0, x: 0, y: size.height, width: size.width, visible: [0...size.width])
-        // Keep recently covered window banks while the window remains reported on this screen
-        // only through its visible segments. Removing a window also frees its snow.
+        // Keep the snow on each exposed window as its position and size change.
         var next = [UInt32:Drift]()
         for edge in [floor] + edges {
             if let bank = byID[edge.id] { bank.move(to: edge); next[edge.id]=bank }
@@ -120,7 +119,7 @@ final class SnowWorld {
     private func row(_ y: CGFloat) -> Int {
         max(0, min(collisionRows.count - 1, Int(y / Self.rowHeight)))
     }
-    private func intercept(x:CGFloat, previous:CGFloat, next:CGFloat) -> Drift? {
+    func intercept(x:CGFloat, previous:CGFloat, next:CGFloat) -> Drift? {
         var bank: Drift?, earliest = CGFloat.greatestFiniteMagnitude
         let first = row(previous), last = row(next)
         // A normal flake crosses at most one row boundary. Keep the original bank
@@ -141,18 +140,7 @@ final class SnowWorld {
             spawnBudget += dt*amount*size.width*0.023
             while spawnBudget>=1 { if particles.count<1600 {spawn(randomHeight:false)};spawnBudget-=1 }
         }
-        if !paused || powderCount > 0 {
-        for i in particles.indices.reversed() {
-            var p=particles[i]; if paused && !p.powder {continue}
-            let previous=p.y
-            if p.powder {p.vy+=170*dt;p.life-=dt} else {p.phase+=dt;p.x+=sin(p.phase)*11*dt}
-            p.x+=p.vx*dt;p.y+=p.vy*dt
-            if !p.powder, let d=intercept(x:p.x,previous:previous,next:p.y) {
-                d.add(at:p.x,amount:0.28+p.radius*0.25);removeParticle(at:i)
-            } else if p.y>size.height+6 || p.life<=0 || p.x < -15 || p.x>size.width+15 {removeParticle(at:i)}
-            else {particles[i]=p}
-        }
-        }
+        if !paused || powderCount > 0 { stepParticles(dt) }
         for i in balls.indices.reversed() {
             let b=balls[i]; if b===held {continue}
             if let id=b.support,let d=byID[id] {
@@ -169,6 +157,18 @@ final class SnowWorld {
                     b.x=min(max(b.radius,b.x),size.width-b.radius);rest(b,on:floor)
                 }
             }
+        }
+    }
+    private func stepParticles(_ dt:CGFloat) {
+        for i in particles.indices.reversed() {
+            var p=particles[i]; if paused && !p.powder {continue}
+            let previous=p.y
+            if p.powder {p.vy+=170*dt;p.life-=dt} else {p.phase+=dt;p.x+=sin(p.phase)*11*dt}
+            p.x+=p.vx*dt;p.y+=p.vy*dt
+            if !p.powder, let d=intercept(x:p.x,previous:previous,next:p.y) {
+                d.add(at:p.x,amount:0.28+p.radius*0.25);removeParticle(at:i)
+            } else if p.y>size.height+6 || p.life<=0 || p.x < -15 || p.x>size.width+15 {removeParticle(at:i)}
+            else {particles[i]=p}
         }
     }
     private func removeParticle(at index:Int) {

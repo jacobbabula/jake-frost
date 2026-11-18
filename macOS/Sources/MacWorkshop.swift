@@ -34,14 +34,18 @@ struct WorkshopPiece: Codable {
     private var size = CGSize.zero
     private var mounts: [UUID:Mount] = [:]
     private var extents: [UUID:CGRect] = [:]
-    private var wires: [UUID: (NSImage,CGRect)] = [:]
+    private struct Paint {let path:CGPath;let color:CGColor}
+    private var wires: [UUID: [Paint]] = [:]
     private var pending: WorkshopKind?, gesture: Gesture?
-    private enum PlayTool {case pile, sled}
+    private enum PlayTool {case pile, sled, push}
     private var playTool:PlayTool?, brushPoint:CGPoint?
     private var puffClock:TimeInterval=0
     private let sleds=MacSledField()
     private(set) var pieces: [WorkshopPiece] = []
-    private(set) var editing = false
+    var onEditingChanged: (() -> Void)?
+    private(set) var editing = false {
+        didSet { if editing != oldValue {onEditingChanged?()} }
+    }
     private(set) var selected: UUID?
     private var index: Int? { pieces.firstIndex { $0.id == selected } }
     var isDragging: Bool { gesture != nil || brushPoint != nil || sleds.isDragging }
@@ -136,12 +140,14 @@ struct WorkshopPiece: Codable {
     }
     func beginPlacement(_ kind:WorkshopKind) {
         guard pieces.count < Self.limit else{return}
-        cancelGesture(); playTool=nil;editing=true; pending=kind; selected=nil; invalidate?()
+        resetTools();pending=kind;editing=true;invalidate?()
     }
-    func arrange() {cancelGesture();playTool=nil;pending=nil;editing=true;invalidate?()}
-    func finishEditing() {cancelGesture();playTool=nil;pending=nil;selected=nil;editing=false;invalidate?()}
-    @objc func beginPiling() {finishEditing();playTool = .pile;editing=true;invalidate?()}
-    @objc func placeSled() {finishEditing();playTool = .sled;editing=true;invalidate?()}
+    private func resetTools() {cancelGesture();playTool=nil;pending=nil;selected=nil}
+    func arrange() {resetTools();editing=true;invalidate?()}
+    func finishEditing() {resetTools();editing=false;invalidate?()}
+    @objc func beginPiling() {resetTools();playTool = .pile;editing=true;invalidate?()}
+    @objc func placeSled() {resetTools();playTool = .sled;editing=true;invalidate?()}
+    @objc private func pushSleds() {resetTools();playTool = .push;editing=true;invalidate?()}
     func clear() {
         pending=nil;gesture=nil;editing=false;selected=nil;playTool=nil;brushPoint=nil;sleds.clear()
         pieces.removeAll();mounts.removeAll();extents.removeAll();wires.removeAll()
@@ -194,18 +200,20 @@ struct WorkshopPiece: Codable {
         return nil
     }
     func captures(_ point:CGPoint)->Bool {
-        playTool != nil || isDragging || (editing && (pending != nil || action(at:point) != nil)) || sleds.captures(point)
+        if isDragging {return true}
+        if playTool == .push {return sleds.captures(point)}
+        return editing && (playTool != nil || pending != nil || action(at:point) != nil)
     }
     @discardableResult func down(_ point:CGPoint)->Bool {
         if let tool=playTool,let w=world {
-            if tool == .sled {
-                _=sleds.add(at:point,world:w);playTool=nil;editing=false
-            } else {brushPoint=point;puffClock=0;pile(at:point,amount:3.4,world:w)}
+            switch tool {
+            case .sled: _=sleds.add(at:point,world:w);playTool = .push
+            case .push: return sleds.down(point,time:ProcessInfo.processInfo.systemUptime)
+            case .pile: brushPoint=point;puffClock=0;pile(at:point,amount:3.4,world:w)
+            }
             invalidate?();return true
         }
-        if !editing || (pending==nil && action(at:point)==nil) {
-            return sleds.down(point,time:ProcessInfo.processInfo.systemUptime)
-        }
+        guard editing else{return false}
         if let kind=pending {
             guard pieces.count<Self.limit else{pending=nil;return false}
             pending=nil
@@ -310,41 +318,38 @@ struct WorkshopPiece: Codable {
     private static func color(_ rgb:Int, _ alpha:CGFloat=1)->CGColor {
         CGColor(red:CGFloat(rgb>>16)/255,green:CGFloat((rgb>>8)&255)/255,blue:CGFloat(rgb&255)/255,alpha:alpha)
     }
-    private func strand(_ p:WorkshopPiece)->(NSImage,CGRect) {
+    private func strand(_ p:WorkshopPiece)->[Paint] {
         if let existing=wires[p.id] {return existing}
-        // Cache in strand-local coordinates; moving the wire reuses its rendering.
+        // Cache each color as one compound path. A long diagonal wire costs as much
+        // as a horizontal one; its empty bounding rectangle consumes no bitmap memory.
         var local=p;local.center = .zero
         let a=local.wirePoint(0), b=local.wirePoint(1)
         let wire=CGMutablePath();wire.move(to:a);wire.addQuadCurve(to:b,control:CGPoint(x:0,y:2*local.sag))
-        let margin=14*p.scale+3
-        let bounds=wire.boundingBoxOfPath.insetBy(dx:-margin,dy:-margin).integral
         let palette=Self.bulbs[p.palette]
-        let image=NSImage(size:bounds.size,flipped:true) { _ in
-            guard let c=NSGraphicsContext.current?.cgContext else{return false}
-            c.saveGState();defer{c.restoreGState()}
-            c.translateBy(x:-bounds.minX,y:-bounds.minY)
-            c.addPath(wire);c.setStrokeColor(Self.color(0x203D42));c.setLineWidth(2);c.strokePath()
-            let count=min(65,max(4,Int((local.span+abs(local.sag)*0.45)/max(11,19*p.scale))))
-            for i in 0..<count {
-                let q=local.wirePoint((CGFloat(i)+0.5)/CGFloat(count)),r=3.1*p.scale
-                let bulb=CGRect(x:q.x-r,y:q.y+r*0.8,width:2*r,height:r*2.5)
-                let rgb=palette[i%palette.count]
-                c.setFillColor(Self.color(rgb,0.16));c.fillEllipse(in:bulb.insetBy(dx:-r*0.7,dy:-r*0.6))
-                c.setFillColor(Self.color(0x2A4D50));c.fill(CGRect(x:q.x-r*0.43,y:q.y,width:r*0.86,height:r*1.15))
-                c.setFillColor(Self.color(rgb));c.fillEllipse(in:bulb)
-                c.setFillColor(Self.color(0xFFF5DF,0.95));c.fillEllipse(in:CGRect(x:q.x-0.48*r,y:q.y+1.23*r,width:0.55*r,height:0.85*r))
-            }
-            return true
+        let sockets=CGMutablePath(), glints=CGMutablePath()
+        let glass=palette.map {_ in CGMutablePath()}, haloes=palette.map {_ in CGMutablePath()}
+        let count=min(65,max(4,Int((local.span+abs(local.sag)*0.45)/max(11,19*p.scale))))
+        for i in 0..<count {
+            let q=local.wirePoint((CGFloat(i)+0.5)/CGFloat(count)),r=3.1*p.scale,j=i%palette.count
+            let bulb=CGRect(x:q.x-r,y:q.y+r*0.8,width:2*r,height:r*2.5)
+            haloes[j].addEllipse(in:bulb.insetBy(dx:-r*0.7,dy:-r*0.6));glass[j].addEllipse(in:bulb)
+            sockets.addRect(CGRect(x:q.x-r*0.43,y:q.y,width:r*0.86,height:r*1.15))
+            glints.addEllipse(in:CGRect(x:q.x-0.48*r,y:q.y+1.23*r,width:0.55*r,height:0.85*r))
         }
-        image.cacheMode = .always
-        let render=(image,bounds);wires[p.id]=render;return render
+        var paths=[Paint(path:wire.copy(strokingWithWidth:2,lineCap:.round,lineJoin:.round,miterLimit:3),color:Self.color(0x203D42))]
+        for j in palette.indices {paths.append(Paint(path:haloes[j],color:Self.color(palette[j],0.16)))}
+        paths.append(Paint(path:sockets,color:Self.color(0x2A4D50)))
+        for j in palette.indices {paths.append(Paint(path:glass[j],color:Self.color(palette[j])))}
+        paths.append(Paint(path:glints,color:Self.color(0xFFF5DF,0.95)))
+        wires[p.id]=paths;return paths
     }
     func draw() {
         guard let c=NSGraphicsContext.current?.cgContext else{return}
         for p in pieces {
             if p.kind == .lights {
-                let (image,bounds)=strand(p)
-                image.draw(in:bounds.offsetBy(dx:p.center.x,dy:p.center.y),from:.zero,operation:.sourceOver,fraction:1,respectFlipped:true,hints:nil)
+                c.saveGState();c.translateBy(x:p.center.x,y:p.center.y)
+                for ink in strand(p) {c.setFillColor(ink.color);c.addPath(ink.path);c.fillPath()}
+                c.restoreGState()
             } else {
                 c.saveGState();c.translateBy(x:p.center.x,y:p.center.y);c.rotate(by:p.angle);c.scaleBy(x:p.scale,y:p.scale)
                 WorkshopSymbol.forKind(p.kind).draw();c.restoreGState()
@@ -389,7 +394,7 @@ struct WorkshopPiece: Codable {
         }
         list.addItem(.separator())
         let edit=item("Arrange decorations",#selector(startArranging));edit.isEnabled = !pieces.isEmpty
-        edit.state=editing && pending==nil ? .on : .off
+        edit.state=editing && pending==nil && playTool==nil ? .on : .off
         if let i=index,editing {
             let p=pieces[i]
             if p.kind == .lights {
@@ -413,6 +418,8 @@ struct WorkshopPiece: Codable {
         pile.target=self;pile.state=playTool == .pile ? .on : .off;tools.addItem(pile)
         let sled=NSMenuItem(title:"Place a sled",action:#selector(placeSled),keyEquivalent:"")
         sled.target=self;sled.state=playTool == .sled ? .on : .off;tools.addItem(sled)
+        let push=NSMenuItem(title:"Push existing sleds",action:#selector(pushSleds),keyEquivalent:"")
+        push.target=self;push.isEnabled = !sleds.sleds.isEmpty;push.state=playTool == .push ? .on : .off;tools.addItem(push)
         let stop=NSMenuItem(title:"Done playing",action:#selector(endArranging),keyEquivalent:"")
         stop.target=self;stop.isEnabled=playTool != nil || brushPoint != nil;tools.addItem(stop)
     }

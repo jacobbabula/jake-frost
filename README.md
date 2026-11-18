@@ -24,9 +24,14 @@ For automatic deliveries between two Windows PCs, expand **Friends → Shared-fo
 
 ## Play on the desktop
 
-**Mac preview.** Flakes settle on exposed window ledges and above the Dock. Drag a drift to roll a ball, then flick and release to throw it. The snowflake menu offers three snowfall levels, pause, clear, and gifts.
+**Mac preview.** Open the snowflake menu to play on the display under your pointer.
 
-**Windows.** The full workshop includes decorations, visitors, sleds and seasonal weather.
+- **Decorate** lets you plant a Christmas tree, hang colorful lights or place seven other decorations. Select **Arrange decorations** to move, rotate or resize a piece. Drag the two ends of a light strand independently and pull its center to set the sag. Your decorations are saved per display.
+- **Play on the snow** lets you pile a snow hill and place a sled. Push the sled or drag and release it to send it downhill. You can also grab snow on exposed window ledges or above the Dock, roll a snowball, and flick it to throw.
+- **Visitors** sends the snowplow, Yeti, Santa and reindeer, visiting snowmen or elf train. Choose a size and speed for each visitor. The plow clears a path through accumulated snow.
+- The help window and gift composer fold where they stand when you choose a desktop tool. **Done** restores them with your draft intact. You can also fold a panel yourself with the yellow button or **⌘M**, then click **Restore** when you want it back.
+
+**Windows.** Click **−** in the Jake Frost panel to leave a compact bar at its current position. Choosing a desktop tool does the same automatically. **Tools…** switches tools, **Done** returns to the full panel, and **Restore** reopens a manually minimized panel. The **×** still hides Jake Frost in the system tray.
 
 - Grab snow on a window ledge or above the taskbar. Drag it to roll a ball, flick to throw, or gently stack three balls to build a snowman.
 - Open **Workshop** to puff snow, pile up a hill, or push a sled down it. **Done** or **Esc** ends desktop editing.

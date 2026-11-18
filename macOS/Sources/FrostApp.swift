@@ -23,7 +23,8 @@ import AppKit
     private var timer:Timer?
     private var lastTick=ProcessInfo.processInfo.systemUptime
     private var nextEdges:TimeInterval=0
-    private var welcome:NSPanel?
+    private var welcome:AnchoredPanel?
+    private var workshopActive = false
     private var receivedDocument=false
     private var awake=true
     private var snowfall:Int {settings.integer(forKey:"snowfall")}
@@ -122,14 +123,23 @@ import AppKit
             else {
                 let scene=ScreenScene(frame:frame)
                 scene.view.workshop.configure(settings:settings,displayID:id)
+                scene.view.workshop.onEditingChanged = { [weak self] in self?.updateWorkshopPanels() }
                 scenes[id]=scene
             }
         }
         applyPreferences();updateEdges()
+        updateWorkshopPanels()
         if interrupted {gifts.retryUndelivered()}
     }
     private func displayID(_ screen:NSScreen)->UInt32? {
         (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+    }
+    private func updateWorkshopPanels() {
+        let editing = scenes.values.contains { $0.view.workshop.editing }
+        guard workshopActive != editing else { return }
+        workshopActive = editing
+        welcome?.setWorkshopEditing(editing)
+        gifts.setWorkshopEditing(editing)
     }
     private func updateEdges(){
         guard let primary=NSScreen.screens.first else{return}
@@ -199,7 +209,7 @@ import AppKit
     @objc private func quitApp(){NSApp.terminate(nil)}
     @objc private func showWelcome() {
         settings.set(true,forKey:"welcomed")
-        if let panel=welcome {NSApp.activate(ignoringOtherApps:true);(panel as? AnchoredPanel)?.expand();panel.makeKeyAndOrderFront(nil);return}
+        if let panel=welcome {NSApp.activate(ignoringOtherApps:true);panel.expand();panel.makeKeyAndOrderFront(nil);return}
         let panel=AnchoredPanel(contentRect:CGRect(x:0,y:0,width:380,height:190),title:"Jake Frost")
         let header=NSTextField(labelWithString:"Snow is falling on your Mac.")
         header.font = .systemFont(ofSize:20,weight:.semibold)

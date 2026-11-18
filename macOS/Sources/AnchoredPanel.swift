@@ -8,6 +8,7 @@ import AppKit
     private var previousHidesOnDeactivate = false
     private weak var previousFocus: NSResponder?
     private var restoreAccessory: NSTitlebarAccessoryViewController?
+    private var foldedForTool = false
     var isCollapsed: Bool { fullContent != nil }
 
     init(contentRect: NSRect, title: String) {
@@ -63,8 +64,19 @@ import AppKit
         standardWindowButton(.miniaturizeButton)?.toolTip = "Restore in place (⌘M)"
     }
     @objc private func restorePanel(_ sender:Any?) { expand() }
+    func setWorkshopEditing(_ active:Bool) {
+        if active {
+            guard isVisible, !isCollapsed, !isMiniaturized else { return }
+            collapse()
+            foldedForTool = isCollapsed
+        } else if foldedForTool {
+            foldedForTool = false
+            if isVisible { expand() }
+        }
+    }
     func expand() {
         guard let form = fullContent else { return }
+        foldedForTool = false
         let anchor = frame
         if let accessory = restoreAccessory, let index = titlebarAccessoryViewControllers.firstIndex(where:{ $0 === accessory }) {
             removeTitlebarAccessoryViewController(at:index)
@@ -115,5 +127,33 @@ import AppKit
     win.expand()
     guard anchored(win.frame,to:moved), win.contentView === form, win.frame.size == start.size else { return false }
     print("PASS: yellow button and Command-M fold in place; Restore preserves typed content and the panel's top-left anchor")
+    let alreadyFolded=AnchoredPanel(contentRect:CGRect(x:0,y:0,width:370,height:150),title:"Already folded")
+    let closed=AnchoredPanel(contentRect:CGRect(x:0,y:0,width:320,height:140),title:"Closed")
+    defer { alreadyFolded.close(); closed.close() }
+    alreadyFolded.center(); alreadyFolded.orderFront(nil); alreadyFolded.performMiniaturize(nil)
+    win.makeKeyAndOrderFront(nil)
+    let toolAnchor=win.frame, hiddenSize=closed.frame.size
+    let workshop=MacWorkshop()
+    workshop.onEditingChanged = {
+        for panel in [win,alreadyFolded,closed] { panel.setWorkshopEditing(workshop.editing) }
+    }
+    defer { workshop.onEditingChanged=nil }
+    let menu=NSMenu()
+    workshop.appendMenu(to:menu)
+    guard let tools=menu.items.compactMap({$0.submenu}).first(where:{$0.item(withTitle:"Pile snow") != nil}),
+          let tool=tools.item(withTitle:"Pile snow"), let select=tool.action else { return false }
+    _ = NSApplication.shared.sendAction(select,to:tool.target,from:tool)
+    guard win.isCollapsed,anchored(win.frame,to:toolAnchor),alreadyFolded.isCollapsed,
+          !closed.isVisible,!closed.isCollapsed else { print("FAIL: starting a workshop tool did not fold exactly the visible open forms");return false }
+    menu.removeAllItems(); workshop.appendMenu(to:menu)
+    guard let stop=menu.items.compactMap({$0.submenu}).compactMap({$0.item(withTitle:"Done playing")}).first,
+          let end=stop.action else {return false}
+    _ = NSApplication.shared.sendAction(end,to:stop.target,from:stop)
+    guard !win.isCollapsed,anchored(win.frame,to:toolAnchor),win.frame.size==toolAnchor.size,
+          note.stringValue=="First snow at the cabin",alreadyFolded.isCollapsed,
+          !closed.isVisible,closed.frame.size==hiddenSize else { print("FAIL: Done did not restore only tool-folded forms");return false }
+    workshop.beginPiling();win.close();workshop.finishEditing()
+    guard !win.isVisible else {print("FAIL: Done reopened a panel closed during editing");return false}
+    print("PASS: choosing a desktop tool folds the gift draft in place; Done restores it and respects closed or manually folded panels")
     return true
 }

@@ -3,7 +3,7 @@ import AppKit
 @MainActor final class MacGifts: NSObject {
     var deliver: ((FrostGift, @escaping () -> Void) -> Bool)?
     private var mailbox: GiftMailbox?
-    private var timer: Timer?, composer: NSPanel?, sharing: NSSharingServicePicker?
+    private var timer: Timer?, composer: AnchoredPanel?, sharing: NSSharingServicePicker?
     private var senderField = NSTextField(), noteField = NSTextField(), kindField = NSPopUpButton()
     private var shareButton = NSButton(), feedback = NSTextField(wrappingLabelWithString: "")
     private var activeID: String?, pendingReceipt: FrostGift?, replayGift: FrostGift?
@@ -147,8 +147,10 @@ import AppKit
             }
             panel.center();composer=panel
         }
-        NSApp.activate(ignoringOtherApps:true);(composer as? AnchoredPanel)?.expand();composer?.makeKeyAndOrderFront(nil);composer?.makeFirstResponder(noteField)
+        NSApp.activate(ignoringOtherApps:true);composer?.expand();composer?.makeKeyAndOrderFront(nil);composer?.makeFirstResponder(noteField)
     }
+
+    func setWorkshopEditing(_ active:Bool) { composer?.setWorkshopEditing(active) }
 
     private func composeGift() throws -> FrostGift {
         let mailbox=try box()

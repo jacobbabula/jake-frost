@@ -102,5 +102,16 @@ import AppKit
     track.up(CGPoint(x:start.x-17,y:start.y-15),time:1.08,world:world)
     check(sled.support==nil && sled.vx < -30,"a dragged sled inherits the release velocity")
     track.clear();check(track.sleds.isEmpty && !track.hasMotion,"clear removes desktop sleds and their physics")
+    var transitions:[Bool]=[]
+    workshop.onEditingChanged={transitions.append(workshop.editing)}
+    workshop.beginPiling();workshop.placeSled()
+    let placement=CGPoint(x:40,y:floor.surface(40)),seat=CGPoint(x:40,y:floor.surface(40)-8)
+    _=workshop.down(placement)
+    check(workshop.editing && workshop.captures(seat) && !workshop.captures(CGPoint(x:320,y:33)),
+          "after placement only the sled takes clicks and the play session stays open")
+    workshop.finishEditing()
+    check(!workshop.captures(seat) && transitions==[true,false],
+          "Done playing restores other apps' clicks and switches tools without reopening panels")
+    workshop.onEditingChanged=nil
     return ok
 }
