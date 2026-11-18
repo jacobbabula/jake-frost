@@ -18,7 +18,7 @@ using Forms = System.Windows.Forms;
 [assembly: AssemblyTitle("Jake Frost")]
 [assembly: AssemblyDescription("Interactive desktop snowfall")]
 [assembly: AssemblyProduct("Jake Frost")]
-[assembly: AssemblyVersion("3.4.0.0")]
+[assembly: AssemblyVersion("3.4.1.0")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8")]
 
 namespace Frostpane
@@ -368,8 +368,12 @@ namespace Frostpane
         {
             if (quitting) return;
             if (building) SetBuild(false);
-            SetCompact(false); panel.Show(); panel.WindowState=WindowState.Normal;
-            panel.Topmost=true; panel.Activate(); panel.Focus();
+            ShowPanel(false); panel.Focus();
+        }
+        private void ShowPanel(bool folded)
+        {
+            SetCompact(folded); panel.Show(); panel.WindowState=WindowState.Normal;
+            panel.Topmost=true; panel.Activate();
             ScheduleFrames();
         }
         private void ClearSnow() {
@@ -430,9 +434,7 @@ namespace Frostpane
                 if (!value) SaveDecorations(overlay);
             }
             trayBuild.Text=value?"Finish playing":"Play on desktop";
-            SetCompact(value);
-            panel.Show(); panel.Topmost=true; panel.Activate();
-            ScheduleFrames();
+            ShowPanel(value);
         }
         private void SyncMonitors()
         {

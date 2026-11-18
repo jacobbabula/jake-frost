@@ -42,6 +42,27 @@ namespace Frostpane
         internal double DisplayAngle { get { return Angle*180/Math.PI+ManualTilt; } }
         // Outer points of the runner, seat and upturned nose in sprite coordinates.
         private static readonly double[] Hull={-21,0,-18,1.5,14,1.5,22,-6,26,-10,25,-13,17,-13,-16,-13,-18,-11};
+        internal bool BladeSlice(double top,double bottom,out double left,out double right)
+        {
+            left=double.PositiveInfinity;right=double.NegativeInfinity;
+            double a=DisplayAngle*Math.PI/180,c=Math.Cos(a),s=Math.Sin(a),baseY=DisplayY;
+            double ax=0,ay=0;
+            for(int i=0;i<=Hull.Length;i+=2) {
+                double u=Facing*Hull[i%Hull.Length],v=Hull[(i+1)%Hull.Length];
+                double bx=X+c*u-s*v,by=baseY+s*u+c*v;
+                if(i!=0 && Math.Max(ay,by)>=top && Math.Min(ay,by)<=bottom) {
+                    double t0=0,t1=1;
+                    if(Math.Abs(by-ay)>.00001) {
+                        t0=Math.Max(0,Math.Min((top-ay)/(by-ay),(bottom-ay)/(by-ay)));
+                        t1=Math.Min(1,Math.Max((top-ay)/(by-ay),(bottom-ay)/(by-ay)));
+                    }
+                    double x0=ax+(bx-ax)*t0,x1=ax+(bx-ax)*t1;
+                    left=Math.Min(left,Math.Min(x0,x1));right=Math.Max(right,Math.Max(x0,x1));
+                }
+                ax=bx;ay=by;
+            }
+            return left<=right;
+        }
         internal double DisplayY {
             get {
                 if(Support==null || ManualTilt==0) return Y;

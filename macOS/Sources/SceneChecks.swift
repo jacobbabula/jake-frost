@@ -94,7 +94,8 @@ import AppKit
     let memoryOK=runMacSceneMemoryChecks()
     let playOK=runMacPlayChecks()
     let deliveryOK=runReceivedSceneGiftChecks()
-    return failures==0 && snowmenOK && visitorsOK && workshopOK && panelsOK && weatherOK && windowsOK && dressingOK && memoryOK && playOK && deliveryOK
+    let plowOK=runMacPlowContactChecks()
+    return failures==0 && snowmenOK && visitorsOK && workshopOK && panelsOK && weatherOK && windowsOK && dressingOK && memoryOK && playOK && deliveryOK && plowOK
 }
 
 @MainActor private func runBuiltSnowmanChecks() -> Bool {

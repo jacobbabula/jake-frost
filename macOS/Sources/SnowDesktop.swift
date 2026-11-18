@@ -28,6 +28,8 @@ final class SnowCanvas: NSView {
     override init(frame: NSRect) {
         super.init(frame:frame)
         workshop.invalidate = { [weak self] in self?.needsDisplay = true }
+        visitors.pushWorkshop = { [weak self] blade in self?.workshop.plow(blade) }
+        visitors.finishPlowing = { [weak self] in self?.workshop.finishPlowing() }
         giftTrain.groundY = { [weak self] x in
             guard let view=self else{return 0}
             return view.world.banks.first?.surface(x) ?? view.bounds.maxY

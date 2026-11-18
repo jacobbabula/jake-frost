@@ -162,7 +162,10 @@ namespace Frostpane
         {
             EnsureSnow();if (paused) TogglePause();
             var target=CurrentMonitor();
-            if(target!=null) panel.Hide();
+            if(target!=null) {
+                if (building) SetBuild(false);
+                ShowPanel(true);
+            }
             else {
                 OpenPage("Weather");
                 Control<Expander>("DisplayOptions").IsExpanded=true;

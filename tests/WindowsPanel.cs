@@ -152,6 +152,17 @@ public static class WindowsPanel
             CheckSize(window, monitor, full, false);
             Console.WriteLine("PASS native minimize keeps a visible compact panel on the same monitor");
 
+            foreach (string visitor in new[]{"PloughButton","YetiButton","SantaButton","SnowmenButton"}) {
+                Click(window,visitor);
+                CheckSize(window,monitor,full,true);
+                CheckButtonOnTop(window,"RestoreButton");
+                if (Control(window,"RestoreButton").Current.Name!="Restore Jake Frost")
+                    throw new Exception("The visitor bar lost its Restore command.");
+                Click(window,"RestoreButton");
+                CheckSize(window,monitor,full,false);
+            }
+            Console.WriteLine("PASS every Workshop visitor leaves a clickable Restore bar at the same position");
+
             Select(window, "Tool_Pile");
             CheckSize(window, monitor, full, true);
             CheckDesktopInput(processId, true);

@@ -16,6 +16,7 @@ namespace Frostpane
         private double angle=double.NaN;
         private DecorationKind kind;
         private Point[] bottom;
+        private double[] tops;
         private double bottomY;
         private SnowBank lastBank;
         private int lastRevision;
@@ -81,6 +82,7 @@ namespace Frostpane
             // Each narrow column stores its lowest piece of paint. Keep all extreme
             // vertices as candidates while sampling the straight segments between them.
             var columns=new Dictionary<int,Point>();
+            var ceilings=new Dictionary<int,double>();
             bottomY=double.NegativeInfinity;
             foreach(Point[] contour in contours) {
                 Point previous=rotation.Transform(contour[contour.Length-1]);
@@ -92,12 +94,18 @@ namespace Frostpane
                         int index=(int)Math.Round(p.X/Resolution);
                         Point old;
                         if(!columns.TryGetValue(index,out old) || p.Y>old.Y) columns[index]=p;
+                        double high;
+                        if(!ceilings.TryGetValue(index,out high) || p.Y<high) ceilings[index]=p.Y;
                         bottomY=Math.Max(bottomY,p.Y);
                     }
                     previous=next;
                 }
             }
-            bottom=new Point[columns.Count];columns.Values.CopyTo(bottom,0);
+            bottom=new Point[columns.Count];tops=new double[columns.Count];
+            int column=0;
+            foreach(var pair in columns) {
+                bottom[column]=pair.Value;tops[column]=ceilings[pair.Key];column++;
+            }
             angle=newAngle;kind=newKind;lastBank=null;
         }
 
@@ -118,6 +126,16 @@ namespace Frostpane
         }
 
         internal double BottomOffset(double scale) { return bottomY*scale; }
+
+        internal bool Slice(double top,double baseY,out double left,out double right)
+        {
+            left=double.PositiveInfinity;right=double.NegativeInfinity;
+            for(int i=0;i<bottom.Length;i++) {
+                if(bottom[i].Y<top || tops[i]>baseY)continue;
+                left=Math.Min(left,bottom[i].X);right=Math.Max(right,bottom[i].X);
+            }
+            return right>=left;
+        }
     }
 
     internal sealed partial class SnowScene

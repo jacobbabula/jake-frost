@@ -1,6 +1,7 @@
 param(
     [string]$SourceDirectory = (Join-Path $PSScriptRoot '..\src'),
-    [string]$OutputDirectory = [IO.Path]::GetTempPath()
+    [string]$OutputDirectory = [IO.Path]::GetTempPath(),
+    [switch]$CheckPlough
 )
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath $OutputDirectory).Path
@@ -18,6 +19,10 @@ try {
         $arguments += "/r:$framework\WPF\$name.dll"
     }
     $files = @(Get-ChildItem -LiteralPath $SourceDirectory -Filter '*.cs' | ForEach-Object FullName)
+    if ($CheckPlough) {
+        $arguments+='/define:CHECK_PLOUGH'
+        $files+=(Join-Path $PSScriptRoot 'WindowsPloughChecks.cs')
+    }
     & (Join-Path $framework 'csc.exe') @arguments @files (Join-Path $PSScriptRoot 'WindowsPerformance.cs') (Join-Path $PSScriptRoot 'WindowsFrameProbe.cs')
     if ($LASTEXITCODE -ne 0) {throw 'Windows performance probe compilation failed.'}
     & $binary $scratch

@@ -122,12 +122,16 @@ enum MacVisitorKind: String, CaseIterable {
     private var active = [Visit]()
     private var scales = [MacVisitorKind:CGFloat]()
     private var speeds = [MacVisitorKind:CGFloat]()
+    var pushWorkshop: ((PlowSweep) -> Void)?
+    var finishPlowing: (() -> Void)?
+    private var pushedFigure = false
+    private(set) var plowPose: (x:CGFloat,y:CGFloat,angle:CGFloat)?
     var isActive: Bool { !active.isEmpty }
 
     func configure(_ controls: MacVisitorControls) {
         for kind in MacVisitorKind.allCases { scales[kind] = controls.scale(for:kind); speeds[kind] = controls.pace(for:kind) }
     }
-    func clear() { active.removeAll(keepingCapacity:true) }
+    func clear() { active.removeAll(keepingCapacity:true);plowPose=nil;finishPlowing?();pushedFigure=false }
     func summon(_ kind: MacVisitorKind, in world: SnowWorld) {
         guard kind != .train, world.size.width > 1, active.count < 8 else { return }
         let scale = scales[kind] ?? 1
@@ -147,7 +151,21 @@ enum MacVisitorKind: String, CaseIterable {
             v.y = band + 5 * sin(v.distance / 65)
             v.angle = 0.027 * cos(v.distance / 65)
         } else if let ground = world.banks.first {
-            let span: CGFloat = (v.kind == .snowplow ? 19 : 6) * scale
+            if v.kind == .snowplow {
+                // Heavy tires run in the shallow lane shaved by the steel lip.
+                // Narrow untouched peaks outside that lane cannot lever the chassis up.
+                func tire(_ at:CGFloat) -> CGFloat {
+                    let shoulder=3.5*scale
+                    let packed=(ground.height(at-shoulder)+2*ground.height(at)+ground.height(at+shoulder))/4
+                    return ground.edge.y-min(1.1,max(0,packed))
+                }
+                let left=tire(v.x-19*scale), right=tire(v.x+16*scale)
+                v.angle=atan((right-left)/(35*scale))
+                v.y=(left*16+right*19)/35
+                plowPose=(v.x,v.y,v.angle)
+                return
+            }
+            let span: CGFloat = 6 * scale
             let left = ground.surface(v.x-span), right = ground.surface(v.x+span)
             v.angle = atan(max(-0.3,min(0.3,(right-left)/(span*2))))
             v.y = min(left + sin(v.angle)*span, right - sin(v.angle)*span)
@@ -159,26 +177,37 @@ enum MacVisitorKind: String, CaseIterable {
         for v in active {
             let scale = scales[v.kind] ?? 1
             let displacement = v.kind.pointsPerSecond * (speeds[v.kind] ?? 1) * dt
+            let old = CGPoint(x:v.x,y:v.y), oldAngle = v.angle
             v.x += displacement; v.distance += displacement
             if v.kind == .snowplow, let ground = world.banks.first {
-                let bladeX = v.x + 36 * scale
-                if bladeX >= 0 && bladeX <= world.size.width {
-                    let contact = ground.surface(bladeX)
-                    let removed = -ground.add(at:bladeX, amount:-displacement*scale*0.95, spread:1)
+                position(v,world:world,scale:scale)
+                var blade=PlowSweep(from:old,angle:oldAngle,to:CGPoint(x:v.x,y:v.y),angle:v.angle,
+                                    scale:scale,speed:v.kind.pointsPerSecond*(speeds[v.kind] ?? 1))
+                if blade.bounds.maxX >= 0 && old.x-27*scale <= world.size.width {
+                    let bladeX=blade.bounds.maxX,contact=ground.surface(bladeX)
+                    let removed=ground.plowLane(rear:old.x-27*scale,lip:bladeX,scale:scale)
+                    blade.carryingSnow(on:ground,scale:scale)
                     if removed > 0 {
-                        ground.add(at:bladeX+ground.spacing*1.5,amount:removed*0.21,spread:1)
                         v.powderBudget = min(12,v.powderBudget+removed*0.38)
                         let flakes = Int(v.powderBudget)
                         if flakes >= 2 {
-                            world.burst(CGPoint(x:bladeX,y:contact-1),count:flakes,strength:0.65)
+                            world.burst(CGPoint(x:bladeX,y:max(v.y-20*scale,contact-1)),count:flakes,strength:0.65)
                             v.powderBudget -= CGFloat(flakes)
                         }
                     }
+                    if world.plowObjects(blade) {pushedFigure=true}
+                    pushWorkshop?(blade)
                 }
             }
-            position(v,world:world,scale:scale)
+            if v.kind != .snowplow {position(v,world:world,scale:scale)}
         }
+        let hadPlow=plowPose != nil
         active.removeAll { $0.x + $0.kind.spriteBounds.minX * (scales[$0.kind] ?? 1) > world.size.width }
+        if hadPlow && !active.contains(where:{$0.kind == .snowplow}) {
+            plowPose=nil
+            if pushedFigure {world.rememberSnowmenNow();pushedFigure=false}
+            finishPlowing?()
+        }
     }
     func draw(in c: CGContext) {
         for visitor in active {

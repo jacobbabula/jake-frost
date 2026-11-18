@@ -65,6 +65,20 @@ import AppKit
     }
     func cancel() {held=nil;samples.removeAll();moved=false}
     func clear() {cancel();sleds.removeAll()}
+    func plow(_ blade:PlowSweep,world:SnowWorld) {
+        guard let floor=world.banks.first else {return}
+        for s in sleds where s !== held && (s.support == nil || s.support == 0) {
+            let box=CGRect(x:s.x-32,y:s.y-29,width:65,height:44)
+            guard blade.touches(box,includingSnow:s.support==0,ink:{ pt in
+                let dx=pt.x-s.x,dy=pt.y-s.y
+                let x=dx*cos(s.angle)+dy*sin(s.angle),y=dy*cos(s.angle)-dx*sin(s.angle)
+                return abs(x)<=23 && (-13 ... -6).contains(y) || abs(x)<=21 && (-3...0).contains(y)
+            }) else {continue}
+            s.x=min(max(0,world.size.width-27),s.x+blade.advance+0.6)
+            s.vx=max(s.vx,blade.speed*1.22)
+            if s.support==0 {attach(s,to:floor)}
+        }
+    }
     private func terrain(_ bank:Drift,at x:CGFloat)->(CGFloat,CGFloat) {
         let mid=bank.surface(x)
         let left=bank.edge.contains(x-halfSki) ? bank.surface(x-halfSki):mid

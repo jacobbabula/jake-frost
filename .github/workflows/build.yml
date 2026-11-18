@@ -24,7 +24,7 @@ jobs:
           Write-Host 'Jake Frost 3.3'
           .\tests\WindowsPerformance.ps1 -SourceDirectory .\baseline\src
           Write-Host 'Current release candidate'
-          .\tests\WindowsPerformance.ps1
+          .\tests\WindowsPerformance.ps1 -CheckPlough
       - name: Build the Windows app and per-user installer
         shell: powershell
         run: |
@@ -36,6 +36,19 @@ jobs:
         run: |
           .\baseline\Build.ps1 -OutputDirectory .\dist\baseline
           .\tests\WindowsStartup.ps1 -BaselineApplication .\dist\baseline\JakeFrost.exe -Application .\dist\Jake-Frost\JakeFrost.exe
+      - name: Restore the settings bar after summoning a visitor from the tray
+        shell: powershell
+        run: .\tests\WindowsVisitorMenu.ps1 -AppDirectory .\dist\Jake-Frost
+      - name: Render the Windows snowplow crossing a packed blanket and a high bank
+        shell: powershell
+        run: |
+          .\tests\WindowsPloughSheet.ps1 -SourceDirectory .\baseline\src -OutputDirectory .\dist\plough-visuals -Name previous
+          .\tests\WindowsPloughSheet.ps1 -OutputDirectory .\dist\plough-visuals -Name current
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-plough-visuals
+          path: dist/plough-visuals/*.png
+          if-no-files-found: error
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-downloads

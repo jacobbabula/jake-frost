@@ -64,7 +64,7 @@ struct WorkshopPiece: Codable {
     private var size = CGSize.zero
     private var mounts: [UUID:Mount] = [:]
     private var extents: [UUID:CGRect] = [:]
-    private struct Paint {let path:CGPath;let color:CGColor}
+    private struct Paint {let path:CGPath;let color:CGColor;var solid=true}
     private var wires: [UUID: [Paint]] = [:]
     private var pending: WorkshopKind?, gesture: Gesture?
     private enum PlayTool {case pile, puff, sled, push}
@@ -72,6 +72,7 @@ struct WorkshopPiece: Codable {
     private var playTool:PlayTool?, brushPoint:CGPoint?
     private var puffClock:TimeInterval=0
     private let sleds=MacSledField()
+    private var plowMovedDecorations=false
     private(set) var pieces: [WorkshopPiece] = []
     var onEditingChanged: (() -> Void)?
     private(set) var editing = false {
@@ -129,6 +130,52 @@ struct WorkshopPiece: Codable {
         if let data=try? JSONEncoder().encode(Saved(size:size,pieces:pieces)) {settings.set(data,forKey:key)}
     }
     func rememberLayoutNow() { save() }
+    func finishPlowing() {
+        if plowMovedDecorations {plowMovedDecorations=false;save()}
+    }
+    func plow(_ blade:PlowSweep) {
+        guard let world=world else{return}
+        sleds.plow(blade,world:world)
+        var moved=false
+        for i in pieces.indices {
+            let p=pieces[i]
+            guard p.attachment==nil,gesture?.piece.id != p.id,gesture?.piece.attachment?.tree != p.id,
+                  mounts[p.id].map({$0.id==0}) ?? true else {continue}
+            var right:CGFloat
+            if p.kind == .lights {
+                // The cached strand contains the actual wire, sockets and bulbs.
+                let local=blade.bounds.offsetBy(dx:-p.center.x,dy:-p.center.y)
+                let a=p.wirePoint(0),b=p.wirePoint(1)
+                let minX=min(a.x,b.x)-10*p.scale,maxX=max(a.x,b.x)+10*p.scale
+                let minY=min(a.y,b.y)+min(0,p.sag)-8*p.scale,maxY=max(a.y,b.y)+max(0,p.sag)+16*p.scale
+                guard blade.bounds.intersects(CGRect(x:minX,y:minY,width:maxX-minX,height:maxY-minY)) else {continue}
+                let inks=strand(p)
+                guard inks.contains(where:{ ink in
+                    guard ink.solid else {return false}
+                    let area=ink.path.boundingBoxOfPath.intersection(local)
+                    guard !area.isNull else {return false}
+                    return blade.touches(area.offsetBy(dx:p.center.x,dy:p.center.y)) { q in
+                        ink.path.contains(CGPoint(x:q.x-p.center.x,y:q.y-p.center.y))
+                    }
+                }) else {continue}
+                right=maxX
+            } else {
+                let outline=extent(p).offsetBy(dx:p.center.x,dy:p.center.y)
+                guard blade.touches(outline,includingSnow:p.onFloor,ink:{ body(p,hits:$0) }) else {continue}
+                right=outline.maxX
+            }
+            let dx=min(blade.advance+0.6,max(0,size.width-right))
+            guard dx>0 else {continue}
+            pieces[i].center.x+=dx
+            if p.onFloor || mounts[p.id]?.id == 0, let floor=world.banks.first {
+                let x=pieces[i].center.x
+                mounts[p.id]=Mount(id:0,fraction:x/floor.edge.width)
+                pieces[i].center.y=floor.surface(x)-extent(p).maxY
+            }
+            moveOrnaments(on:pieces[i]);moved=true
+        }
+        if moved {plowMovedDecorations=true;invalidate?()}
+    }
     private func extent(_ p:WorkshopPiece)->CGRect {
         if let b=extents[p.id] {return b}
         let b=WorkshopSymbol.forKind(p.kind).rotatedBounds(scale:p.scale,angle:p.angle)
@@ -522,7 +569,7 @@ struct WorkshopPiece: Codable {
             glints.addEllipse(in:CGRect(x:q.x-0.48*r,y:q.y+1.23*r,width:0.55*r,height:0.85*r))
         }
         var paths=[Paint(path:wire.copy(strokingWithWidth:2,lineCap:.round,lineJoin:.round,miterLimit:3),color:Self.color(0x203D42))]
-        for j in palette.indices {paths.append(Paint(path:haloes[j],color:Self.color(palette[j],0.16)))}
+        for j in palette.indices {paths.append(Paint(path:haloes[j],color:Self.color(palette[j],0.16),solid:false))}
         paths.append(Paint(path:sockets,color:Self.color(0x2A4D50)))
         for j in palette.indices {paths.append(Paint(path:glass[j],color:Self.color(palette[j])))}
         paths.append(Paint(path:glints,color:Self.color(0xFFF5DF,0.95)))

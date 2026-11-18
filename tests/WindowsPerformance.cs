@@ -151,6 +151,9 @@ internal static class WindowsPerformance
     public static void Main(string[] args)
     {
         if(args.Length==2 && args[0]=="--window-fixture") {WindowsFrameProbe.ShowTestWindows(args[1]);return;}
+#if CHECK_PLOUGH
+        WindowsPloughChecks.Run();
+#endif
         MeasurePhysics(0, false);
         MeasurePhysics(4, false);
         MeasurePhysics(16, true);

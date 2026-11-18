@@ -32,7 +32,7 @@ For automatic deliveries, connect the same shared or synced folder on both compu
 - **Visitors** sends the snowplow, Yeti, Santa and reindeer, visiting snowmen or elf train. Choose a size and speed for each visitor, or enable occasional snowplow and Santa visits. The plow clears a path through accumulated snow.
 - The help window and gift composer fold where they stand when you choose a desktop tool. **Done** restores them with your draft intact. You can also fold a panel yourself with the yellow button or **⌘M**, then click **Restore** when you want it back.
 
-**Windows.** Click **−** in the Jake Frost panel to leave a compact bar at its current position. Choosing a desktop tool does the same automatically. **Tools…** switches tools, **Done** returns to the full panel, and **Restore** reopens a manually minimized panel. The **×** still hides Jake Frost in the system tray.
+**Windows.** Click **−** in the Jake Frost panel to leave a compact bar at its current position. Sending a visitor from Workshop, Friends or the tray leaves **Restore** visible on that bar. Choosing a desktop tool folds the panel there too. **Tools…** switches tools, **Done** returns to the full panel, and **Restore** reopens it. The **×** hides Jake Frost in the system tray.
 
 - Grab snow on a window ledge or above the taskbar. Drag it to roll a ball, flick to throw, or gently stack three balls to build a snowman.
 - Open **Workshop** to puff snow, pile up a hill, or push a sled down it. **Done** or **Esc** ends desktop editing.
@@ -55,6 +55,8 @@ The gallery includes Christmas trees, lights, candles, red and gold baubles, sta
 In **Weather**, choose Snow, Heavy snow, Rain, Sakura, Leaves, Fireflies, Starfall or Off. Adjust snowfall volume, wind, accumulation depth and window ice. **Display and seasonal options** controls which monitors show effects, whether snow settles on window edges, and whether effects appear behind open windows. **My weather** looks up the city or coordinates you enter and refreshes about every 30 minutes. Weather and geocoding data come from [Open-Meteo](https://open-meteo.com/).
 
 Send a Yeti, Santa, snowmen or a snowplough from Workshop. Expand **Visitor sizes** to set each visitor from 50% to 250%, including Santa’s sleigh and reindeer and the elf train. Each starts at 100%. Size changes take effect during a visit, and the app remembers each setting. **Visitor speed** has Leisurely, Steady and Brisk settings. It also controls the gift train. The train parks while its note is on screen.
+
+On both platforms the snowplough cuts a low track through flat snow and tall drifts. Its blade pushes loose snowballs, snowmen, sleds, trees, decorations and low loose lights along the desktop. Ornaments travel with their tree. Props above its path stay on their ledges.
 
 ## Build from source
 

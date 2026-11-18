@@ -64,6 +64,36 @@ final class Drift {
         edge = next; revision &+= 1
     }
     func clear() { depth = Array(repeating:0,count:depth.count); revision &+= 1 }
+    /// Cut each covered column down to a shallow road and move the reclaimed
+    /// powder forward into a long, angle-limited bank. Never refill the wheel lane.
+    func plowLane(rear: CGFloat, lip: CGFloat, scale: CGFloat) -> CGFloat {
+        guard edge.id == 0, lip >= edge.x, rear <= edge.x+edge.width else {return 0}
+        let left=max(0,Int(ceil((rear-edge.x)/spacing-0.5)))
+        let right=min(depth.count-1,Int(floor((lip-edge.x)/spacing+0.5)))
+        guard left<=right else {return 0}
+        let road:CGFloat=1.1
+        var removed:CGFloat=0
+        for i in left...right where depth[i]>road {removed+=depth[i]-road;depth[i]=road}
+        guard removed>0 else {return 0}
+        // The toe meets the near side of a broad mound. Limit the height increase per
+        // sample from the cleared road and taper the far side instead of building a wall.
+        let count=max(7,Int(ceil((70+38*scale)/spacing)))
+        let end=min(depth.count-1,right+count)
+        var powder=removed*0.88,previous=depth[right]
+        if end>right {
+            for i in (right+1)...end {
+                let t=CGFloat(i-right)/CGFloat(count+1)
+                let weight=sin(.pi*t)
+                let ceiling=min(maximumDepth,previous+spacing*0.55)
+                let existing=depth[i]
+                let offered=min(powder,removed*0.88*weight*1.7/CGFloat(count))
+                let next=min(ceiling,existing+offered)
+                // Excess from a pre-existing abrupt bank is carried into later columns.
+                powder+=existing-next;depth[i]=next;previous=next
+            }
+        }
+        revision &+= 1;return removed
+    }
 }
 
 struct SnowParticle {
@@ -170,6 +200,26 @@ final class SnowWorld {
         if size.width > 1 { snowmen = store.restore(in:size,banks:banks) }
     }
     func rememberSnowmenNow() { snowmanStore?.save(snowmen,size:size) }
+    @discardableResult func plowObjects(_ blade: PlowSweep) -> Bool {
+        guard let floor=byID[0] else {return false}
+        func circle(_ b: PackedBall) -> Bool {
+            let r=b.radius
+            return blade.touches(CGRect(x:b.x-r,y:b.y-r,width:2*r,height:2*r),includingSnow:b.support==0) { hypot($0.x-b.x,$0.y-b.y)<=r }
+        }
+        for b in balls where b !== held && b.below == nil && (b.support == nil || b.support == 0) {
+            guard circle(b) || b.above.map(circle)==true else {continue}
+            b.x=min(max(b.radius,size.width-b.radius),b.x+blade.advance+0.6)
+            b.thrown=false;rest(b,on:floor);positionUpperBall(on:b)
+        }
+        var moved=false
+        for figure in snowmen where figure !== heldSnowman && (figure.support == nil || figure.support == 0) {
+            let box=CGRect(x:figure.x-figure.base,y:figure.foot-6*figure.base,width:2*figure.base,height:6*figure.base)
+            guard blade.touches(box,includingSnow:figure.support==0,ink:{ figure.contains($0,padding:0) }) else {continue}
+            let x=min(max(figure.base,size.width-figure.base),figure.x+blade.advance+0.6)
+            if x != figure.x {figure.x=x;settle(figure,on:floor);moved=true}
+        }
+        return moved
+    }
     func containsReceivedGift(_ id: String) -> Bool { snowmen.contains { $0.giftID == id } }
     func receiveSnowman(_ gift: FrostGift, at foot: CGPoint) -> Bool {
         guard gift.kind == .snowman else { return false }
