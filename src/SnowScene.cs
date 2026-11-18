@@ -571,13 +571,11 @@ namespace Frostpane
             PickBall(x,y);
             if (heldBall == null)
             {
-                for (int i = Snowmen.Count - 1; i >= 0; i--)
+                heldMan = DirectSnowman(x,y);
+                if (heldMan != null)
                 {
-                    Snowman man = Snowmen[i];
-                    if (!TouchesFigure(man,x,y,3)) continue;
-                    heldMan = man;
-                    man.Held = true;
-                    grabX = x - man.X; grabY = y - man.Y;
+                    heldMan.Held = true;
+                    grabX = x - heldMan.X; grabY = y - heldMan.Y;
                     return;
                 }
                 if (Balls.Count + Snowmen.Count >= 70) return;

@@ -9,9 +9,9 @@ $giftType=$assembly.GetType('Frostpane.GiftPayload',$true)
 $postType=$assembly.GetType('Frostpane.GiftPost',$true)
 $flags=[Reflection.BindingFlags]'Instance,NonPublic'
 $profile=[IO.Directory]::CreateDirectory((Join-Path ([IO.Path]::GetTempPath()) ('JakeFrost-online-test-'+[Guid]::NewGuid().ToString('N')))).FullName
-function Open-Profile($which) {
+function Open-Profile($which,$address=$Service) {
     $dir=[IO.Path]::Combine($profile,$which)
-    $online.GetConstructor($flags,$null,[type[]]@([string],[uri]),$null).Invoke(@($dir,$Service))
+    $online.GetConstructor($flags,$null,[type[]]@([string],[uri]),$null).Invoke(@($dir,$address))
 }
 function Call($subject,[string]$method,[object[]]$arguments) {
     $subject.GetType().GetMethod($method,$flags).Invoke($subject,$arguments)
@@ -59,8 +59,15 @@ try {
     $savedName=@(Call $alice 'List' @())[0].name
     Require ($savedName -ceq 'Winter tester B') 'Sender did not discover the accepting friend'
     $gift=New-Note 'Offline delivery one'
-    Call $alice 'Send' @($id,$gift)
-    Call $alice 'Send' @($id,$gift)
+    $temporarilyOffline=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,0)
+    $temporarilyOffline.Start()
+    $closedPort=$temporarilyOffline.LocalEndpoint.Port
+    $temporarilyOffline.Stop()
+    $offline=Open-Profile 'alice' ([uri]("http://127.0.0.1:"+$closedPort+"/api/post"))
+    Require (!(Call $offline 'Send' @($id,$gift))) 'An offline sender did not queue the gift'
+    $alice=Open-Profile 'alice'
+    Receive-Mail $alice $aliceLocal
+    Require (Call $alice 'Send' @($id,$gift)) 'An online retry could not be confirmed'
     $bob=Open-Profile 'bob'
     Receive-Mail $bob $bobLocal
     Receive-Mail $bob $bobLocal
@@ -70,7 +77,7 @@ try {
     Require ($giftType.GetField('Sender',$flags).GetValue($inbox[0]) -ceq 'Winter tester A') 'The recipient saw the wrong sender'
     Call $bobLocal 'Acknowledge' @($inbox[0])
     $back=New-Note 'Reply from Winter tester B'
-    Call $bob 'Send' @($id,$back)
+    Require (Call $bob 'Send' @($id,$back)) 'The reply was not confirmed'
     $alice=Open-Profile 'alice'
     Receive-Mail $alice $aliceLocal
     $reply=@(Call $aliceLocal 'Receive' @())

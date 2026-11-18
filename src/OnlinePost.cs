@@ -177,10 +177,30 @@ namespace Frostpane
         internal void Remove(string id)
         {
             lock(gate) {
-                var c=Find(id);Request(new {action="remove",c.id,c.token});contacts.Remove(c);Save();
+                var c=Find(id);Request(new {action="remove",c.id,c.token});Forget(c);
             }
         }
-        internal void Send(string id,GiftPayload gift)
+        private string Outbox(OnlineContact c)
+        {
+            return Path.Combine(Path.GetDirectoryName(file),"Outbox",c.id);
+        }
+        private void Forget(OnlineContact c)
+        {
+            string folder=Outbox(c);
+            if(Directory.Exists(folder)) {
+                foreach(string path in Directory.EnumerateFiles(folder,"*.letter"))File.Delete(path);
+            }
+            contacts.Remove(c);Save();
+        }
+        private void PostLetter(OnlineContact c,string path)
+        {
+            string id=Path.GetFileNameWithoutExtension(path);
+            if(!GiftPayload.IsId(id))throw new InvalidDataException("Invalid outgoing gift.");
+            string body=GiftPayload.ReadSmall(path,28000);
+            Request(new {action="send",c.id,c.token,giftId=id,body});
+            File.Delete(path);
+        }
+        internal bool Send(string id,GiftPayload gift)
         {
             lock(gate) {
                 var c=Find(id);
@@ -188,8 +208,19 @@ namespace Frostpane
                 gift.Sender=c.ownName;gift.SenderId="";gift.RecipientId="";
                 string content=gift.Encode();GiftPayload.DecodeGift(content);
                 string side=c.owner?"b":"a";
-                Request(new { action="send",c.id,c.token,giftId=gift.Id,
-                    body=FriendEnvelope.Seal(c.secret,"gift/"+side+"/"+gift.Id,content) });
+                string folder=Outbox(c);
+                Directory.CreateDirectory(folder);
+                string path=Path.Combine(folder,gift.Id+".letter");
+                if(!File.Exists(path) && Directory.EnumerateFiles(folder,"*.letter").Take(24).Count()>=24)
+                    throw new InvalidOperationException("Your outbox is full. Check deliveries after reconnecting.");
+                GiftPayload.AtomicWrite(path,FriendEnvelope.Seal(c.secret,"gift/"+side+"/"+gift.Id,content),false);
+                try {PostLetter(c,path);return true;}
+                catch(OnlineError e) {
+                    if(e.Status==0 || e.Status==409 || e.Status==429 || e.Status>=500)return false;
+                    if(e.Status==403)Forget(c);
+                    else File.Delete(path);
+                    throw;
+                }
             }
         }
         internal void Poll(Action<GiftPayload> accept)
@@ -203,7 +234,7 @@ namespace Frostpane
                 if(response.contacts==null || response.contacts.Length!=ready.Length)throw new InvalidDataException("Incomplete friend service response.");
                 foreach(var row in response.contacts) {
                     var c=Find(row.id);
-                    if(row.status=="gone"){contacts.Remove(c);Save();continue;}
+                    if(row.status=="gone"){Forget(c);continue;}
                     if(row.status!="active")continue;
                     string side=c.owner?"a":"b",other=c.owner?"b":"a";
                     string otherName=Display(FriendEnvelope.Open(c.secret,"name/"+other,row.name));
@@ -219,6 +250,11 @@ namespace Frostpane
                         } catch(InvalidDataException) {} catch(FormatException) {} catch(CryptographicException) {} catch(ArgumentException) {}
                         if(gift!=null){gift.Sender=c.name;accept(gift);}
                         Request(new { action="ack",c.id,c.token,giftId=letter.id });
+                    }
+                    string folder=Outbox(c);
+                    if(Directory.Exists(folder))foreach(string path in Directory.EnumerateFiles(folder,"*.letter").Take(3)) {
+                        try {PostLetter(c,path);}
+                        catch(OnlineError e){if(e.Status==409)break;throw;}
                     }
                 }
             }

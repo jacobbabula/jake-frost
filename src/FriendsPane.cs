@@ -87,7 +87,9 @@ namespace Frostpane
                 var friend=onlineFriends.SelectedItem as OnlineContact;
                 if(friend==null || friend.status!="active")return;
                 var gift=Compose();
-                OnlineWork(delegate {online.Send(friend.id,gift);return "Sent to "+friend.name+". Their train will arrive when Jake Frost is open.";},
+                OnlineWork(delegate {return online.Send(friend.id,gift)
+                    ? "Sent to "+friend.name+". Their train will arrive when Jake Frost is open."
+                    : "Saved to your outbox. Jake Frost will retry while it’s open.";},
                     delegate{note.Clear();});
             });
             actions.Children.Add(sendOnline);

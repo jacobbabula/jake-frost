@@ -61,8 +61,8 @@ export async function expire(store, now = Date.now()) {
     const [, date, kind, id, side, giftId] = key.split('/');
     if (date > today) break;
     if (kind === 'inv') {
-      const claim = await read(store, 'yes/' + id);
-      if (!claim) await removePair(store, id);
+      const [invite, claim] = await Promise.all([read(store, 'inv/' + id), read(store, 'yes/' + id)]);
+      if (!invite || !claim) await removePair(store, id);
     } else if (kind === 'msg') {
       await store.delete('msg/' + id + '/' + side + '/' + giftId);
     }

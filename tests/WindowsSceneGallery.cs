@@ -104,6 +104,42 @@ internal static class WindowsSceneGallery
         Console.WriteLine("Rendered {0} at {1} x {2}",Path.GetFileName(path),frame.PixelWidth,frame.PixelHeight);
     }
 
+    private static int PaletteBytes(int flags)
+    {
+        return (flags&128)==0 ? 0 : 3*(2<<(flags&7));
+    }
+
+    // WPF writes a graphic-control block per frame, but zeroes its duration even
+    // when the source BitmapFrame supplies GIF metadata. Patch those blocks only.
+    private static void SavePreview(GifBitmapEncoder encoder,string path)
+    {
+        byte[] data;
+        using(var stream=new MemoryStream()) {encoder.Save(stream);data=stream.ToArray();}
+        int start=13+PaletteBytes(data[10]), cursor=start, frames=0;
+        while(cursor<data.Length) {
+            int marker=data[cursor++];
+            if(marker==0x3b)break;
+            if(marker==0x21) {
+                int extension=data[cursor++];
+                if(extension==0xf9 && data[cursor]==4) {
+                    data[cursor+2]=8;data[cursor+3]=0;frames++;
+                }
+            } else if(marker==0x2c) {
+                cursor+=9+PaletteBytes(data[cursor+8])+1;
+            } else throw new InvalidDataException("Unexpected GIF block.");
+            while(data[cursor]!=0)cursor+=1+data[cursor];
+            cursor++;
+        }
+        if(frames!=encoder.Frames.Count)throw new InvalidDataException("GIF timing is missing for one or more frames.");
+        using(var output=new BinaryWriter(File.Create(path))) {
+            output.Write(data,0,start);
+            output.Write(new byte[]{0x21,0xff,11});
+            output.Write(System.Text.Encoding.ASCII.GetBytes("NETSCAPE2.0"));
+            output.Write(new byte[]{3,1,0,0,0}); // Repeat indefinitely.
+            output.Write(data,start,data.Length-start);
+        }
+    }
+
     private static void YetiPreview(string path)
     {
         var scene=Woodcutting(true);
@@ -129,7 +165,7 @@ internal static class WindowsSceneGallery
             gif.Frames.Add(BitmapFrame.Create(frame,null,metadata,null));
             scene.Step(.08,1,0);
         }
-        using(var file=File.Create(path))gif.Save(file);
+        SavePreview(gif,path);
     }
 
     [STAThread] public static void Main(string[] args)

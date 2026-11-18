@@ -34,8 +34,17 @@ namespace Frostpane
             string value=Utf8.GetString(Convert.FromBase64String(s));if(value.Length>max)throw new InvalidDataException("Gift is too large.");return value;
         }
         internal string Encode() {
+            string appearance=Dress??"";
+            double bottom=Size,middle=Mid,top=Head;
+            if(Kind==GiftType.Snowman && (middle>bottom || top>middle)) {
+                var radii=new[]{bottom,middle,top};
+                // v3 reads the three fields in decreasing size. v4 restores the placed order.
+                appearance="stack1,"+Number(bottom)+","+Number(middle)+","+Number(top)+";"+appearance;
+                Array.Sort(radii);bottom=radii[2];middle=radii[1];top=radii[0];
+            }
+            if(appearance.Length>8192) throw new InvalidDataException("Gift appearance is too large.");
             string result=string.Join("\n",new[]{ "FROSTPANE-GIFT-1",Id,SenderId,RecipientId,B64(Name(Sender)),Kind.ToString(),
-                B64(Plain(Note,280)),Style.ToString(CultureInfo.InvariantCulture),Number(Size),Number(Mid),Number(Head),Number(Facing),B64(Dress??""),"END" });
+                B64(Plain(Note,280)),Style.ToString(CultureInfo.InvariantCulture),Number(bottom),Number(middle),Number(top),Number(Facing),B64(appearance),"END" });
             if(result.Length>20000) throw new InvalidDataException("Gift is too large."); return result;
         }
         private static double ReadNumber(string s,double low,double high) {
@@ -54,6 +63,16 @@ namespace Frostpane
                 Kind=kind,Note=Plain(Decode(l[6],280),280),Style=style,Size=ReadNumber(l[8],3,160),
                 Mid=ReadNumber(l[9],1,64),Head=ReadNumber(l[10],1,64),Facing=ReadNumber(l[11],-1,1),Dress=Decode(l[12],8192) };
             if(g.Kind==GiftType.Snowman && (g.Size>50||g.Mid>50||g.Head>50))throw new InvalidDataException("Invalid snowman proportions.");
+            if(g.Kind==GiftType.Snowman && g.Dress.StartsWith("stack1,",StringComparison.Ordinal)) {
+                int end=g.Dress.IndexOf(';');
+                if(end<0) throw new InvalidDataException("Invalid snowman stack.");
+                var parts=g.Dress.Substring(0,end).Split(',');
+                if(parts.Length!=4) throw new InvalidDataException("Invalid snowman stack.");
+                double bottom=ReadNumber(parts[1],3,50),middle=ReadNumber(parts[2],1,50),top=ReadNumber(parts[3],1,50);
+                var radii=new[]{bottom,middle,top};Array.Sort(radii);
+                if(g.Size!=radii[2] || g.Mid!=radii[1] || g.Head!=radii[0]) throw new InvalidDataException("Inconsistent snowman stack.");
+                g.Size=bottom;g.Mid=middle;g.Head=top;g.Dress=g.Dress.Substring(end+1);
+            }
             return g;
         }
         internal static string ReadSmall(string path,int maximum) {

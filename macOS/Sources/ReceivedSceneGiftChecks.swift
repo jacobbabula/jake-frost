@@ -55,6 +55,10 @@ import AppKit
     check(deliver(snowman,to:scene) && !scene.giftTrain.containsParcel(snowman.id) && scene.world.snowmen.count==1,
           "a delivered snowman becomes part of the playable scene")
     guard let figure=scene.world.snowmen.first else { return false }
+    var wideGift=snowman;wideGift.size=12;wideGift.mid=32;wideGift.head=19
+    let wide=BuiltSnowman(gift:wideGift,foot:CGPoint(x:120,y:240))
+    let edge=CGPoint(x:wide.x+wide.middle-1,y:wide.foot-wide.base-0.78*(wide.base+wide.middle))
+    check(wide.hitBounds.contains(edge) && wide.contains(edge,padding:0),"a gifted snowman's widest middle is playable and reachable by the plough")
     let grab=CGPoint(x:figure.x,y:figure.foot-figure.base), destination=CGPoint(x:350,y:220)
     _=scene.world.down(grab,at:1);scene.world.up(destination,at:2)
     for _ in 0..<95 { scene.world.step(1.0/30) }

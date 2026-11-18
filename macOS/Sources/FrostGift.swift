@@ -36,8 +36,14 @@ struct FrostGift {
 
     func encoded() throws -> Data {
         func base64(_ text: String) -> String { Data(text.utf8).base64EncodedString() }
+        var radii = [size, mid, head], appearance = dress
+        if kind == .snowman && (mid > size || head > mid) {
+            // The v3 fields remain a valid conventional stack. v4 reads the original order.
+            appearance = "stack1,\(size),\(mid),\(head);" + dress
+            radii.sort(by: >)
+        }
         let lines = ["FROSTPANE-GIFT-1", id, senderID, recipientID, base64(sender), kind.rawValue,
-                     base64(note), String(style), String(size), String(mid), String(head), String(facing), base64(dress), "END"]
+                     base64(note), String(style), String(radii[0]), String(radii[1]), String(radii[2]), String(facing), base64(appearance), "END"]
         let bytes = Data(lines.joined(separator: "\n").utf8)
         _ = try Self.decode(bytes)
         return bytes
@@ -67,6 +73,17 @@ struct FrostGift {
         gift.size = try number(8, 3...160); gift.mid = try number(9, 1...64)
         gift.head = try number(10, 1...64); gift.facing = try number(11, -1...1)
         if kind == .snowman && (gift.size > 50 || gift.mid > 50 || gift.head > 50) { throw invalid }
+        if kind == .snowman && gift.dress.hasPrefix("stack1,") {
+            guard let end = gift.dress.firstIndex(of: ";") else { throw invalid }
+            let parts = gift.dress[..<end].split(separator: ",", omittingEmptySubsequences: false)
+            guard parts.count == 4,
+                  let bottom = Double(parts[1]), (3...50).contains(bottom),
+                  let middle = Double(parts[2]), (1...50).contains(middle),
+                  let top = Double(parts[3]), (1...50).contains(top),
+                  [bottom, middle, top].sorted(by: >) == [gift.size, gift.mid, gift.head] else { throw invalid }
+            gift.size = bottom; gift.mid = middle; gift.head = top
+            gift.dress = String(gift.dress[gift.dress.index(after: end)...])
+        }
         return gift
     }
 

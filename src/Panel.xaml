@@ -108,6 +108,7 @@
         </StackPanel>
         <ControlTemplate.Triggers>
           <Trigger Property="IsChecked" Value="True"><Setter TargetName="Switch" Property="Background" Value="#2879AA"/><Setter TargetName="Dot" Property="HorizontalAlignment" Value="Right"/><Setter TargetName="Dot" Property="Fill" Value="#FFFFFF"/></Trigger>
+          <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".52"/></Trigger>
           <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Switch" Property="BorderBrush" Value="#186CA4"/><Setter TargetName="Switch" Property="BorderThickness" Value="1"/></Trigger>
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>

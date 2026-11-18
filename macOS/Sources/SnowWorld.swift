@@ -142,9 +142,16 @@ final class BuiltSnowman {
         style = Int.random(in:0..<3); facing = Bool.random() ? 1 : -1
     }
 
+    var reach: CGFloat { max(max(base, middle), head*1.08) }
+    var hitBounds: CGRect {
+        let torso = foot-base-0.78*(base+middle), face = torso-0.78*(middle+head)
+        let top = min(foot-2*base, min(torso-middle, face-1.88*head))
+        let bottom = max(foot, max(torso+middle, face+head))
+        return CGRect(x:x-reach,y:top,width:2*reach,height:bottom-top)
+    }
     func contains(_ point: CGPoint, padding: CGFloat = 1) -> Bool {
         let dx = abs(point.x-x), dy = point.y-foot
-        guard dx <= max(base, head*1.08)+padding else {return false}
+        guard dx <= reach+padding else {return false}
         let torso = -base - 0.78*(base+middle), face = torso - 0.78*(middle+head)
         return hypot(dx,dy+base) <= base+padding || hypot(dx,dy-torso) <= middle+padding ||
             hypot(dx,dy-face) <= head+padding || (dx <= head*0.72+padding && dy >= face-head*1.88-padding && dy <= face-head*0.77+padding) ||
@@ -213,9 +220,8 @@ final class SnowWorld {
         }
         var moved=false
         for figure in snowmen where figure !== heldSnowman && (figure.support == nil || figure.support == 0) {
-            let box=CGRect(x:figure.x-figure.base,y:figure.foot-6*figure.base,width:2*figure.base,height:6*figure.base)
-            guard blade.touches(box,includingSnow:figure.support==0,ink:{ figure.contains($0,padding:0) }) else {continue}
-            let x=min(max(figure.base,size.width-figure.base),figure.x+blade.advance+0.6)
+            guard blade.touches(figure.hitBounds,includingSnow:figure.support==0,ink:{ figure.contains($0,padding:0) }) else {continue}
+            let x=min(max(figure.reach,size.width-figure.reach),figure.x+blade.advance+0.6)
             if x != figure.x {figure.x=x;settle(figure,on:floor);moved=true}
         }
         return moved

@@ -49,6 +49,16 @@ $mac = @($friends | Where-Object {
 if ($mac.Count -ne 1) {throw 'Windows could not discover the expected Mac friend.'}
 if ($Mode -eq 'Send') {
     $fixture = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\macOS\Tests\Fixtures\windows-tree.fpgift')).Path
+    $shape=[Activator]::CreateInstance($giftType,$true)
+    $kind=$giftType.GetField('Kind',$instance)
+    $kind.SetValue($shape,[Enum]::Parse($kind.FieldType,'Snowman'))
+    $giftType.GetField('Size',$instance).SetValue($shape,12.0)
+    $giftType.GetField('Mid',$instance).SetValue($shape,32.0)
+    $giftType.GetField('Head',$instance).SetValue($shape,19.0)
+    $wire=$giftType.GetMethod('Encode',$instance).Invoke($shape,@())
+    $decoded=$giftType.GetMethod('DecodeGift',[Reflection.BindingFlags]'Static,NonPublic').Invoke($null,@($wire))
+    if((($wire -split [char]10)[8..10] -join ',') -ne '32,19,12' -or $giftType.GetField('Mid',$instance).GetValue($decoded) -ne 32 -or
+        $giftType.GetMethod('Encode',$instance).Invoke($decoded,@()) -cne $wire) {throw 'An irregular gift must retain a v3 envelope and round-trip unchanged.'}
     $gift = $giftType.GetMethod('DecodeGift',[Reflection.BindingFlags]'Static,NonPublic').Invoke($null,@([IO.File]::ReadAllText($fixture)))
     $giftType.GetField('Id',$instance).SetValue($gift,[guid]::NewGuid().ToString('N'))
     $giftType.GetField('Note',$instance).SetValue($gift,'Windows to Mac')
@@ -64,7 +74,7 @@ if ($Mode -eq 'Send') {
     $pending = $postType.GetMethod('Receive',$instance).Invoke($post,@())
     if ($pending.Count -ne 1) {throw "Expected one addressed snowman from Mac, got $($pending.Count)."}
     $gift = $pending[0]
-    $expected = @{Kind='Snowman';Sender='Mac friend';SenderId=$macID;RecipientId=$winID;Note='Mac to Windows'}
+    $expected = @{Kind='Snowman';Sender='Mac friend';SenderId=$macID;RecipientId=$winID;Note='Mac to Windows';Size='12';Mid='32';Head='19'}
     foreach ($name in $expected.Keys) {
         $actual = $giftType.GetField($name,$instance).GetValue($gift)
         if ([string]$actual -cne $expected[$name]) {throw "Wrong shared gift field $name ($actual)."}
