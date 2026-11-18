@@ -128,6 +128,11 @@ public static class WindowsPanel
                 "Stocking", "CandyCane", "Gift", "Bells", "Gingerbread", "Holly", "SantaHat", "SnowGlobe", "Cocoa", "Boat" };
             foreach (string kind in decorations) Control(window, "Decor" + kind);
             Select(window, "WeatherTab");
+            Select(window, "ModeClouds");
+            var clouds = (SelectionItemPattern)Control(window, "ModeClouds").GetCurrentPattern(SelectionItemPattern.Pattern);
+            if (!clouds.Current.IsSelected || Control(window, "ModeSakura").Current.Name != "Cherry Blossom")
+                throw new Exception("Clouds or Cherry Blossom was missing from the weather picker.");
+            Select(window, "ModeSnow");
             Select(window, "DecorTab");
             Control(window, "DecorLights");
             Console.WriteLine("PASS all 17 decorations load on opening the gallery and remain available on return");
@@ -152,7 +157,7 @@ public static class WindowsPanel
             CheckSize(window, monitor, full, false);
             Console.WriteLine("PASS native minimize keeps a visible compact panel on the same monitor");
 
-            foreach (string visitor in new[]{"PloughButton","YetiButton","SantaButton","SnowmenButton"}) {
+            foreach (string visitor in new[]{"PloughButton","YetiButton","SantaButton","SnowmenButton","BlizzardButton"}) {
                 Click(window,visitor);
                 CheckSize(window,monitor,full,true);
                 CheckButtonOnTop(window,"RestoreButton");

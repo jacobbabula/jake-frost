@@ -5,7 +5,7 @@ using System.Windows.Media;
 
 namespace Frostpane
 {
-    internal enum WeatherMode { Snow, HeavySnow, Rain, Sakura, Leaves, Fireflies, Starfall, Off }
+    internal enum WeatherMode { Snow, HeavySnow, Rain, Sakura, Leaves, Fireflies, Starfall, Off, Clouds }
     internal enum WeatherState { Airborne, Resting, Splash, Spark }
 
     internal sealed class WeatherParticle
@@ -36,7 +36,7 @@ namespace Frostpane
                 ResetStorm();
             }
         }
-        internal bool HasSnowWeather { get { return weather==WeatherMode.Snow || weather==WeatherMode.HeavySnow; } }
+        internal bool HasSnowWeather { get { return BlizzardActive || weather==WeatherMode.Snow || weather==WeatherMode.HeavySnow; } }
         internal WeatherMode Weather {
             get { return weather; }
             set {
@@ -158,7 +158,7 @@ namespace Frostpane
 
         partial void StepWeather(double dt,double wind)
         {
-            if (HasSnowWeather || weather==WeatherMode.Off || width<1 || height<1) return;
+            if (HasSnowWeather || weather==WeatherMode.Off || weather==WeatherMode.Clouds || width<1 || height<1) return;
             int target=AirTarget();
             if (warmWeather && target>0) {
                 for(int i=0;i<target;i++) WeatherParticles.Add(NewWeather(true));

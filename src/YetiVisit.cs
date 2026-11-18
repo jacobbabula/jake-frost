@@ -40,6 +40,11 @@ namespace Frostpane
 
         private bool StepYeti(WinterVisitor v,double dt,double pacedDt)
         {
+            if(v.Wild) {
+                int direction=v.Walk.Entry;
+                WalkYeti(v,direction>0?width+180*v.Scale:-180*v.Scale,pacedDt,dt);
+                return direction>0?v.X>width+42*v.Scale:v.X<-42*v.Scale;
+            }
             if (v.Timber!=null && !CanChop(v.Timber)) {
                 v.Timber=null;v.Chops=0;v.Wait=0;v.Met=false;
             }
@@ -48,25 +53,12 @@ namespace Frostpane
                 if (v.Timber!=null) v.Friend=null;
                 else if (v.Friend==null || v.Friend.Held || !Snowmen.Contains(v.Friend)) v.Friend=FindYetiFriend(v);
                 double tx=v.TargetX;
-                double ty=VisitorGround(v.X);
-                int chopFacing=1;
-                if (v.Timber!=null) {
-                    double reach=23*v.Scale;
-                    chopFacing=v.Timber.X<reach ? -1 : v.Timber.X>width-reach ? 1 : v.Timber.X<v.X ? -1 : 1;
-                    tx=v.Timber.X-chopFacing*reach;
-                } else if (v.Friend!=null) {
-                    tx=v.Friend.X-v.Friend.BaseRadius-8*v.Scale;
-                    ty=v.Friend.Y;
-                }
-                double dx=tx-v.X,walk=Limit(dx,-42*pacedDt,42*pacedDt);
-                v.Facing=dx<0?-1:1;v.X+=walk;v.Travel+=Math.Abs(walk);
-                if(v.Friend==null || Math.Abs(v.Friend.Y-VisitorGround(v.Friend.X))<3)
-                    v.Y=VisitorGround(v.X);
-                else v.Y+=Limit(ty-v.Y,-62*pacedDt,62*pacedDt);
-                if(Math.Abs(v.X-tx)<2 && Math.Abs(v.Y-ty)<3) {
+                if (v.Timber!=null) tx=YetiApproach(v,v.Timber,v.Timber.X,23*v.Scale);
+                else if(v.Friend!=null) tx=YetiApproach(v,v.Friend,v.Friend.X,v.Friend.BaseRadius+10*v.Scale);
+                if(WalkYeti(v,tx,pacedDt,dt)) {
                     v.Met=true;
-                    if(v.Timber!=null) v.Facing=chopFacing;
-                    else if(v.Friend!=null) {
+                    if(v.Timber!=null || v.Friend!=null)v.Facing=v.Walk.Approach;
+                    if(v.Friend!=null) {
                         v.Friend.Facing=v.X<v.Friend.X?-1:1;
                         PowderBurst(v.Friend.X,v.Friend.Y-v.Friend.Height*.6,12,0,.55);
                     }
@@ -74,6 +66,7 @@ namespace Frostpane
             } else if (v.Timber!=null) {
                 // A moving player or plough can take the tree out of reach mid-swing.
                 if (Math.Abs(v.Timber.X-v.X)>31*v.Scale) {v.Met=false;v.Wait=0;v.Chops=0;return false;}
+                PoseYeti(v,0,v.X,dt);
                 v.Wait+=dt;
                 if (v.Wait>=(v.Chops+.72)*ChopBeat) {
                     v.Chops++;
@@ -84,10 +77,9 @@ namespace Frostpane
                     }
                 }
             } else if ((v.Wait+=dt)>v.Dwell) {
-                v.Facing=1;v.X+=42*pacedDt;v.Travel+=42*pacedDt;
-                v.Y+=Limit(VisitorGround(v.X)-v.Y,-62*pacedDt,62*pacedDt);
-                if(v.X>width+55*v.Scale)return true;
-            }
+                double exit=v.Walk.Entry>0 ? width+55*v.Scale : -55*v.Scale;
+                return WalkYeti(v,exit,pacedDt,dt);
+            } else PoseYeti(v,0,v.X,dt);
             return false;
         }
     }

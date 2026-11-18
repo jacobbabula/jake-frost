@@ -19,8 +19,8 @@ namespace Frostpane
         public double X, Y, Radius, Depth, Phase, Angle;
         public bool Crystal;
         internal double FallSpeed, DriftSpeed, Frequency, Spin, ThrowX, ThrowY;
-        internal bool Clump, Powder;
-        internal double Life, Lifetime;
+        internal bool Clump, Powder, Wisp;
+        internal double Life, Lifetime, SnowArea;
     }
 
     internal sealed class SnowBank
@@ -88,7 +88,8 @@ namespace Frostpane
         public double X, Y, BaseRadius, MidRadius, HeadRadius, Facing;
         public int Style;
         public bool Held;
-        internal double Vy;
+        internal double Vx, Vy;
+        internal bool InFlight;
         internal double Height { get { return BaseRadius + .78 * (BaseRadius + 2 * MidRadius + HeadRadius) + HeadRadius; } }
     }
 
@@ -291,6 +292,7 @@ namespace Frostpane
         {
             Time += dt;
             WeatherIntensity=intensity;
+            StepSky(dt,wind);
             StepWeather(dt,wind);
             double rate = intensity <= 0 ? 0 : intensity == 1 ? 8 : intensity == 2 ? 20 : 40;
             spawnBudget += rate * width / 1300 * dt * SnowWeatherScale * Limit(SnowVolume, 0, 400) / 100;
@@ -306,10 +308,15 @@ namespace Frostpane
                 if (f.Clump)
                 {
                     if (f.Powder && (f.Life -= dt) <= 0) { Flakes.RemoveAt(i); continue; }
-                    f.ThrowY = Math.Min(360, f.ThrowY + 290 * dt);
-                    f.ThrowX *= 1 - .6 * dt;
+                    f.ThrowY = Math.Min(360, f.ThrowY + (f.Wisp ? 42 : 290) * dt);
+                    f.ThrowX *= 1 - (f.Wisp ? 2.0 : .6) * dt;
                     f.X += (f.ThrowX + breeze * .55) * dt;
                     f.Y += f.ThrowY * dt;
+                    if (f.SnowArea > 0 && (f.X < 0 || f.X > width))
+                    {
+                        f.X = Limit(f.X, 0, width);
+                        f.ThrowX *= -.24;
+                    }
                 }
                 else
                 {
@@ -322,9 +329,17 @@ namespace Frostpane
                 if (Math.Abs(f.X - x0) > width * .5) x0 = f.X;
                 double sy;
                 SnowBank target = FindSupport((x0 + f.X) * .5, y0, f.Y, .15, out sy,true);
+                if (f.SnowArea > 0 && target == null && f.ThrowY >= 0)
+                    target = BankAroundFragment(f.X, y0, f.Y);
                 if (target != null)
                 {
-                    Deposit(target, f.X, (f.Powder ? .15 : f.Clump ? .8 : .37) * f.Radius + .18);
+                    if (f.SnowArea > 0) SettleImpact(target, f.X, f.SnowArea);
+                    else if (!f.Wisp) Deposit(target, f.X, (f.Powder ? .15 : f.Clump ? .8 : .37) * f.Radius + .18);
+                    Flakes.RemoveAt(i);
+                }
+                else if (f.SnowArea > 0 && f.Y >= floor.Y - floor.HeightAt(f.X) && f.ThrowY >= 0)
+                {
+                    SettleImpact(floor, f.X, f.SnowArea);
                     Flakes.RemoveAt(i);
                 }
                 else if (f.Y > height + 12 || (f.Clump && (f.X < -12 || f.X > width + 12))) Flakes.RemoveAt(i);
@@ -344,15 +359,7 @@ namespace Frostpane
             {
                 Snowman m = Snowmen[i];
                 if (m.Held) continue;
-                m.Vy = Math.Min(620, m.Vy + 400 * dt);
-                double sy;
-                if (FindSupport(m.X, m.Y, m.Y + m.Vy * dt, 5, out sy) != null || m.Y >= height)
-                {
-                    m.Y = Math.Min(height, sy);
-                    if (m.Vy >= 155) CrumbleFigure(m, 0, m.Vy);
-                    else m.Vy = 0;
-                }
-                else m.Y += m.Vy * dt;
+                AdvanceFigure(m, dt);
             }
         }
 
@@ -575,6 +582,7 @@ namespace Frostpane
                 if (heldMan != null)
                 {
                     heldMan.Held = true;
+                    heldMan.InFlight = false; heldMan.Vx = heldMan.Vy = 0;
                     grabX = x - heldMan.X; grabY = y - heldMan.Y;
                     return;
                 }
@@ -630,9 +638,7 @@ namespace Frostpane
             PointerMove(x, y);
             if (heldMan != null)
             {
-                SnowBank support = NearbyBank(heldMan.X, heldMan.Y);
-                if (support != null) heldMan.Y = Math.Min(heldMan.Y, support.Y - support.HeightAt(heldMan.X));
-                heldMan.Held = false; heldMan.Vy = 0; heldMan = null;
+                ReleaseFigure(345);
             }
             if (heldBall == null) return;
             SnowBall b = heldBall;
@@ -648,6 +654,7 @@ namespace Frostpane
 
         public void Clear()
         {
+            EndBlizzard();
             CancelPlay();
             PropsClear();
             ClearWeatherParticles();

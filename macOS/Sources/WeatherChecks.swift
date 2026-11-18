@@ -8,15 +8,18 @@ import AppKit
     func check(_ result:Bool,_ message:String) {
         print((result ? "PASS: ":"FAIL: ")+message);if !result {passed=false}
     }
+    settings.set("Sakura",forKey:"weatherMode")
     let controls=MacWeatherControls(settings:settings) {notifications+=1}
     let menu=NSMenu();controls.append(to:menu)
     let choices=menu.item(withTitle:"Weather")?.submenu
+    check(controls.mode == .sakura && choices?.item(withTitle:"Cherry Blossom")?.state == .on,
+          "existing blossom settings keep their selection under the new menu name")
     func press(_ item:NSMenuItem?) {
         if let item=item,let action=item.action {_=NSApplication.shared.sendAction(action,to:item.target,from:item)}
     }
     for effect in MacWeatherMode.allCases {
-        press(choices?.item(withTitle:effect.rawValue))
-        check(controls.mode==effect,"the desktop weather menu selects "+effect.rawValue)
+        press(choices?.item(withTitle:effect.title))
+        check(controls.mode==effect,"the desktop weather menu selects "+effect.title)
     }
     press(choices?.item(withTitle:"Wind")?.submenu?.items.first(where:{$0.tag == -80}))
     press(choices?.item(withTitle:"Lightning in rain"))

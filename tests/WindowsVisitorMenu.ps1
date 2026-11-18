@@ -16,7 +16,15 @@ try {
     $panel.Left=48;$panel.Top=24
     $panel.UpdateLayout()
     $tray=$type.GetField('menu',$flags).GetValue($app)
-    foreach ($visitor in 'Send snowplough','Send snowmen','Send Yeti','Send Santa') {
+    $twinkle=$panel.FindName('TwinkleLightsOption')
+    if(!$twinkle.IsChecked){throw 'Twinkling must start enabled in a new profile.'}
+    $twinkle.IsChecked=$false
+    $prefs=$type.GetField('prefs',$flags).GetValue($app)
+    $prefs.GetType().GetMethod('Save',$flags).Invoke($prefs,@())
+    $reopened=[Activator]::CreateInstance($prefs.GetType(),$true)
+    $prefs.GetType().GetMethod('Load',$flags).Invoke($reopened,@())
+    if($prefs.GetType().GetField('TwinkleLights',$flags).GetValue($reopened)){throw 'The desktop light switch did not survive reopening.'}
+    foreach ($visitor in 'Send snowplough','Send snowmen','Send Yeti','Send Santa','Blizzard') {
         $x=$panel.Left;$y=$panel.Top
         $panel.Hide()
         $command=@($tray.Items | Where-Object Text -eq $visitor)

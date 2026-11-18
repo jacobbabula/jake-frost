@@ -156,6 +156,75 @@ internal static class WindowsPloughChecks
               "a ball rolls off a real window ledge and crumbles on floor impact");
     }
 
+    private static void GroundedWalk(int direction,int size)
+    {
+        var scene=Scene(1,100);
+        scene.SetVisitorSize(VisitorSizeTarget.Yeti,size);
+        if(direction<0) {scene.SendVisitors(VisitorKind.Yeti);scene.Clear();}
+        var ground=scene.Banks[0];
+        for(int i=0;i<ground.Heights.Length;i++) {
+            double x=i*Width/(ground.Heights.Length-1);
+            double p=(x-Width*.50)/125;
+            ground.Heights[i]=8+32*Math.Exp(-p*p);
+        }
+        ground.Revision++;
+        scene.SendVisitors(VisitorKind.Yeti);var v=scene.Visitors.Single();
+        v.TargetX=direction>0?Width-170:170;
+        var w=v.Walk;var feet=new[]{w.Far,w.Near};
+        int[] plants={0,0},supportFrames={0,0};
+        double greatestLift=0,highestSlope=0,slip=0,error=0,fastestChange=0;
+        for(int frame=0;frame<3300;frame++) {
+            double left=feet[0].X,right=feet[1].X,oldSpeed=w.Velocity;
+            bool a=feet[0].Planted,b=feet[1].Planted;
+            scene.Step(1.0/60,0,0);
+            fastestChange=Math.Max(fastestChange,Math.Abs(w.Velocity-oldSpeed));
+            if(!feet[0].Planted && !feet[1].Planted)throw new InvalidOperationException("Both Yeti feet left the bank.");
+            for(int i=0;i<2;i++) {
+                var foot=feet[i];bool wasDown=i==0?a:b;
+                if(foot.Planted) {
+                    if(wasDown)slip=Math.Max(slip,Math.Abs(foot.X-(i==0?left:right)));else plants[i]++;
+                    error=Math.Max(error,Math.Abs(foot.Y-(ground.Y-ground.PaintedHeightAt(foot.X))));
+                    if(w.Velocity*direction>35)supportFrames[i]++;
+                    highestSlope=Math.Max(highestSlope,Math.Abs(foot.Tilt));
+                }
+                greatestLift=Math.Max(greatestLift,foot.Clearance/v.Scale);
+            }
+            if(v.Met && v.Wait>1.7)break;
+        }
+        Console.WriteLine("Gait {0}% dir {1}: plants {2}/{3}, travel frames {4}/{5}, lift {6:F3}, slope {7:F3}, slip {8:F4}, clearance error {9:F3}, largest speed change {10:F3}, final speed {11:F3}",
+              size,direction,plants[0],plants[1],supportFrames[0],supportFrames[1],greatestLift,highestSlope,slip,error,fastestChange,w.Velocity);
+        Check(plants.All(n=>n>=4) && supportFrames.All(n=>n>=30) && greatestLift>4 && highestSlope>4 &&
+              slip<.001 && error<.001 && fastestChange<6 && Math.Abs(w.Velocity)<.001,
+              String.Format("Yeti at {0}% walking {1} plants both soles without slip on slopes, lifts alternate feet, and brakes to a stop",
+                            size,direction>0?"right":"left"));
+        Check(v.Met && feet.All(f=>f.Planted) && Math.Abs(feet[0].X-feet[1].X)>4*v.Scale,
+              "Yeti finishes the last swing into a balanced resting stance");
+    }
+
+    private static void RunningYeti()
+    {
+        var scene=Scene(1,100);
+        var tree=new WinterTree {X=Width/2,Y=Height,Size=80,Support=scene.Banks[0]};scene.Trees.Add(tree);
+        var friend=new Snowman{X=260,Y=Height,BaseRadius=18,MidRadius=11,HeadRadius=9};scene.Snowmen.Add(friend);
+        scene.SetVisitorSize(VisitorSizeTarget.Yeti,150);
+        scene.SendBlizzardYeti(-1);scene.SendBlizzardYeti(1);
+        var runners=scene.Visitors.ToArray();double speed=0,lift=0;
+        bool powder=false;int southpaw=0,righty=0;
+        for(int frame=0;frame<1000 && scene.Visitors.Count>0;frame++) {
+            scene.Step(1.0/60,0,0);
+            foreach(var v in scene.Visitors) {
+                if(!v.Wild || v.Scale!=1.5 || v.Friend!=null || v.Timber!=null || v.Met)
+                    throw new InvalidOperationException("A blizzard runner stopped for a visitor interaction.");
+                if(!v.Walk.Far.Planted && !v.Walk.Near.Planted)throw new InvalidOperationException("Runner lost its planted foot.");
+                speed=Math.Max(speed,Math.Abs(v.Walk.Velocity));lift=Math.Max(lift,Math.Max(v.Walk.Far.Clearance,v.Walk.Near.Clearance)/v.Scale);
+                if(v.Walk.Velocity>80)righty++; if(v.Walk.Velocity< -80)southpaw++;
+            }
+            powder|=scene.Flakes.Any(f=>f.Powder);
+        }
+        Check(runners.Length==2 && righty>30 && southpaw>30 && speed>95 && lift>7 && powder && scene.Visitors.Count==0 &&
+              scene.Trees.Contains(tree) && scene.Snowmen.Contains(friend),"two size-adjusted blizzard Yetis run through with grounded strides and powder footfalls, leaving the tree and snowman intact");
+    }
+
     private static void YetiVisit()
     {
         var scene=Scene(1,100);
@@ -183,12 +252,25 @@ internal static class WindowsPloughChecks
         scene.SendVisitors(VisitorKind.Yeti);yeti=scene.Visitors.Single();
         for(int i=0;i<500 && !yeti.Met;i++)scene.Step(.035,0,0);
         Check(yeti.Met && yeti.Friend==man && !yeti.CarryingLog && scene.Snowmen.Contains(man),"Yeti greets a snowman when there is no floor tree");
+        scene=Scene(1,100);
+        scene.SetLedges(new[]{new Ledge("sill",140,130,280)});scene.Clear();
+        man=new Snowman{X=270,Y=130,BaseRadius=15,MidRadius=13,HeadRadius=10};
+        scene.Snowmen.Add(man);scene.SendVisitors(VisitorKind.Yeti);yeti=scene.Visitors.Single();
+        double minSole=Height;
+        for(int i=0;i<800 && !yeti.Met;i++) {
+            scene.Step(1.0/60,0,0);minSole=Math.Min(minSole,Math.Max(yeti.Walk.Near.Y,yeti.Walk.Far.Y));
+        }
+        Check(yeti.Met && yeti.Friend==man && minSole>Height-3 && man.Y<150,"Yeti waves to a window snowman from the ground without walking through empty air");
     }
 
     internal static void Run()
     {
         SnowPhysics();
+        foreach(int size in new[]{50,100,250}) {
+            GroundedWalk(1,size);GroundedWalk(-1,size);
+        }
         YetiVisit();
+        RunningYeti();
         foreach (int direction in new[]{1,-1}) {
             foreach (int scale in new[]{50,100,250}) Terrain(direction,scale);
             Objects(direction);

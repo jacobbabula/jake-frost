@@ -30,7 +30,7 @@ namespace Frostpane
             if (mode==WeatherSchedule.Manual || DateTime.UtcNow<next) return;
             int month=DateTime.Now.Month;
             if (mode==WeatherSchedule.Random) {
-                var options=new[]{WeatherMode.Snow,WeatherMode.HeavySnow,WeatherMode.Rain,WeatherMode.Sakura,WeatherMode.Leaves,WeatherMode.Fireflies,WeatherMode.Starfall};
+                var options=new[]{WeatherMode.Snow,WeatherMode.HeavySnow,WeatherMode.Rain,WeatherMode.Clouds,WeatherMode.Sakura,WeatherMode.Leaves,WeatherMode.Fireflies,WeatherMode.Starfall};
                 WeatherMode pick=options[random.Next(options.Length)];
                 if (pick==lastRandom) pick=options[(Array.IndexOf(options,pick)+1)%options.Length];
                 lastRandom=pick; next=DateTime.UtcNow.AddMinutes(15); apply(pick,"Random weather changes every 15 minutes."); return;
@@ -87,7 +87,8 @@ namespace Frostpane
             if(code==75 || code==86) {result=WeatherMode.HeavySnow;description="heavy snow";}
             else if(code==71 || code==73 || code==77 || code==85) {result=WeatherMode.Snow;description="snow";}
             else if(code>=51) {result=WeatherMode.Rain;description="rain or showers";}
-            else {result=WeatherMode.Off;description=code>=45?"fog":code>=2?"clouds":"clear skies";}
+            else if(code==2 || code==3) {result=WeatherMode.Clouds;description=code==2?"partly cloudy":"overcast";}
+            else {result=WeatherMode.Off;description=code>=45?"fog":"clear skies";}
             return new KeyValuePair<WeatherMode,string>(result,label+" · "+description+" · Open-Meteo");
         }
     }

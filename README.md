@@ -29,15 +29,16 @@ For automatic deliveries, connect the same shared or synced folder on both compu
 **New on Windows**
 
 - **Weather → Desktop wallpaper** offers two original painted landscapes. Switchback Station has a smoking chimney. Lantern Sound has moving water and a sweeping beacon. Choose **Follow local time** for changing daylight, hold a particular time, or turn motion off. Select **System wallpaper** to reveal your regular desktop again.
-- **Workshop → Elf snowball fight** starts a short animated visit. **Wake the snowmen** starts a game with your own snowmen. A lone snowman plays against an elf. Send the Yeti to see it chop a planted ground tree or greet a snowman.
-- Stack three balls gently to preserve their individual sizes. A hard landing or thrown snowball can break the snowman apart. The plough clears ground decorations on its way offscreen.
-- Open **Decorate → Tree design** to choose a tree’s colors, baubles and lights. You can change the bulbs on a desktop light strand from 50% to 500%, bend its wire, or switch twinkling off. In **Weather**, select **Rain** and enable lightning for occasional branching bolts.
+- **Weather → Clouds** sends clouds drifting across your desktop. **Workshop → Blizzard** sends windblown snow and running Yetis across enabled displays for 22 seconds. Your selected weather returns when the storm clears. Choose a weather mode to end it early.
+- **Workshop → Wake the snowmen** starts a team snowball fight with a snowman you built or received. Nearby snowmen join, and guests can fill out the teams. Hits throw up powder and repeated hits can break a snowman apart. Send the Yeti to watch it walk across the snow, greet a snowman or chop a planted ground tree.
+- Stack three balls gently to preserve their individual sizes. Flick a ball or a snowman into a ledge or drop it from a height to see it crumble. The scattered snow settles on window ledges and the desktop. The plough clears ground decorations on its way offscreen.
+- Open **Decorate → Tree design** to choose a tree’s colors, baubles and lights. You can change the bulbs on a desktop light strand from 50% to 500% or bend its wire. Uncheck **Decorate → Twinkle string and tree lights** to keep every bulb steady. Switching twinkle back on restores each tree’s own design. In **Weather**, select **Rain** and enable lightning for occasional branching bolts.
 
 **Mac preview.** Open the snowflake menu to play on the display under your pointer.
 
 - **Decorate** includes all 17 Windows decorations and a mitten. Select **Arrange decorations** to move, rotate or resize a piece. Drag the ends of a light strand to tilt it and pull its center to set the sag. Drop ornaments on a tree to dress it. They travel with that tree when you move it or send it to a friend.
 - **Play on the snow** lets you puff a drift, pile a hill and push a sled down it. Grab snow on a window ledge or above the Dock, drag to roll a ball, then flick to throw it. Lower one ball onto another and gently add a third to build a snowman. You can move it or send it as a gift.
-- **Weather** includes Snow, Heavy snow, Rain, Sakura, Leaves, Fireflies, Starfall and Off. Choose wind, lightning and manual, random, seasonal or local weather. **Snow and windows** adjusts particle volume, accumulation depth, window ice, displays and whether snow appears behind windows. You can also pause over fullscreen apps, reduce animation in Low Power Mode and remember your scene between launches.
+- **Weather** includes Snow, Heavy snow, Rain, Cherry Blossom, Leaves, Fireflies, Starfall and Off. Choose wind, lightning and manual, random, seasonal or local weather. **Snow and windows** adjusts particle volume, accumulation depth, window ice, displays and whether snow appears behind windows. You can also pause over fullscreen apps, reduce animation in Low Power Mode and remember your scene between launches.
 - **Visitors** sends the snowplow, Yeti, Santa and reindeer, visiting snowmen or elf train. Choose a size and speed for each visitor, or enable occasional snowplow and Santa visits. The plow clears a path through accumulated snow.
 - The help window and gift composer fold where they stand when you choose a desktop tool. **Done** restores them with your draft intact. You can also fold a panel yourself with the yellow button or **⌘M**, then click **Restore** when you want it back.
 
@@ -48,20 +49,18 @@ For automatic deliveries, connect the same shared or synced folder on both compu
 - In **Decorate**, choose a decoration and place it on your desktop. **Workshop → Arrange** lets you select it again. Drag the corner to resize or the circular arrow to rotate. Drag the ends of a light string to tilt it and its middle to adjust the sag.
 - **Workshop → Visitor sizes** adjusts the snowplow, Yeti, Santa and reindeer, elf train, and visiting snowmen individually.
 
-**Weather** includes snow, rain, sakura blossoms, leaves, fireflies and starfall. **My weather** looks up the city or coordinates you enter using [Open-Meteo](https://open-meteo.com/).
-
 ### Hang lights and arrange decorations
 
 1. Choose **Decorate → String lights**. Drag between two points on the desktop for a custom strand. Clicking a ledge hangs a strand along it.
 2. Drag either white end to change the length or angle. Drag the center chevron down to increase the sag or up to pull the wire taut.
-3. Click the colored-dot button to change that strand’s palette. Scroll over the strand to resize its bulbs. **Workshop → New light strings** chooses the starting palette for future strands.
+3. Click the colored-dot button to change that strand’s palette. Scroll over the strand to resize its bulbs. **Decorate → String lights → New string colors** chooses the starting palette for future strands.
 4. Choose any other decoration to place it. Drop a hat or ornament near the snow to rest it on its visible edge, or drag an ornament onto a tree to hang it. Use **Workshop → Arrange** to select an existing piece. Drag the circular-arrow handle to rotate it freely, or hold **Shift** and scroll over it to turn in 15° increments. The corner handle and plain scroll resize trees and ornaments. Sleds have a rotation handle too.
 
 The gallery includes Christmas trees, lights, candles, red and gold baubles, stars, wreaths, stockings, candy canes, gifts, bells, gingerbread, holly, Santa hats, snow globes, cocoa and boats. **Remember decorations and snowmen** restores saved arrangements per display.
 
 ### Weather and visitors
 
-In **Weather**, choose Snow, Heavy snow, Rain, Sakura, Leaves, Fireflies, Starfall or Off. Adjust snowfall volume, wind, accumulation depth and window ice. **Display and seasonal options** controls which monitors show effects, whether snow settles on window edges, and whether effects appear behind open windows. **My weather** looks up the city or coordinates you enter and refreshes about every 30 minutes. Weather and geocoding data come from [Open-Meteo](https://open-meteo.com/).
+In **Weather**, choose Snow, Heavy snow, Rain, Clouds, Cherry Blossom, Leaves, Fireflies, Starfall or Off. Adjust snowfall volume, wind, accumulation depth and window ice. **Display and seasonal options** controls which monitors show effects, whether snow settles on window edges, and whether effects appear behind open windows. **My weather** looks up the city or coordinates you enter and refreshes about every 30 minutes. Weather and geocoding data come from [Open-Meteo](https://open-meteo.com/).
 
 Send a Yeti, Santa, snowmen or a snowplough from Workshop. Expand **Visitor sizes** to set each visitor from 50% to 250%, including Santa’s sleigh and reindeer and the elf train. Each starts at 100%. Size changes take effect during a visit, and the app remembers each setting. **Visitor speed** has Leisurely, Steady and Brisk settings. It also controls the gift train. The train parks while its note is on screen.
 

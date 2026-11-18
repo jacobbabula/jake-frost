@@ -19,7 +19,8 @@ namespace Frostpane
         private IntPtr powerNotice;
         private DateTime nextPlough=DateTime.Now.AddMinutes(15),nextSanta=DateTime.Now.AddHours(2);
         private readonly Dictionary<WeatherMode,Forms.ToolStripMenuItem> modeItems=new Dictionary<WeatherMode,Forms.ToolStripMenuItem>();
-        private static readonly string[] EffectLabels={"Snow","Heavy snow","Rain","Sakura","Leaves","Fireflies","Starfall","Off"};
+        private static readonly WeatherMode[] WeatherOrder={WeatherMode.Snow,WeatherMode.HeavySnow,WeatherMode.Rain,WeatherMode.Clouds,
+            WeatherMode.Sakura,WeatherMode.Leaves,WeatherMode.Fireflies,WeatherMode.Starfall,WeatherMode.Off};
         private static readonly string[] Schedules={"Manual","Random","Season","Local"};
         private bool Snowing {get {return prefs.Weather==WeatherMode.Snow || prefs.Weather==WeatherMode.HeavySnow;}}
         [DllImport("user32.dll")] private static extern IntPtr RegisterPowerSettingNotification(IntPtr recipient,ref Guid setting,uint flags);
@@ -39,6 +40,11 @@ namespace Frostpane
             foreach(WeatherMode item in Enum.GetValues(typeof(WeatherMode))) {
                 WeatherMode value=item; var radio=Control<RadioButton>("Mode"+item); radio.IsChecked=prefs.Weather==value;
                 radio.Checked+=delegate { if (!updatingWeather) SetWeather(value,true); };
+                // Checked does not fire when a user clicks their current mode during a storm.
+                radio.Click+=delegate {
+                    if(!updatingWeather && (prefs.Schedule!=WeatherSchedule.Manual || overlays.Exists(o=>o.Surface.Scene.BlizzardActive)))
+                        SetWeather(value,true);
+                };
             }
             foreach(string item in Schedules) {
                 var schedule=(WeatherSchedule)Enum.Parse(typeof(WeatherSchedule),item);
@@ -134,6 +140,7 @@ namespace Frostpane
         }
         private void SetWeather(WeatherMode value,bool manual)
         {
+            if(manual) CancelBlizzard();
             updatingWeather=true;
             try {
                 if (manual && prefs.Schedule!=WeatherSchedule.Manual) {
@@ -253,8 +260,9 @@ namespace Frostpane
         private void AddStudioMenu(Forms.ContextMenuStrip strip)
         {
             var modes=new Forms.ToolStripMenuItem("Weather");strip.Items.Add(modes);
-            foreach(WeatherMode mode in Enum.GetValues(typeof(WeatherMode))) {
-                var captured=mode; var item=(Forms.ToolStripMenuItem)modes.DropDownItems.Add(EffectLabels[(int)mode],null,delegate { SetWeather(captured,true); });
+            foreach(WeatherMode mode in WeatherOrder) {
+                var captured=mode;string title=(string)Control<RadioButton>("Mode"+mode).Content;
+                var item=(Forms.ToolStripMenuItem)modes.DropDownItems.Add(title,null,delegate { SetWeather(captured,true); });
                 modeItems.Add(mode,item);item.Checked=mode==prefs.Weather;
             }
             modes.DropDownItems.Add(new Forms.ToolStripSeparator());
@@ -270,6 +278,7 @@ namespace Frostpane
             });
             strip.Items.Add(tools);
             strip.Items.Add("Send snowplough",null,delegate {SendPlough();});
+            strip.Items.Add("Blizzard",null,delegate {BeginBlizzard();});
             strip.Items.Add("Add Christmas tree",null,delegate {ActivateTool(PlayTool.Tree);});
             strip.Items.Add("Send snowmen",null,delegate {Summon(VisitorKind.Snowmen);});
             strip.Items.Add("Send Yeti",null,delegate {Summon(VisitorKind.Yeti);});

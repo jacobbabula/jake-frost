@@ -153,6 +153,7 @@ internal static class WindowsPerformance
         if(args.Length==2 && args[0]=="--window-fixture") {WindowsFrameProbe.ShowTestWindows(args[1]);return;}
 #if CHECK_PLOUGH
         WindowsPloughChecks.Run();
+        WindowsImpactChecks.Run();
 #endif
         MeasurePhysics(0, false);
         MeasurePhysics(4, false);

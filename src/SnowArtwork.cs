@@ -67,7 +67,9 @@ namespace Frostpane
 
         internal static void Draw(DrawingContext dc, SnowScene scene)
         {
-            if (scene.Weather==WeatherMode.Off) return;
+            if (scene.Weather==WeatherMode.Off && !scene.BlizzardActive) return;
+            if(scene.BlizzardActive || scene.Weather==WeatherMode.Clouds) DrawClouds(dc,scene);
+            if(scene.BlizzardActive) DrawStormSnow(dc,scene,false);
             if (!scene.HasSnowWeather)
             {
                 WinterArt.DrawObjects(dc,scene);
@@ -104,6 +106,7 @@ namespace Frostpane
             foreach (Flake flake in scene.Flakes)
                 if (flake.Depth >= .88) DrawFlake(dc, flake);
             VisitorArtwork.Draw(dc,scene);
+            if(scene.BlizzardActive) DrawStormSnow(dc,scene,true);
         }
 
         private static void DrawFlake(DrawingContext dc, Flake f)

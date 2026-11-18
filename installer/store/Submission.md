@@ -20,9 +20,9 @@ Upload **Jake-Frost-Store.msixupload** in **Packages**. The script uses MakeAppx
 
 **Description**
 
-Catch the snow on a window ledge and roll it into a ball. Toss it with the mouse, stack three balls into your own snowman, or send a plough to clear a path. Elves can start a snowball fight, and a small Yeti can visit the trees you plant.
+Catch the snow on a window ledge and roll it into a ball. Toss it with the mouse, stack three balls into your own snowman, or send a plough to clear a path. Wake your snowmen for a snowball fight. A direct hit sends powder into the air and leaves loose snow where the pieces land. Send a little Yeti to chop a tree or start a Blizzard to see Yetis run through wind-driven snow.
 
-Decorate your desktop with adjustable light strings, ornaments and trees. Switch to rain with optional lightning, or choose petals, leaves, fireflies or falling stars. Two original painted landscapes follow your local clock from daylight into night. Choose the lighting yourself or turn the motion off at any time.
+Decorate your desktop with adjustable light strings, ornaments and trees. Let the lights twinkle or keep them steady. Choose drifting clouds, rain with optional lightning, cherry blossoms, leaves, fireflies or falling stars. Two original painted landscapes follow your local clock from daylight into night. Choose the lighting yourself or turn the motion off at any time.
 
 Keep in touch with gifts. Share a note, snowman or decorated tree and an elf train delivers it on your friend's desktop.
 

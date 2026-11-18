@@ -180,6 +180,7 @@ namespace Frostpane
             }
             if (directTarget==DirectTarget.Snowman) {
                 heldMan=DirectSnowman(x,y);heldMan.Held=true;
+                heldMan.InFlight=false;heldMan.Vx=heldMan.Vy=0;
                 grabX=x-heldMan.X;grabY=y-heldMan.Y;
             }
             return true;
@@ -262,7 +263,12 @@ namespace Frostpane
                 bank.Heights[i]=Math.Min(bank.Maximum(i),bank.Heights[i]+amount*weight*weight);
             }
             bank.Revision++;
-            // Keep existing figures on the crest as snow is packed under them.
+            LiftRestingObjects(bank,x,radius);
+        }
+
+        // Keep resting pieces on the new crest as snow collects underneath them.
+        private void LiftRestingObjects(SnowBank bank,double x,double radius)
+        {
             foreach (SnowBall b in Balls) {
                 if (b.Held || b.InFlight || b.Below!=null || Math.Abs(b.X-x)>radius) continue;
                 double bottom=b.Y+b.Radius, top=bank.Y-bank.HeightAt(b.X);
@@ -270,7 +276,7 @@ namespace Frostpane
                     b.Y=top-b.Radius;
             }
             foreach (Snowman m in Snowmen) {
-                if (m.Held || Math.Abs(m.X-x)>radius || m.X<bank.X || m.X>bank.X+bank.Width) continue;
+                if (m.Held || m.InFlight || Math.Abs(m.X-x)>radius || m.X<bank.X || m.X>bank.X+bank.Width) continue;
                 double top=bank.Y-bank.HeightAt(m.X);
                 if (m.Y>top && m.Y<=bank.Y+.2) m.Y=top;
             }
@@ -325,6 +331,13 @@ namespace Frostpane
                 f.Life=f.Lifetime=Between(.38,.92);
                 f.ThrowX=sideways*.16+Between(-115,115)*power;
                 f.ThrowY=Between(-177,-48)*power;
+                if (i % 9 == 0) {
+                    f.Wisp=true;
+                    f.Radius=Between(5,8)*power;
+                    f.Life=f.Lifetime=Between(.44,.69);
+                    f.ThrowX*=.62; f.ThrowY*=.48;
+                    f.Depth=1;
+                }
                 Flakes.Add(f);
             }
         }
@@ -342,6 +355,13 @@ namespace Frostpane
             motion.Clear(); SampleThrow(x,y);
             PickBall(x,y);
             if (heldBall==null) {
+                heldMan=DirectSnowman(x,y);
+                if (heldMan!=null) {
+                    heldMan.Held=true; heldMan.InFlight=false;
+                    heldMan.Vx=heldMan.Vy=0;
+                    grabX=x-heldMan.X; grabY=y-heldMan.Y;
+                    return;
+                }
                 if (Balls.Count+Snowmen.Count>=70) return;
                 heldBall=new SnowBall { X=x,Y=y,Radius=12 };
                 Balls.Add(heldBall); grabX=grabY=0;
@@ -364,6 +384,11 @@ namespace Frostpane
         }
         private void FinishThrow()
         {
+            if (heldMan!=null) {
+                ReleaseFigure(55);
+                motion.Clear();
+                return;
+            }
             SnowBall b=heldBall;
             if (b==null) return;
             b.Held=false; heldBall=null;
@@ -412,36 +437,46 @@ namespace Frostpane
         private void BreakBall(SnowBall b,SnowBank surface)
         {
             foreach (SnowBall other in Balls) if (other.Below==b) other.Below=null;
-            if (surface!=null) Deposit(surface,b.X,b.Radius*.52);
             double speed=Math.Sqrt(b.Vx*b.Vx+b.Vy*b.Vy);
-            ScatterSnow(b.X,b.Y,b.Radius,b.Vx,speed);
             Balls.Remove(b);
+            ScatterSnow(b.X,b.Y,b.Radius,b.Vx,speed,surface);
         }
 
-        private void ScatterSnow(double x,double y,double radius,double vx,double speed)
+        private void ScatterSnow(double x,double y,double radius,double vx,double speed,SnowBank contact=null)
         {
             double power=Limit(.65+speed/820+radius/85,.75,1.85);
-            PowderBurst(x,y,(int)Limit(radius+speed/40,12,54),vx,power);
-            // Larger fragments carry momentum and settle into nearby drifts.
-            int chunks=Math.Min((int)Limit(radius/3,3,10),ParticleLimit+300-Flakes.Count);
+            double area=1.65*radius*radius;
+            if (contact!=null && !contact.Bare) {
+                SettleImpact(contact,x,area*.65);
+                area*=.35;
+            }
+            int chunks=(int)Limit(radius/3,3,9);
             for (int i=0;i<chunks;i++) {
-                Flake f=NewFlake(x+Between(-.55,.55)*radius,y+Between(-.6,.25)*radius);
+                Flake f=NewFlake(Limit(x+Between(-.55,.55)*radius,0,width),y+Between(-.6,.25)*radius);
                 f.Clump=true; f.Crystal=false; f.Radius=Limit(radius*Between(.12,.28),1.8,7);
+                if (contact!=null && f.X>=contact.X && f.X<=contact.X+contact.Width)
+                    f.Y=Math.Min(f.Y,contact.Y-contact.HeightAt(f.X)-1);
                 f.ThrowX=Limit(vx*.30,-220,220)+Between(-76,76)*power;
                 f.ThrowY=Between(-140,-48)*power;
-                Flakes.Add(f);
+                f.SnowArea=area/chunks;
+                AddImpactFragment(f);
             }
+            PowderBurst(x,y,(int)Limit(radius+speed/40,12,46),vx,power);
         }
 
-        private void CrumbleFigure(Snowman m,double vx,double impact)
+        private void CrumbleFigure(Snowman m,double vx,double impact,SnowBank contact=null)
         {
+            if (!Snowmen.Remove(m)) return;
+            if (contact==null) {
+                double sy;
+                contact=FindSupport(m.X,m.Y-2,m.Y+2,1,out sy);
+            }
             double baseY=m.Y-m.BaseRadius,midY=baseY-.78*(m.BaseRadius+m.MidRadius);
             double headY=midY-.78*(m.MidRadius+m.HeadRadius);
             double speed=Math.Sqrt(vx*vx+impact*impact);
-            ScatterSnow(m.X,baseY,m.BaseRadius,vx*.45,speed);
-            ScatterSnow(m.X,midY,m.MidRadius,vx*.70,speed);
-            ScatterSnow(m.X,headY,m.HeadRadius,vx,speed);
-            Snowmen.Remove(m);
+            ScatterSnow(m.X,baseY,m.BaseRadius,vx*.45,speed,contact);
+            ScatterSnow(m.X,midY,m.MidRadius,vx*.70,speed,null);
+            ScatterSnow(m.X,headY,m.HeadRadius,vx,speed,null);
         }
 
         private void AdvanceThrow(SnowBall b,double dt)

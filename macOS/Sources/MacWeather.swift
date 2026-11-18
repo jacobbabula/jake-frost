@@ -4,6 +4,7 @@ enum MacWeatherMode: String, CaseIterable {
     case snow = "Snow", heavySnow = "Heavy snow", rain = "Rain", sakura = "Sakura"
     case leaves = "Leaves", fireflies = "Fireflies", starfall = "Starfall", off = "Off"
     var isSnow: Bool { self == .snow || self == .heavySnow }
+    var title: String { self == .sakura ? "Cherry Blossom" : rawValue }
 }
 
 enum MacWeatherSchedule: String, CaseIterable {
@@ -90,7 +91,7 @@ enum MacWeatherSchedule: String, CaseIterable {
     func append(to parent:NSMenu) {
         let weather=child("Weather",in:parent)
         for effect in MacWeatherMode.allCases {
-            let entry=row(effect.rawValue,#selector(setMode(_:)),in:weather)
+            let entry=row(effect.title,#selector(setMode(_:)),in:weather)
             entry.representedObject=effect.rawValue;entry.state=effect == mode ? .on:.off
         }
         weather.addItem(.separator())

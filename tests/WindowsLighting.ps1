@@ -115,7 +115,19 @@ $tree=(Field $treeScene Trees)[0]
 $first=Fingerprint $treeScene
 Tick $treeScene 27
 if((Fingerprint $treeScene) -eq $first) {throw 'Tree lights did not twinkle.'}
+Set-Field $treeScene TwinkleLights $false
+$first=Fingerprint $treeScene
+Tick $treeScene 27
+if((Fingerprint $treeScene) -ne $first) {throw 'The master twinkle switch left tree lights animated.'}
+Set-Field $treeScene TwinkleLights $true
+$first=Fingerprint $treeScene
+Tick $treeScene 27
+if((Fingerprint $treeScene) -eq $first) {throw 'The master switch lost the original twinkling tree design.'}
 $trim=$app.GetType('Frostpane.TreeTrim')
+Set-Field $tree Trim ([Enum]::Parse($trim,'Baubles,Lights'))
+$first=Fingerprint $treeScene
+Tick $treeScene 27
+if((Fingerprint $treeScene) -ne $first) {throw 'Master twinkle overrode a tree designed with steady lights.'}
 Set-Field $treeScene NewTreeTrim ([Enum]::Parse($trim,'Baubles'))
 Set-Field $treeScene NewTreePalette 2
 Set-Mode $treeScene Tool StyleTree

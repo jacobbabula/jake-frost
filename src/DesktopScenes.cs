@@ -17,8 +17,8 @@ namespace Frostpane
         private TextBlock wallpaperStatus;
         private void ConnectScenes()
         {
-            Control<Button>("ElfFightButton").Click+=delegate {BeginFight(false);};
-            Control<Button>("SnowmanFightButton").Click+=delegate {BeginFight(true);};
+            Control<Button>("BlizzardButton").Click+=delegate {BeginBlizzard();};
+            Control<Button>("SnowmanFightButton").Click+=delegate {BeginFight();};
             string file=Path.Combine(Preferences.DirectoryName,"wallpaper.dat");
             try {
                 if(File.Exists(file)) {
@@ -75,11 +75,29 @@ namespace Frostpane
                 if(wallpaper!=null) wallpaper.Dispose();wallpaper=null;wallpaperStatus.Text="Windows could not display this landscape.";
             }
         }
-        private void BeginFight(bool snowmen)
+        private void BeginBlizzard()
+        {
+            if(overlays.All(o=>prefs.HiddenScreens.Contains(o.MonitorInfo.Id))) {
+                OpenPage("Weather");Control<Expander>("DisplayOptions").IsExpanded=true;return;
+            }
+            if(building)SetBuild(false);
+            foreach(var overlay in overlays) {
+                if(prefs.HiddenScreens.Contains(overlay.MonitorInfo.Id))continue;
+                overlay.Surface.Scene.StartBlizzard();
+                PollOverlay(overlay);
+            }
+            if(!paused)ShowPanel(true);
+            ScheduleFrames();
+        }
+        private void CancelBlizzard()
+        {
+            foreach(var overlay in overlays)overlay.Surface.Scene.EndBlizzard();
+        }
+        private void BeginFight()
         {
             var target=DesktopForVisit();
             if(target==null) return;
-            if(!target.Surface.Scene.StartFight(snowmen)) {
+            if(!target.Surface.Scene.StartFight()) {
                 OpenPage("Workshop");
                 MessageBox.Show(panel,"Roll and stack three snowballs to build a snowman, or send a snowman to your desktop first.",
                     "Wake the snowmen",MessageBoxButton.OK,MessageBoxImage.Information);

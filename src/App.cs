@@ -18,7 +18,7 @@ using Forms = System.Windows.Forms;
 [assembly: AssemblyTitle("Jake Frost")]
 [assembly: AssemblyDescription("Interactive desktop snowfall")]
 [assembly: AssemblyProduct("Jake Frost")]
-[assembly: AssemblyVersion("4.0.0.0")]
+[assembly: AssemblyVersion("4.0.1.0")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8")]
 
 namespace Frostpane
@@ -400,7 +400,7 @@ namespace Frostpane
         }
         private void PollOverlay(Overlay overlay)
         {
-            overlay.Poll(prefs.PauseFullscreen,building,prefs.Weather==WeatherMode.Off || displayAsleep || prefs.HiddenScreens.Contains(overlay.MonitorInfo.Id),
+            overlay.Poll(prefs.PauseFullscreen,building,(prefs.Weather==WeatherMode.Off && !overlay.Surface.Scene.BlizzardActive) || displayAsleep || prefs.HiddenScreens.Contains(overlay.MonitorInfo.Id),
                 prefs.BehindWindows,prefs.WindowBanks);
             UpdateGrab(overlay);
             if (overlay.LayoutInitialized || overlay.Suspended || overlay.Surface.ActualWidth<2 || overlay.Surface.Scene.Banks.Count==0) return;
@@ -480,7 +480,7 @@ namespace Frostpane
         }
         private void ScheduleFrames()
         {
-            bool needed=!paused && !displayAsleep && prefs.Weather!=WeatherMode.Off && overlays.Any(o=>!o.Suspended);
+            bool needed=!paused && !displayAsleep && overlays.Any(o=>!o.Suspended && (prefs.Weather!=WeatherMode.Off || o.Surface.Scene.BlizzardActive));
             if (needed && !animation.IsEnabled) { lastFrame=watch.Elapsed.TotalSeconds; animation.Start(); }
             if (!needed && animation.IsEnabled) animation.Stop();
         }

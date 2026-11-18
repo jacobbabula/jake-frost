@@ -109,6 +109,14 @@ namespace Frostpane
             {
                 double life = Math.Max(0, Math.Min(1, f.Lifetime > 0 ? f.Life / f.Lifetime : 1));
                 int index = (int)(life * (Powder.Length-1));
+                if (f.Wisp) {
+                    double size=f.Radius*(.68+2.1*(1-life));
+                    Brush mist=Powder[Math.Min(Powder.Length-1,(int)(2+life*5))];
+                    double side=f.Phase>Math.PI ? -1 : 1;
+                    dc.DrawEllipse(Powder[index],null,new Point(f.X,f.Y),size,size*.79);
+                    dc.DrawEllipse(mist,null,new Point(f.X+side*size*.53,f.Y-size*.18),size*.73,size*.64);
+                    return;
+                }
                 double expansion = f.Radius * (1.28 + .62*(1-life));
                 dc.DrawEllipse(Powder[index], null, new Point(f.X,f.Y), expansion, expansion*.85);
             }
@@ -136,7 +144,7 @@ namespace Frostpane
                     if(tree.Hidden) continue;
                     if(tree.Angle!=0) dc.PushTransform(new RotateTransform(tree.Angle,tree.X,tree.Y));
                     DrawTree(dc,tree.X,tree.Y,tree.DisplaySize/96,tree.Palette<0?palette:tree.Palette,
-                        Math.Abs(tree.Style%3),tree.Trim,scene.Time);
+                        Math.Abs(tree.Style%3),scene.TwinkleLights ? tree.Trim : tree.Trim & ~TreeTrim.Twinkle,scene.Time);
                     if(tree.Angle!=0) dc.Pop();
                 }
                 foreach (LightString strand in scene.Lights)

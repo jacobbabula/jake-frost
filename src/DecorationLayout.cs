@@ -68,6 +68,8 @@ namespace Frostpane
             }
             ExportCatalog(text,savedTrees);
             foreach(Snowman man in Snowmen) {
+                var player=FightingSnowman(man);
+                if(player!=null && player.Guest)continue;
                 SnowBank support=man.Held ? null : PropSurfaceBelow(man.X,man.Y,2.5);
                 if(support!=null && Math.Abs(SnowSurfaceY(support,man.X)-man.Y)>2.5) support=null;
                 text.Append("\nS\t").Append(LayoutNumber(man.X)).Append('\t').Append(LayoutNumber(support==null?man.Y:support.Y))

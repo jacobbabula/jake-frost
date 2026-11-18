@@ -43,7 +43,6 @@ namespace Frostpane
             R(d,"#F1223C41",left,top,w,h,8);d.DrawText(t,new Point(left+10,top+6));
         }
         internal static void Draw(DrawingContext d,SnowScene scene) {
-            DrawFight(d,scene);
             foreach(WinterVisitor v in scene.Visitors) {
                 Matrix pose=Matrix.Identity;
                 pose.Scale(v.Scale,v.Scale);
@@ -60,7 +59,8 @@ namespace Frostpane
             }
             foreach(FriendlyShot ball in scene.FriendlyShots) {
                 L(d,"#79BCD5DC",2,ball.X,ball.Y,ball.X-ball.Vx*.035,ball.Y-ball.Vy*.035);
-                E(d,"#A8C7D6",ball.X,ball.Y+.8,3.6,3.6);E(d,"#FCFEF9",ball.X-.45,ball.Y-.4,3.3,3.3);
+                double r=ball.Radius;
+                E(d,"#9FBFCD",ball.X,ball.Y+.55,r,r);E(d,"#F3FAFF",ball.X-r*.12,ball.Y-r*.14,r*.83,r*.83);
             }
             WinterPresent box=scene.DailyPresent;
             if(box!=null) {d.PushTransform(new TranslateTransform(box.X,box.Y));Parcel(d,-12,-21,24,20);d.Pop();}
@@ -72,26 +72,66 @@ namespace Frostpane
             L(d,"#BD5850",.8,x+2,y+h*.5,x+w*.40,y+h*.5);L(d,"#D98670",.8,x+w*.72,y+h*.5,x+w*.85,y+h*.5);
             L(d,"#F7DFA5",.8,x+w*.47,y+1,x+w*.47,y+h-1);
         }
+        private static void YetiLeg(DrawingContext d,WinterVisitor v,YetiFoot foot,bool near)
+        {
+            var walk=v.Walk;
+            double x=(foot.X-v.X)/v.Scale,y=(foot.Y-v.Y)/v.Scale;
+            double hipX=(near?3.5:-3.5)*v.Facing+.65*walk.Weight*v.Facing;
+            double hipY=-13-walk.Bob,ankleY=y-3.2;
+            double dx=x-hipX,dy=ankleY-hipY,length=Math.Max(.1,Math.Sqrt(dx*dx+dy*dy));
+            double bend=Math.Sqrt(Math.Max(0,55-length*length*.25));
+            double kneeX=(hipX+x)*.5+dy/length*bend*v.Facing;
+            double kneeY=(hipY+ankleY)*.5-dx/length*bend*v.Facing;
+            string fur=near?"#CBDBDB":"#90ACB7", shadow=near?"#A8C3C9":"#809FAC";
+            L(d,fur,5.7,hipX,hipY,kneeX,kneeY);
+            L(d,shadow,4.9,kneeX,kneeY,x,ankleY);
+            d.PushTransform(new TranslateTransform(x,y));
+            double roll=foot.Planted?0:-Math.Sin(foot.Progress*Math.PI*2)*11*v.Facing;
+            d.PushTransform(new RotateTransform(foot.Tilt+roll));
+            d.PushTransform(new ScaleTransform(v.Facing,1));
+            P(d,near?"#8CAAB6":"#7496A6","M-4.8,-2.5 Q-4.8,-6 -2,-6.3 Q1,-7.3 3,-5 Q7,-4.8 7.2,-2.1 Q7.6,0 3,0 L-2,0 Q-4.7,0 -4.8,-2.5 Z");
+            P(d,fur,"M-4,-4 Q-3.4,-7 -1,-7.1 Q1,-7.2 2,-5.9 L4,-6 3.6,-5 Q6,-4.9 6.3,-3.5 Q3.9,-2.9 2,-3.4 L.7,-2.7 -1,-3.2 Q-3,-2.4 -4,-4 Z");
+            d.Pop();d.Pop();d.Pop();
+        }
+
         private static void Yeti(DrawingContext d,WinterVisitor v) {
+            var walk=v.Walk;
+            E(d,"#3557777B",0,-.55,14,1.7);
+            YetiLeg(d,v,walk.Far,false);YetiLeg(d,v,walk.Near,true);
+            if(Math.Abs(walk.Look)<.999) {
+                // A planted pivot briefly shows the in-between silhouette of the two facing poses.
+                double right=(walk.Look+1)*.5;
+                var turning=new DrawingGroup();
+                using(var layer=turning.Open()) {
+                    layer.PushOpacity(1-right);YetiBody(layer,v,-1);layer.Pop();
+                    layer.PushOpacity(right);YetiBody(layer,v,1);layer.Pop();
+                }
+                d.DrawDrawing(turning);
+            } else YetiBody(d,v,Math.Sign(walk.Look));
+        }
+
+        private static void YetiBody(DrawingContext d,WinterVisitor v,int facing) {
             bool stopped=v.Met && v.Wait<=v.Dwell;
             bool chopping=v.Timber!=null && v.Met;
-            double stride=stopped?0:Math.Sin(v.Travel/(7*v.Scale));
+            var walk=v.Walk;
             double beat=(v.Wait/SnowScene.ChopBeat)%1;
-            double bob=stopped?.55*Math.Sin(v.Wait*3):-Math.Abs(stride)*2;
+            double breathe=stopped?.34*Math.Sin(v.Age*2.5):0;
             double windup=beat<.54 ? -25-78*beat/.54 :
                           beat<.72 ? -103+127*(beat-.54)/.18 : 24-49*(beat-.72)/.28;
-            d.PushTransform(new ScaleTransform(v.Facing,1));
-            E(d,"#4A57777B",0,-.7,18,2.8);
-            E(d,"#7593A9",-8+stride*4,-3.8,6.6,4);E(d,"#94B3BF",8-stride*4,-3.5,7,3.7);
-            d.PushTransform(new TranslateTransform(0,bob));
+            d.PushTransform(new ScaleTransform(facing,1));
+            d.PushTransform(new TranslateTransform(.65*walk.Weight,-4.1-walk.Bob+breathe));
+            d.PushTransform(new RotateTransform((v.Wild?7.0:1.4)*walk.SpeedRatio+.9*walk.Weight,0,-14));
             // A little ridge of curled fur frames a round muzzle and two short ram horns.
+            d.PushTransform(new RotateTransform(-walk.Arm*.82,-11,-27));
             P(d,"#798FA2","M-14,-29 Q-20,-26 -20,-17 Q-22,-12 -17,-12 Q-14,-10 -11,-18 Z");
+            d.Pop();
             P(d,"#95AEBB","M-12,-28 Q-19,-22 -18,-12 L-19,-9 -16,-10 Q-13,-3 -8,-4 L-7,-2 -4,-4 Q1,-2 5,-4 L8,-3 9,-5 Q17,-5 17,-16 Q17,-28 9,-30 Z");
             P(d,"#EDF0E7","M-11,-28 Q-17,-20 -15,-13 L-17,-11 -14,-12 Q-14,-6 -9,-7 L-8,-5 -5,-7 Q1,-4 5,-6 L7,-5 9,-7 Q16,-8 15,-18 Q15,-27 8,-29 Z");
             P(d,"#BED4D7","M-10,-15 Q-8,-11 -6,-12 L-4,-10 -3,-12 1,-10 2,-12 4,-11 7,-14 Q2,-7 -4,-9 Q-10,-9 -10,-15 Z");
             P(d,"#A7504A","M-9,-25 Q-12,-20 -14,-17 L-11,-17 -11,-15 Q-6,-17 -4,-23 Z");
             L(d,"#E89472",1.8,-12,-18,-9,-17.5);
             E(d,"#BD6056",1,-26.2,13.1,3.8);E(d,"#E58B71",2,-27,10,1.6);
+            d.PushTransform(new RotateTransform(-.8*walk.Weight,1,-28));
             P(d,"#756B70","M-12,-38 Q-20,-40 -18,-48 Q-17,-52 -14,-53 Q-16,-46 -9,-45 Z M10,-41 Q15,-47 12,-52 Q20,-49 18,-43 Q17,-38 12,-37 Z");
             P(d,"#D9AE87","M-13,-41 Q-18,-43 -16,-49 Q-16,-45 -10,-44 Z M12,-42 Q16,-46 14,-49 Q18,-46 16,-42 Z");
             P(d,"#91AFBC","M-16,-40 Q-15,-49 -6,-50 L-2,-55 1,-52 6,-54 7,-51 Q16,-49 18,-39 L20,-36 17,-36 19,-32 16,-32 Q13,-25 5,-25 L3,-23 0,-25 -3,-23 -5,-25 Q-15,-25 -17,-33 L-19,-32 -18,-37 -20,-37 Z");
@@ -103,13 +143,14 @@ namespace Frostpane
             E(d,"#526674",4,-35.6,2.1,1.25);
             P(d,"#485762","M.3,-33.6 Q3,-31.9 7,-33.7 Q6.4,-30 3.8,-30.3 Q1.5,-30.2 .3,-33.6 Z");
             P(d,"#FFFBE8","M1,-33.3 L3.2,-32.8 2.5,-31.7 Z");
+            d.Pop();
             if(v.CarryingLog) {
                 d.PushTransform(new RotateTransform(-14,8,-20));
                 R(d,"#946543",-16,-27,36,10,4);L(d,"#C99A69",1.3,-12,-24,11,-24);
                 E(d,"#E3B579",18,-22,4.8,5);E(d,"#AD7B51",18,-22,2.8,3.4);E(d,"#E3B579",18,-22,1.7,2.1);
                 d.Pop();
             }
-            double arm=chopping ? windup : v.CarryingLog?-48:stopped?-89+Math.Sin(v.Wait*5)*14:stride*13;
+            double arm=chopping ? windup : v.CarryingLog?-48+walk.Arm*.08:stopped?-89+Math.Sin(v.Wait*5)*14:walk.Arm;
             d.PushTransform(new RotateTransform(arm,10,-21));
             P(d,"#9AB6C0","M8,-24 Q12,-28 15,-22 L19,-16 Q21,-11 17,-10 Q13,-8 10,-15 Z");
             P(d,"#E1EAE4","M9,-24 Q12,-26 14,-21 L17,-17 16,-15 18,-15 Q17,-12 14,-13 Q11,-15 9,-20 Z");
@@ -120,7 +161,7 @@ namespace Frostpane
                 P(d,"#D3E4E3","M27,-20 L29,-21 29,-16 Q26,-13 24,-13 L24,-15 Q27,-17 27,-20 Z");
                 E(d,"#AEC8CC",15,-15,2.4,2.4);
             }
-            d.Pop();d.Pop();d.Pop();
+            d.Pop();d.Pop();d.Pop();d.Pop();
         }
         private static void Deer(DrawingContext d,double x,double y,double t) {
             d.PushTransform(new TranslateTransform(x,y));

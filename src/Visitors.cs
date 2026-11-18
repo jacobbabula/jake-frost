@@ -13,13 +13,14 @@ namespace Frostpane
         internal bool Met;
         internal Snowman Friend;
         internal WinterTree Timber;
+        internal YetiWalk Walk;
         internal int Chops;
-        internal bool CarryingLog;
+        internal bool CarryingLog,Wild;
         internal GiftPayload Gift;
         internal string Caption;
     }
     internal sealed class WinterPresent { internal double X,Y,Vy; }
-    internal sealed class FriendlyShot { internal double X,Y,Vx,Vy,Remaining;internal Snowman Target; }
+    internal sealed class FriendlyShot { internal double X,Y,Vx,Vy,Remaining,Radius=3.6;internal Snowman Target;internal FightPlayer Shooter; }
 
     internal sealed partial class SnowScene
     {
@@ -36,6 +37,10 @@ namespace Frostpane
             if(target==VisitorSizeTarget.Snowplow && Plough!=null) SizePlough();
             foreach(WinterVisitor v in Visitors) {
                 if(sizeTargets[(int)v.Kind]!=target) continue;
+                if(v.Kind==VisitorKind.Yeti) {
+                    ResizeYetiFoot(v.Walk.Far,v.X,scale/v.Scale);
+                    ResizeYetiFoot(v.Walk.Near,v.X,scale/v.Scale);
+                }
                 v.Scale=scale;
                 if(v.Kind==VisitorKind.Train) GroundWheels(v.X,scale,trainWheels,4.4,out v.Y,out v.Incline);
             }
@@ -92,7 +97,7 @@ namespace Frostpane
             if (kind==VisitorKind.Snowmen && Snowmen.Count>=70) return;
             double scale=visitorScales[(int)sizeTargets[(int)kind]];
             var v=new WinterVisitor { Kind=kind,Scale=scale,X=-23*scale,TargetX=Between(.22,.78)*Math.Min(width,1100) };
-            if(kind==VisitorKind.Yeti) { v.Y=VisitorGround(0);v.Dwell=5; }
+            if(kind==VisitorKind.Yeti) {EnterYeti(v,nextYetiEntry);nextYetiEntry=-nextYetiEntry;}
             if (kind==VisitorKind.Snowmen) { v.TargetX=Between(width*.22,width*.78);v.X=v.TargetX;v.Y=-2; }
             if (kind==VisitorKind.Santa) { v.X=-109*scale;v.Y=height*.2; }
             Visitors.Add(v);
@@ -172,7 +177,9 @@ namespace Frostpane
                 }
             }
             for(int i=FriendlyShots.Count-1;i>=0;i--) {
-                var b=FriendlyShots[i];b.Remaining-=dt;b.X+=b.Vx*dt;b.Y+=b.Vy*dt+130*dt*dt;b.Vy+=260*dt;
+                var b=FriendlyShots[i];
+                if(b.Shooter!=null){if(AdvanceBattleShot(b,dt))FriendlyShots.RemoveAt(i);continue;}
+                b.Remaining-=dt;b.X+=b.Vx*dt;b.Y+=b.Vy*dt+130*dt*dt;b.Vy+=260*dt;
                 if(b.Remaining<=0) {
                     if(b.Target!=null && !b.Target.Held && Math.Abs(b.Target.X-b.X)<b.Target.BaseRadius+10) b.Target.Facing=b.Vx>0?-1:1;
                     PowderBurst(b.X,b.Y,13,b.Vx*.2,.65);FriendlyShots.RemoveAt(i);
