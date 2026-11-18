@@ -14,7 +14,7 @@ $app = (Resolve-Path -LiteralPath $AppDirectory).Path
 $installedDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\Jake Frost'
 $installed = Join-Path $installedDir 'JakeFrost.exe'
 $shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Jake Frost.lnk'
-$profile = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Frostpane'
+$frostData = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Frostpane'
 $extKey = 'HKCU:\Software\Classes\.fpgift'
 $classKey = 'HKCU:\Software\Classes\JakeFrost.Gift'
 $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\JakeFrost.Desktop_is1'
@@ -37,7 +37,7 @@ function Run-Installer([string]$path, [string]$action, [switch]$ExpectRefusal) {
     }
 }
 Check (!(Test-Path -LiteralPath $installedDir) -and !(Test-Path -LiteralPath $extKey) -and
-    !(Test-Path -LiteralPath $profile) -and !(Test-Path -LiteralPath $uninstallKey)) 'clean runner profile'
+    !(Test-Path -LiteralPath $frostData) -and !(Test-Path -LiteralPath $uninstallKey)) 'clean runner profile'
 
 # Install a small earlier-version fixture under the same product identity.
 $oldApp = (New-Item -ItemType Directory -Path (Join-Path $scratch 'old')).FullName
@@ -73,8 +73,8 @@ if ($GiftPath) {
 }
 $giftId = [IO.File]::ReadAllLines($gift)[1]
 Check ($giftId -match '^[A-Fa-f0-9]{32}$') 'gift fixture contains a valid ID'
-$pending = Join-Path $profile "GiftPost\Pending\$giftId.fpgift"
-$received = Join-Path $profile "GiftPost\Received\$giftId.fpgift"
+$pending = Join-Path $frostData "GiftPost\Pending\$giftId.fpgift"
+$received = Join-Path $frostData "GiftPost\Received\$giftId.fpgift"
 # This goes through the Explorer association, including any path quoting.
 Start-Process -FilePath $gift -Verb Open
 for ($i=0; $i -lt 150; $i++) {

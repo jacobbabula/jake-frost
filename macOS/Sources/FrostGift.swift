@@ -17,7 +17,7 @@ struct FrostGift {
         }
     }
 
-    var id = newID(), senderID = "", recipientID = "", sender = "A friend", note = "", dress = ""
+    var id = FrostGift.newID(), senderID = "", recipientID = "", sender = "A friend", note = "", dress = ""
     var kind = Kind.note
     var style = 0
     var size = 18.0, mid = 13.0, head = 9.0, facing = 1.0

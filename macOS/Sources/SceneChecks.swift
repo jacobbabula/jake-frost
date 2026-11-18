@@ -44,5 +44,26 @@ import AppKit
     }
     check(painted,"AppKit raster contains visible snow")
     s.clear();check(s.balls.isEmpty && s.particles.isEmpty && floor.depth.allSatisfy{$0==0},"clear empties the desktop")
+    if let gift=try? FrostGift.make(.tree,sender:"Windows friend",note:"Snow day!",senderID:FrostGift.newID(),template:nil) {
+        let train=GiftTrain(), area=CGRect(x:0,y:0,width:360,height:160)
+        var arrivals=0
+        check(train.start(gift) {arrivals+=1},"gift train accepts a portable dressed tree")
+        for _ in 0..<15 {train.step(1.0/30,bounds:area)}
+        check(arrivals==0 && train.cancel(),"early train can be interrupted before its receipt")
+        _=train.start(gift) {arrivals+=1}
+        for _ in 0..<1300 {train.step(1.0/30,bounds:area)}
+        check(arrivals==1 && train.hasActivity,"gift unloads once and leaves its tree after departure")
+        let drawing=NSImage(size:area.size,flipped:true) { _ in train.draw(in:area);return true }
+        var treePixels=0
+        if let tiff=drawing.tiffRepresentation,let rep=NSBitmapImageRep(data:tiff) {
+            for y in stride(from:0,to:rep.pixelsHigh,by:3) {for x in stride(from:0,to:rep.pixelsWide,by:3) {
+                if let p=rep.colorAt(x:x,y:y)?.usingColorSpace(.deviceRGB),p.alphaComponent>0.8,
+                   p.greenComponent>p.redComponent+0.05 {treePixels+=1}
+            }}
+        }
+        check(treePixels>16,"AppKit draws the delivered evergreen onto the desktop")
+        _=train.clear()
+        check(!train.hasActivity,"clearing removes delivered scenery")
+    } else { check(false,"portable dressed tree creation") }
     return failures==0
 }

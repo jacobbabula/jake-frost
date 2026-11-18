@@ -166,8 +166,9 @@ import AppKit
         do {
             let gift=try composeGift()
             let folder=FileManager.default.temporaryDirectory.appendingPathComponent("JakeFrost-Gifts",isDirectory:true)
+                .appendingPathComponent(gift.id,isDirectory:true)
             try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
-            let path=folder.appendingPathComponent("Winter \(gift.kind.rawValue.lowercased())-\(gift.id.prefix(8)).fpgift")
+            let path=folder.appendingPathComponent("Winter \(gift.kind.rawValue.lowercased()).fpgift")
             try gift.encoded().write(to:path,options:.atomic)
             let picker=NSSharingServicePicker(items:[path])
             sharing=picker;picker.show(relativeTo:shareButton.bounds,of:shareButton,preferredEdge:.minY)

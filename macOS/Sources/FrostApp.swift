@@ -181,11 +181,12 @@ import AppKit
     @objc private func closeWelcome(){welcome?.close()}
 }
 
-if CommandLine.arguments.contains("--scene-self-test") {
-    guard runSceneTests() else {exit(1)}
-    exit(0)
+@main enum FrostEntry {
+    @MainActor static func main() {
+        if CommandLine.arguments.contains("--scene-self-test") {exit(runSceneTests() ? 0 : 1)}
+        let app=NSApplication.shared
+        let delegate=FrostApp()
+        app.delegate=delegate
+        withExtendedLifetime(delegate){app.run()}
+    }
 }
-let app=NSApplication.shared
-let delegate=FrostApp()
-app.delegate=delegate
-app.run()
