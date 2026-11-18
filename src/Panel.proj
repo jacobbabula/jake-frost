@@ -1,4 +1,4 @@
-<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0" DefaultTargets="Build">
   <UsingTask TaskName="Microsoft.Build.Tasks.Windows.MarkupCompilePass1" AssemblyFile="$(MSBuildBinPath)\WPF\PresentationBuildTasks.dll"/>
   <UsingTask TaskName="Microsoft.Build.Tasks.Windows.ResourcesGenerator" AssemblyFile="$(MSBuildBinPath)\WPF\PresentationBuildTasks.dll"/>
   <ItemGroup>

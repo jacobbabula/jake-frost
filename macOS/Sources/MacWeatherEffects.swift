@@ -5,7 +5,7 @@ import AppKit
     struct Particle {
         var x:CGFloat, y:CGFloat, vx:CGFloat, vy:CGFloat, size:CGFloat
         var angle:CGFloat, phase:CGFloat, age:CGFloat=0, life:CGFloat
-        var tint:Int, rest:UInt32?, fraction:CGFloat=0, splash=false
+        var tint:Int, rest:UInt32?=nil, fraction:CGFloat=0, splash=false
     }
     private(set) var particles:[Particle]=[]
     private(set) var mode:MacWeatherMode = .snow
@@ -15,19 +15,13 @@ import AppKit
     private var pointerStill:CGFloat=0
     private var size=CGSize.zero
     private var stormClock:CGFloat=17, flash:CGFloat=0, strike:[CGPoint]=[]
-    private var randomState:UInt64
+    private var generator:SnowRandom
     var isActive:Bool { !mode.isSnow && mode != .off && intensity>0 }
     var hasLightning:Bool { flash>0 }
 
-    init(seed:UInt64=UInt64.random(in:1...UInt64.max)) {randomState=seed}
+    init(seed:UInt64=UInt64.random(in:1...UInt64.max)) {generator=SnowRandom(state:seed)}
     private func random(_ low:CGFloat,_ high:CGFloat)->CGFloat {
-        // SplitMix64 gives each display an independent stream without a system call per streak.
-        randomState &+= 0x9E3779B97F4A7C15
-        var n=randomState
-        n=(n ^ (n>>30)) &* 0xBF58476D1CE4E5B9
-        n=(n ^ (n>>27)) &* 0x94D049BB133111EB
-        n ^= n>>31
-        return low + (high-low)*CGFloat(n>>11)/9_007_199_254_740_992
+        generator.between(low,high)
     }
     func configure(mode:MacWeatherMode,wind:CGFloat,lightning:Bool,intensity:CGFloat) {
         if mode != self.mode {

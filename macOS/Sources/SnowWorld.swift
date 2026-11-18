@@ -1,5 +1,19 @@
 import Foundation
 
+/// Each display has its own stream so spawning particles doesn't request system
+/// entropy for every size, velocity and position.
+struct SnowRandom {
+    var state: UInt64
+    mutating func between(_ low:CGFloat,_ high:CGFloat) -> CGFloat {
+        state &+= 0x9E3779B97F4A7C15
+        var n=state
+        n=(n ^ (n>>30)) &* 0xBF58476D1CE4E5B9
+        n=(n ^ (n>>27)) &* 0x94D049BB133111EB
+        n ^= n>>31
+        return low + (high-low)*CGFloat(n>>11)/9_007_199_254_740_992
+    }
+}
+
 final class Drift {
     var edge: SnowEdge
     private(set) var depth: [CGFloat]
@@ -85,13 +99,13 @@ final class BuiltSnowman {
         style = Int.random(in:0..<3); facing = Bool.random() ? 1 : -1
     }
 
-    func contains(_ point: CGPoint) -> Bool {
+    func contains(_ point: CGPoint, padding: CGFloat = 1) -> Bool {
         let dx = abs(point.x-x), dy = point.y-foot
-        guard dx <= max(base, head*1.08)+1 else {return false}
+        guard dx <= max(base, head*1.08)+padding else {return false}
         let torso = -base - 0.78*(base+middle), face = torso - 0.78*(middle+head)
-        return hypot(dx,dy+base) <= base+1 || hypot(dx,dy-torso) <= middle+1 ||
-            hypot(dx,dy-face) <= head+1 || (dx <= head*0.72 && dy >= face-head*1.88 && dy <= face-head*0.77) ||
-            (dx <= head*1.08 && dy >= face-head && dy <= face-head*0.77)
+        return hypot(dx,dy+base) <= base+padding || hypot(dx,dy-torso) <= middle+padding ||
+            hypot(dx,dy-face) <= head+padding || (dx <= head*0.72+padding && dy >= face-head*1.88-padding && dy <= face-head*0.77+padding) ||
+            (dx <= head*1.08+padding && dy >= face-head-padding && dy <= face-head*0.77+padding)
     }
 }
 
@@ -111,6 +125,7 @@ final class SnowWorld {
     private(set) var snowmen = [BuiltSnowman]()
     private weak var heldSnowman: BuiltSnowman?
     private var spawnBudget: CGFloat = 0
+    private var random = SnowRandom(state:UInt64.random(in:1...UInt64.max))
     var amount: CGFloat = 1
     var wind: CGFloat = 0
     var snowEnabled = true {
@@ -165,9 +180,9 @@ final class SnowWorld {
     }
 
     private func spawn(randomHeight: Bool) {
-        let r=CGFloat.random(in:0.8...2.5)
-        particles.append(SnowParticle(x:.random(in:0...size.width),y:randomHeight ? .random(in:0...size.height) : -3,
-                         vx:.random(in:-6...8),vy:18+12*r,radius:r,phase:.random(in:0...6.28)))
+        let r=random.between(0.8,2.5)
+        particles.append(SnowParticle(x:random.between(0,size.width),y:randomHeight ? random.between(0,size.height) : -3,
+                         vx:random.between(-6,8),vy:18+12*r,radius:r,phase:random.between(0,6.28)))
     }
 
     func burst(_ point: CGPoint, count: Int, strength: CGFloat = 1) {
@@ -175,9 +190,9 @@ final class SnowWorld {
         let added = max(0,min(count,1800-particles.count))
         powderCount += added
         for _ in 0..<added {
-            particles.append(SnowParticle(x:point.x,y:point.y,vx:.random(in:-70...70)*strength,
-                vy:.random(in:-112 ... -23)*strength,radius:.random(in:1...2.7),
-                phase:0,powder:true,life:.random(in:0.45...0.85)))
+            particles.append(SnowParticle(x:point.x,y:point.y,vx:random.between(-70,70)*strength,
+                vy:random.between(-112,-23)*strength,radius:random.between(1,2.7),
+                phase:0,powder:true,life:random.between(0.45,0.85)))
         }
     }
 
@@ -207,6 +222,7 @@ final class SnowWorld {
         }
         if !paused || powderCount > 0 { stepParticles(dt) }
         for b in balls where b !== held && b.below == nil {
+            if b.thrown { advanceThrow(b,dt:dt);continue }
             if let id=b.support,let d=byID[id] {
                 let x=d.edge.x+b.supportFraction*d.edge.width
                 if d.edge.contains(x) {
@@ -217,11 +233,11 @@ final class SnowWorld {
             let old=b.y+b.radius;b.vy+=340*dt;b.x+=b.vx*dt;b.y+=b.vy*dt
             let bank=intercept(x:b.x,previous:old,next:b.y+b.radius)
             let nextFoot=min(b.y+b.radius,bank?.surface(b.x) ?? size.height)
-            if !b.thrown && b.vy>=0 && tryStack(b,previous:old,next:nextFoot,byHand:false) {continue}
+            if b.vy>=0 && tryStack(b,previous:old,next:nextFoot,byHand:false) {continue}
             if let d=bank {
-                if b.thrown { splat(b,d) } else { rest(b,on:d) }
+                rest(b,on:d)
             } else if b.y+b.radius>=size.height || b.x < -b.radius || b.x > size.width+b.radius {
-                if b.thrown {splat(b,nil)} else if let floor=byID[0] {
+                if let floor=byID[0] {
                     b.x=min(max(b.radius,b.x),size.width-b.radius);rest(b,on:floor)
                 }
             }
@@ -241,23 +257,30 @@ final class SnowWorld {
         }
     }
     private func stepParticles(_ dt:CGFloat) {
-        for i in particles.indices.reversed() {
-            var p=particles[i]; if paused && !p.powder {continue}
-            let previous=p.y
-            if p.powder {p.vy+=170*dt;p.life-=dt} else {p.phase+=dt;p.x+=(sin(p.phase)*11+wind)*dt}
-            p.x+=p.vx*dt;p.y+=p.vy*dt
-            if !p.powder, let d=intercept(x:p.x,previous:previous,next:p.y) {
-                d.add(at:p.x,amount:0.28+p.radius*0.25);removeParticle(at:i)
-            } else if p.y>size.height+6 || p.life<=0 || p.x < -15 || p.x>size.width+15 {removeParticle(at:i)}
-            else {particles[i]=p}
+        let wind=self.wind, paused=self.paused, bottom=size.height+6, right=size.width+15
+        var kept=0, expiredPowder=0
+        // Compact survivors in a single pass and truncate the array once per frame.
+        particles.withUnsafeMutableBufferPointer { buffer in
+            for i in buffer.indices {
+                var p=buffer[i]
+                if !paused || p.powder {
+                    let previous=p.y
+                    if p.powder {p.vy+=170*dt;p.life-=dt}
+                    else {p.phase+=dt;p.x+=(sin(p.phase)*11+wind)*dt}
+                    p.x+=p.vx*dt;p.y+=p.vy*dt
+                    if !p.powder, let d=intercept(x:p.x,previous:previous,next:p.y) {
+                        d.add(at:p.x,amount:0.28+p.radius*0.25);continue
+                    }
+                    if p.y>bottom || p.life<=0 || p.x < -15 || p.x>right {
+                        if p.powder {expiredPowder+=1}
+                        continue
+                    }
+                }
+                buffer[kept]=p;kept+=1
+            }
         }
-    }
-    private func removeParticle(at index:Int) {
-        if particles[index].powder { powderCount -= 1 }
-        // Reverse traversal means the particle at the back has already advanced.
-        // The renderer groups particles by color, so their array order is immaterial.
-        particles.swapAt(index, particles.count-1)
-        particles.removeLast()
+        powderCount-=expiredPowder
+        particles.removeLast(particles.count-kept)
     }
 
     private func rest(_ b: PackedBall,on bank:Drift) {
@@ -303,6 +326,21 @@ final class SnowWorld {
         let y=bank?.surface(b.x) ?? min(size.height-2,b.y)
         burst(CGPoint(x:b.x,y:y),count:Int(b.radius*2.5),strength:1.2)
         bank?.add(at:b.x,amount:b.radius*0.35,spread:3);balls.removeAll { $0 === b }
+    }
+    private func advanceThrow(_ b:PackedBall,dt:CGFloat) {
+        b.vy += 340*dt
+        let steps=max(1,Int(ceil(max(abs(b.vx),abs(b.vy))*dt/7)))
+        let slice=dt/CGFloat(steps)
+        for _ in 0..<steps {
+            let previous=b.y+b.radius
+            b.x += b.vx*slice;b.y += b.vy*slice
+            let bank=intercept(x:b.x,previous:previous,next:b.y+b.radius)
+            if bank != nil || b.x <= b.radius || b.x+b.radius >= size.width || b.y <= b.radius || b.y+b.radius >= size.height ||
+                snowmen.contains(where:{$0 !== heldSnowman && $0.contains(CGPoint(x:b.x,y:b.y),padding:b.radius)}) {
+                b.x=max(1,min(size.width-1,b.x));b.y=max(1,min(size.height-1,b.y))
+                splat(b,bank);return
+            }
+        }
     }
     private func snowyBank(_ p:CGPoint)->Drift? {
         banks.first { d in
