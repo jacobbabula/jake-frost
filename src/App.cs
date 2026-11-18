@@ -18,7 +18,7 @@ using Forms = System.Windows.Forms;
 [assembly: AssemblyTitle("Jake Frost")]
 [assembly: AssemblyDescription("Interactive desktop snowfall")]
 [assembly: AssemblyProduct("Jake Frost")]
-[assembly: AssemblyVersion("4.0.1.0")]
+[assembly: AssemblyVersion("4.0.2.0")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8")]
 
 namespace Frostpane
