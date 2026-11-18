@@ -12,10 +12,12 @@ actor SharedGiftPost {
         let name: String
     }
     private let files = FileManager.default
+    private let mailbox: GiftMailbox
     private let identity: String, settings: URL
     private(set) var connection: Connection?
 
     init(mailbox: GiftMailbox) throws {
+        self.mailbox = mailbox
         identity = mailbox.senderID
         settings = mailbox.root.appendingPathComponent("shared-folder.json")
         if FileManager.default.fileExists(atPath: settings.path) {
@@ -139,6 +141,18 @@ actor SharedGiftPost {
             if gifts.count >= 16 { break }
         }
         return gifts
+    }
+
+    func stageIncoming() throws -> [FrostGift] {
+        var stored: [FrostGift] = []
+        for gift in try incoming() {
+            do { _ = try mailbox.accept(gift); stored.append(gift) }
+            catch {
+                if stored.isEmpty { throw error }
+                break // Dispatch the entries already saved. The next poll retries the rest.
+            }
+        }
+        return stored
     }
 
     /// Remove only envelopes that are safely stored in the local pending or received folder.

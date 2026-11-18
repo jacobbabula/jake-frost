@@ -83,10 +83,8 @@ import AppKit
                     return
                 }
                 connected = true
-                let gifts = try await post.incoming()
+                let gifts = try await post.stageIncoming()
                 if !gifts.isEmpty {
-                    let mail = try mailbox()
-                    for gift in gifts { _ = try mail.accept(gift) }
                     received()
                     try await post.confirm(gifts, at:current.folder)
                 }

@@ -87,6 +87,7 @@ final class BuiltSnowman {
     var x, foot: CGFloat
     let base, middle, head: CGFloat
     let style: Int, facing: CGFloat
+    var giftID: String?
     var support: UInt32?, supportFraction: CGFloat
     var vy: CGFloat = 0
 
@@ -94,6 +95,12 @@ final class BuiltSnowman {
         x = saved.x*desktop.width; foot = saved.foot*desktop.height
         base = saved.base; middle = saved.middle; head = saved.head
         style = saved.style; facing = saved.facing; supportFraction = saved.fraction
+        giftID = saved.giftID
+    }
+    init(gift: FrostGift, foot point: CGPoint) {
+        x = point.x; foot = point.y; supportFraction = 0
+        base = CGFloat(gift.size); middle = CGFloat(gift.mid); head = CGFloat(gift.head)
+        style = gift.style; facing = CGFloat(gift.facing); giftID = gift.id
     }
 
     init(bottom: PackedBall, middleBall: PackedBall, headBall: PackedBall) {
@@ -163,6 +170,15 @@ final class SnowWorld {
         if size.width > 1 { snowmen = store.restore(in:size,banks:banks) }
     }
     func rememberSnowmenNow() { snowmanStore?.save(snowmen,size:size) }
+    func containsReceivedGift(_ id: String) -> Bool { snowmen.contains { $0.giftID == id } }
+    func receiveSnowman(_ gift: FrostGift, at foot: CGPoint) -> Bool {
+        guard gift.kind == .snowman else { return false }
+        if containsReceivedGift(gift.id) { return true }
+        guard let floor = byID[0], balls.count+snowmen.count < 55 else { return false }
+        let figure = BuiltSnowman(gift:gift,foot:foot)
+        settle(figure,on:floor);snowmen.append(figure);rememberSnowmenNow()
+        return true
+    }
 
     func setDesktop(size newSize: CGSize, edges: [SnowEdge]) {
         guard newSize.width > 1 && newSize.height > 1 else { return }

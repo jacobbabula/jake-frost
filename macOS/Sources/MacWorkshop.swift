@@ -22,7 +22,7 @@ struct TreeAttachment: Codable {
     static let ornamentScale: CGFloat = 0.4
     var isValid: Bool {
         (-0.35...0.35).contains(anchor.x) && (-1.02 ... -0.08).contains(anchor.y)
-            && (0.4...3.5).contains(magnification) && abs(angle) <= .pi
+            && (0.35...4).contains(magnification) && abs(angle) <= .pi
     }
 }
 
@@ -37,6 +37,8 @@ struct WorkshopPiece: Codable {
     var palette: Int = 0
     var onFloor = false
     var attachment: TreeAttachment?
+    var giftID: String?
+    var giftStyle: Int?
 
     func wirePoint(_ t: CGFloat) -> CGPoint {
         let u = (t - 0.5) * span
@@ -101,7 +103,8 @@ struct WorkshopPiece: Codable {
             size=saved.size
             var seen=Set<UUID>()
             for p in saved.pieces.prefix(Self.limit) where seen.insert(p.id).inserted {
-                guard p.scale.isFinite,(p.attachment != nil || (0.4...3.5).contains(p.scale)),
+                let importedTree = p.kind == .tree && p.giftID.map(FrostGift.validID) == true
+                guard p.scale.isFinite,(p.attachment != nil || (importedTree ? 0.02...3.5 : 0.4...3.5).contains(p.scale)),
                       (26...3200).contains(p.span),(-220...340).contains(p.sag),
                       Self.bulbs.indices.contains(p.palette),abs(p.angle)<=2 * .pi,
                       p.center.x.isFinite,p.center.y.isFinite else {continue}
@@ -176,7 +179,7 @@ struct WorkshopPiece: Codable {
     }
     private func detach(_ i: Int, magnification: CGFloat) {
         pieces[i].attachment = nil
-        pieces[i].scale = magnification
+        pieces[i].scale = max(0.4,min(3.5,magnification))
         extents.removeValue(forKey: pieces[i].id)
     }
     private func settle(_ i: Int, _ g: Gesture, at point: CGPoint) {
@@ -208,9 +211,34 @@ struct WorkshopPiece: Codable {
         ornaments.append("angles," + angles.joined(separator: ","))
         var result = FrostGift()
         result.kind = .tree
-        result.size = Double(min(160, WorkshopSymbol.forKind(.tree).bounds.height * tree.scale))
+        result.style = tree.giftStyle ?? 0
+        result.size = Double(max(3, min(160, WorkshopSymbol.forKind(.tree).bounds.height * tree.scale)))
         result.dress = ornaments.joined(separator: ";")
         return result
+    }
+    func containsReceivedGift(_ id: String) -> Bool { pieces.contains { $0.giftID == id } }
+    func receiveTree(_ parcel: GiftTrain.Parcel, at foot: CGPoint) -> Bool {
+        let gift = parcel.gift
+        guard gift.kind == .tree else { return false }
+        if containsReceivedGift(gift.id) { return true }
+        guard size.width > 1, size.height > 1, pieces.count + 1 + parcel.ornaments.count <= Self.limit else { return false }
+        let symbol = WorkshopSymbol.forKind(.tree)
+        var tree = WorkshopPiece(kind:.tree,center:foot)
+        tree.giftID = gift.id; tree.giftStyle = gift.style
+        tree.scale = CGFloat(gift.size)/symbol.bounds.height
+        tree.angle = signed(parcel.tilt * .pi/180)
+        position(&tree,at:foot);pieces.append(tree)
+        snap(pieces.count-1)
+        tree = pieces[pieces.count-1]
+        for ornament in parcel.ornaments {
+            guard let kind = WorkshopKind(giftOrnamentID:ornament.kind) else { continue }
+            let a = TreeAttachment(tree:tree.id,anchor:CGPoint(x:ornament.x,y:ornament.y),
+                                   magnification:ornament.scale,angle:signed(ornament.angle * .pi/180))
+            pieces.append(WorkshopPiece(kind:kind,center:tree.center))
+            fit(pieces.count-1,attachment:a,to:tree)
+        }
+        save();invalidate?()
+        return true
     }
     @discardableResult func sync(world:SnowWorld)->Bool {
         self.world=world

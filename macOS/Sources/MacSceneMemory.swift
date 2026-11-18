@@ -1,6 +1,9 @@
 import Foundation
 
 enum MacSceneMemory {
+    private static func isSceneKey(_ key: String) -> Bool {
+        key.hasPrefix("workshop.v1.") || key.hasPrefix("snowmen.v1.") || key.hasPrefix("parcels.v1.")
+    }
     static func remembers(_ settings: UserDefaults) -> Bool {
         settings.object(forKey: "rememberScene") == nil || settings.bool(forKey: "rememberScene")
     }
@@ -8,10 +11,25 @@ enum MacSceneMemory {
         settings.set(enabled, forKey: "rememberScene")
         if !enabled {
             // Also forget arrangements belonging to currently disconnected displays.
-            for key in settings.dictionaryRepresentation().keys where key.hasPrefix("workshop.v1.") || key.hasPrefix("snowmen.v1.") {
+            for key in settings.dictionaryRepresentation().keys where isSceneKey(key) {
                 settings.removeObject(forKey: key)
             }
         }
+    }
+    static func containsGift(_ id: String, in settings: UserDefaults, excluding displays: Set<UInt32>) -> Bool {
+        guard remembers(settings), FrostGift.validID(id) else { return false }
+        struct Origin: Decodable { let giftID: String? }
+        struct Arrangement: Decodable { let pieces: [Origin] }
+        let token = Data(id.utf8), decoder = JSONDecoder()
+        for (key,value) in settings.dictionaryRepresentation() where isSceneKey(key) {
+            guard let suffix=key.split(separator:".").last, let display=UInt32(suffix), !displays.contains(display),
+                  let data=value as? Data, data.count <= (key.hasPrefix("parcels.") ? 1_400_000 : 120_000),
+                  data.range(of:token) != nil else { continue }
+            let records = key.hasPrefix("workshop.") ? (try? decoder.decode(Arrangement.self,from:data))?.pieces :
+                (try? decoder.decode([Origin].self,from:data))
+            if records?.contains(where:{ $0.giftID == id }) == true { return true }
+        }
+        return false
     }
 }
 
@@ -20,6 +38,7 @@ struct SavedSnowman: Codable {
     let style: Int
     let support: UInt32?
     let fraction: CGFloat
+    let giftID: String?
 
     init(_ figure: BuiltSnowman, desktop: CGSize) {
         x = max(0, min(1, figure.x / desktop.width))
@@ -27,12 +46,13 @@ struct SavedSnowman: Codable {
         base = figure.base; middle = figure.middle; head = figure.head
         facing = figure.facing; style = figure.style
         support = figure.support
+        giftID = figure.giftID
         fraction = max(0, min(1, figure.supportFraction))
     }
     var valid: Bool {
         (0...1).contains(x) && (0...1).contains(foot) && (0...1).contains(fraction)
-            && (8...50).contains(base) && middle >= 1 && middle <= base && head >= 1 && head <= middle
-            && (0...63).contains(style) && abs(facing) == 1
+            && (3...50).contains(base) && middle >= 1 && middle <= base && head >= 1 && head <= middle
+            && (0...63).contains(style) && (-1...1).contains(facing)
     }
 }
 

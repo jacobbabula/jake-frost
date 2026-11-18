@@ -8,6 +8,10 @@ final class SnowCanvas: NSView {
     let weatherEffects = MacWeatherEffects()
     let ice = WindowIce()
     var iceLevel = 0
+    var giftExistsElsewhere: ((String) -> Bool)?
+    func containsReceivedGift(_ id: String) -> Bool {
+        world.containsReceivedGift(id) || workshop.containsReceivedGift(id) || giftTrain.containsParcel(id)
+    }
     var animating: Bool { world.hasMotion || (!world.paused && weatherEffects.isActive) || giftTrain.isMoving || visitors.isActive || workshop.hasMotion }
     private var bankShapes = [(bank:Drift, revision:UInt, path:CGPath)]()
     private static let flakeColors = [NSColor(calibratedRed:0.79,green:0.89,blue:0.99,alpha:0.58),
@@ -27,6 +31,15 @@ final class SnowCanvas: NSView {
         giftTrain.groundY = { [weak self] x in
             guard let view=self else{return 0}
             return view.world.banks.first?.surface(x) ?? view.bounds.maxY
+        }
+        giftTrain.unload = { [weak self] parcel, foot in
+            guard let self=self else { return false }
+            if self.giftExistsElsewhere?(parcel.gift.id) == true { return true }
+            switch parcel.gift.kind {
+            case .tree: return self.workshop.receiveTree(parcel,at:foot)
+            case .snowman: return self.world.receiveSnowman(parcel.gift,at:foot)
+            case .note: return true
+            }
         }
     }
     required init?(coder: NSCoder) { fatalError("Programmatic view") }

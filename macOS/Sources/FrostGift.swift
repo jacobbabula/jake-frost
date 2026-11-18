@@ -106,6 +106,8 @@ final class GiftMailbox {
     let root: URL
     private let pending: URL, received: URL
     private let files = FileManager.default
+    // Finder imports, the shared-folder worker and train receipts use the same local entries.
+    private let writes = NSLock()
 
     init(root: URL) throws {
         self.root = root
@@ -132,6 +134,8 @@ final class GiftMailbox {
     }
 
     func accept(_ gift: FrostGift) throws -> (ImportResult, FrostGift) {
+        writes.lock()
+        defer { writes.unlock() }
         guard FrostGift.validID(gift.id) else { throw GiftProblem.message("Invalid gift identity.") }
         guard gift.recipientID.isEmpty || gift.recipientID == senderID else {
             throw GiftProblem.message("This gift is addressed to someone else. Ask the sender to save a gift file for sharing.")
@@ -165,6 +169,8 @@ final class GiftMailbox {
     }
 
     func acknowledge(_ gift: FrostGift) throws {
+        writes.lock()
+        defer { writes.unlock() }
         let source = url(gift.id, in: pending), target = url(gift.id, in: received)
         if !files.fileExists(atPath: source.path) { return }
         if files.fileExists(atPath: target.path) { try files.removeItem(at: source) }

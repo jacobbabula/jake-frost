@@ -9,10 +9,10 @@ import AppKit
         var dwell: TimeInterval = 0
         init(_ gift: FrostGift, _ receipt: (() -> Void)?) { self.gift = gift; self.receipt = receipt }
     }
-    private struct Ornament {
+    struct Ornament {
         var kind: Int, x: CGFloat, y: CGFloat, scale: CGFloat = 1, angle: CGFloat = 0
     }
-    private struct Parcel {
+    struct Parcel {
         let gift: FrostGift
         var x: CGFloat, tilt: CGFloat = 0, ornaments: [Ornament] = []
         init(_ gift: FrostGift, x: CGFloat) {
@@ -42,7 +42,37 @@ import AppKit
     }
 
     var groundY: ((CGFloat) -> CGFloat)?
+    var unload: ((Parcel, CGPoint) -> Bool)?
     private var trains: [Delivery] = [], parcels: [Parcel] = []
+    private var nextDrop = 0
+    private struct SavedParcel: Codable {
+        let giftID: String, bytes: Data, x: CGFloat
+    }
+    private var storage: UserDefaults?, storageKey = ""
+    func configureParcelStorage(settings: UserDefaults, displayID: UInt32) {
+        let key = "parcels.v1.\(displayID)"
+        guard settings !== storage || key != storageKey else { return }
+        storage=settings;storageKey=key;parcels.removeAll();nextDrop=0
+        guard MacSceneMemory.remembers(settings), let data=settings.data(forKey:key), data.count<1_400_000,
+              let records=try? JSONDecoder().decode([SavedParcel].self,from:data) else { return }
+        var seen=Set<String>()
+        for record in records.prefix(48) {
+            guard record.x.isFinite, let gift=try? FrostGift.decode(record.bytes), gift.kind != .note,
+                  gift.id==record.giftID, seen.insert(gift.id).inserted else { continue }
+            parcels.append(Parcel(gift,x:record.x))
+        }
+        nextDrop=parcels.count%5
+    }
+    func rememberParcelsNow() {
+        guard let settings=storage, MacSceneMemory.remembers(settings) else { return }
+        if parcels.isEmpty { settings.removeObject(forKey:storageKey);return }
+        let records=parcels.compactMap { p -> SavedParcel? in
+            guard let bytes=try? p.gift.encoded() else { return nil }
+            return SavedParcel(giftID:p.gift.id,bytes:bytes,x:p.x)
+        }
+        if let data=try? JSONEncoder().encode(records) { settings.set(data,forKey:storageKey) }
+    }
+    func containsParcel(_ id: String) -> Bool { parcels.contains { $0.gift.id == id } }
     private var station: CGFloat = 320
     private var scale: CGFloat = 1, pace: CGFloat = 1
     var hasActivity: Bool { !trains.isEmpty || !parcels.isEmpty }
@@ -73,7 +103,7 @@ import AppKit
         trains.removeAll()
         return interrupted
     }
-    @discardableResult func clear() -> Bool { parcels.removeAll(); return cancel() }
+    @discardableResult func clear() -> Bool { parcels.removeAll(); nextDrop=0; rememberParcelsNow(); return cancel() }
 
     func step(_ dt: TimeInterval, bounds: CGRect) {
         station = min(540, max(80, bounds.width * 0.46))
@@ -84,9 +114,18 @@ import AppKit
                 train.x = min(station, train.x + delta * 64 * pace)
                 if train.x >= station {
                     if train.gift.kind != .note {
-                        if parcels.count == 48 { parcels.removeFirst() }
-                        let offset = CGFloat(parcels.count % 5) * 32
-                        parcels.append(Parcel(train.gift, x: max(35, station - 83 - offset)))
+                        let previous = parcels.firstIndex { $0.gift.id == train.gift.id }
+                        let offset = CGFloat(nextDrop) * 32
+                        let x = previous.map { parcels[$0].x } ?? max(35, station - 83 - offset)
+                        let parcel = Parcel(train.gift,x:x)
+                        let foot = CGPoint(x:x, y:groundY?(x) ?? bounds.maxY-2)
+                        if unload?(parcel,foot) == true {
+                            if let previous=previous { parcels.remove(at:previous);rememberParcelsNow() }
+                        } else if previous == nil {
+                            if parcels.count == 48 { parcels.removeFirst() }
+                            parcels.append(parcel);rememberParcelsNow()
+                        }
+                        if previous == nil { nextDrop = (nextDrop+1)%5 }
                     }
                     train.dwell = max(11, 7 + Double(train.gift.note.utf16.count) / 16)
                     let done = train.receipt

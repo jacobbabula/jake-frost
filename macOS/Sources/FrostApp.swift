@@ -142,7 +142,14 @@ import AppKit
             if let existing=scenes[id] {existing.panel.setFrame(frame,display:true)}
             else {
                 let scene=ScreenScene(frame:frame)
+                scene.view.giftExistsElsewhere = { [weak self] giftID in
+                    guard let self=self else{return false}
+                    let loaded=self.scenes.compactMap { $0.value.view.world.size.width>1 ? $0.key:nil }
+                    return self.scenes.contains { key,value in key != id && value.view.containsReceivedGift(giftID) } ||
+                        MacSceneMemory.containsGift(giftID,in:self.settings,excluding:Set(loaded))
+                }
                 scene.view.world.configureSnowmanStorage(settings:settings,displayID:id)
+                scene.view.giftTrain.configureParcelStorage(settings:settings,displayID:id)
                 let workshop=scene.view.workshop
                 workshop.configure(settings:settings,displayID:id)
                 workshop.onEditingChanged = { [weak self,weak workshop] in
@@ -311,7 +318,9 @@ import AppKit
     }
     @objc private func toggleMemory(){
         MacSceneMemory.setRemember(!MacSceneMemory.remembers(settings),settings:settings)
-        for s in scenes.values {s.view.world.rememberSnowmenNow();s.view.workshop.rememberLayoutNow()}
+        for s in scenes.values {
+            s.view.world.rememberSnowmenNow();s.view.workshop.rememberLayoutNow();s.view.giftTrain.rememberParcelsNow()
+        }
     }
     @objc private func togglePause(){settings.set(!paused,forKey:"pauseSnow");applyPreferences()}
     @objc private func togglePlay(){settings.set(!snowPlay,forKey:"snowPlay");applyPreferences()}

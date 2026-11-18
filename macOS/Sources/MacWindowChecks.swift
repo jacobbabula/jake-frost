@@ -25,14 +25,15 @@ import AppKit
           world.intercept(x:45,previous:0,next:100) === ledge,"depth changes update both existing snow and collision geometry")
     let ice = WindowIce(), width=180, height=130
     func raster(_ level:Int) -> [UInt8] {
-        var pixels=[UInt8](repeating:0,count:width*height)
+        var pixels=[UInt8](repeating:0,count:width*height*4)
         pixels.withUnsafeMutableBytes { bytes in
-            guard let c=CGContext(data:bytes.baseAddress,width:width,height:height,bitsPerComponent:8,bytesPerRow:width,
-                                  space:nil,bitmapInfo:CGImageAlphaInfo.alphaOnly.rawValue) else {return}
+            guard let c=CGContext(data:bytes.baseAddress,width:width,height:height,bitsPerComponent:8,bytesPerRow:width*4,
+                                  space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue |
+                                      CGBitmapInfo.byteOrder32Big.rawValue) else {return}
             c.translateBy(x:0,y:CGFloat(height));c.scaleBy(x:1,y:-1)
             ice.draw(c,banks:world.banks,level:level)
         }
-        return pixels
+        return stride(from:3,to:pixels.count,by:4).map {pixels[$0]}
     }
     let off=raster(0),light=raster(1),heavy=raster(3)
     let lit=heavy.indices.filter { heavy[$0] > 30 }

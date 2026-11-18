@@ -42,7 +42,7 @@ import Foundation
         let mismatch = inbox.appendingPathComponent(FrostGift.newID() + ".fpgift")
         try tree.encoded().write(to:mismatch)
         try check(try await post.incoming().count == 1, "ignore envelopes with another recipient or mismatched filenames")
-        try check(try mail.accept(tree).0 == .added && (try mail.accept(tree)).0 == .pending, "repeated polls stage only one delivery")
+        try check(try await post.stageIncoming().count == 1 && (try mail.accept(tree)).0 == .pending, "repeated polls stage only one delivery")
         try await post.confirm([tree], at:share)
         try check(try await post.incoming().isEmpty && (try mail.next())?.id == tree.id, "remove remote envelope only after durable local staging")
         try mail.acknowledge(tree)

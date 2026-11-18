@@ -92,7 +92,9 @@ import AppKit
     let windowsOK=runMacWindowChecks()
     let dressingOK=runMacTreeDressingChecks()
     let memoryOK=runMacSceneMemoryChecks()
-    return failures==0 && snowmenOK && visitorsOK && workshopOK && panelsOK && weatherOK && windowsOK && dressingOK && memoryOK
+    let playOK=runMacPlayChecks()
+    let deliveryOK=runReceivedSceneGiftChecks()
+    return failures==0 && snowmenOK && visitorsOK && workshopOK && panelsOK && weatherOK && windowsOK && dressingOK && memoryOK && playOK && deliveryOK
 }
 
 @MainActor private func runBuiltSnowmanChecks() -> Bool {
