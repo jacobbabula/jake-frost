@@ -40,7 +40,7 @@ import AppKit
     check(point?.0==41.88 && point?.1 == -87.63 && LocalWeather.coordinates("Chicago, IL")==nil &&
           LocalWeather.coordinates("91, 0")==nil,"local weather accepts coordinates and distinguishes city searches")
     check(LocalWeather.effect(code:86)?.0 == .heavySnow && LocalWeather.effect(code:73)?.0 == .snow &&
-          LocalWeather.effect(code:95)?.0 == .rain && LocalWeather.effect(code:3)?.0 == .off &&
+          LocalWeather.effect(code:95)?.0 == .rain && LocalWeather.effect(code:3)?.0 == .clouds &&
           LocalWeather.effect(code:123)==nil,"Open-Meteo weather codes map to supported effects")
 
     let world=SnowWorld()

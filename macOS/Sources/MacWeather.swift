@@ -2,7 +2,7 @@ import AppKit
 
 enum MacWeatherMode: String, CaseIterable {
     case snow = "Snow", heavySnow = "Heavy snow", rain = "Rain", sakura = "Sakura"
-    case leaves = "Leaves", fireflies = "Fireflies", starfall = "Starfall", off = "Off"
+    case leaves = "Leaves", fireflies = "Fireflies", starfall = "Starfall", clouds = "Clouds", off = "Off"
     var isSnow: Bool { self == .snow || self == .heavySnow }
     var title: String { self == .sakura ? "Cherry Blossom" : rawValue }
 }
@@ -14,6 +14,7 @@ enum MacWeatherSchedule: String, CaseIterable {
 @MainActor final class MacWeatherControls: NSObject {
     private let settings: UserDefaults
     private let onChange: () -> Void
+    var onManualChoice: (() -> Void)?
     private var nextChange = Date.distantPast
     private var lookup: Task<Void,Never>?
     private var status = ""
@@ -34,6 +35,7 @@ enum MacWeatherSchedule: String, CaseIterable {
         mode = effect; settings.set(effect.rawValue,forKey:"weatherMode"); onChange()
     }
     func choose(_ effect: MacWeatherMode) {
+        onManualChoice?()
         use(.manual)
         apply(effect)
     }
@@ -162,7 +164,8 @@ enum LocalWeather {
         case 75,86: return (.heavySnow,"Heavy snow")
         case 71,73,77,85: return (.snow,"Snow")
         case 51...67,80...82,95...99: return (.rain,"Rain or showers")
-        case 0...3,45,48: return (.off,code>=45 ? "Fog" : code>=2 ? "Clouds" : "Clear skies")
+        case 2,3: return (.clouds,code == 2 ? "Partly cloudy" : "Overcast")
+        case 0,1,45,48: return (.off,code>=45 ? "Fog" : "Clear skies")
         default: return nil
         }
     }

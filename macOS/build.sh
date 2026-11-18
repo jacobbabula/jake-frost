@@ -9,6 +9,10 @@ trap 'rm -rf "$tmp"' EXIT
 app="$tmp/Jake Frost.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$root/Info.plist" "$app/Contents/Info.plist"
+mkdir "$app/Contents/Resources/Wallpapers"
+for image in Switchback SwitchbackNight Lantern LanternNight; do
+  cp "$root/../src/Wallpapers/$image.jpg" "$app/Contents/Resources/Wallpapers/"
+done
 /usr/bin/plutil -lint "$app/Contents/Info.plist"
 sdk="$(xcrun --sdk macosx --show-sdk-path)"
 for arch in arm64 x86_64; do

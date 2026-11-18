@@ -16,7 +16,8 @@ import AppKit
     private var size=CGSize.zero
     private var stormClock:CGFloat=17, flash:CGFloat=0, strike:[CGPoint]=[]
     private var generator:SnowRandom
-    var isActive:Bool { !mode.isSnow && mode != .off && intensity>0 }
+    let sky = MacSky()
+    var isActive:Bool { sky.inBlizzard || (!mode.isSnow && mode != .off && intensity>0) }
     var hasLightning:Bool { flash>0 }
 
     init(seed:UInt64=UInt64.random(in:1...UInt64.max)) {generator=SnowRandom(state:seed)}
@@ -25,13 +26,17 @@ import AppKit
     }
     func configure(mode:MacWeatherMode,wind:CGFloat,lightning:Bool,intensity:CGFloat) {
         if mode != self.mode {
-            clear();self.mode=mode;seedNext=true
+            clearParticles();self.mode=mode;seedNext=true
         }
         self.wind=wind;self.lightning=lightning;self.intensity=max(0,intensity)
         if !lightning {flash=0;strike.removeAll(keepingCapacity:true)}
         if !isActive && !particles.isEmpty {clear()}
     }
     func clear() {
+        sky.endStorm()
+        clearParticles()
+    }
+    private func clearParticles() {
         particles.removeAll(keepingCapacity:true);previousPointer=nil;pointerStill=0;budget=0
         seedNext=false;flash=0;strike.removeAll(keepingCapacity:true);stormClock=random(14,28)
     }
@@ -74,7 +79,7 @@ import AppKit
     }
     func step(_ seconds:TimeInterval,world:SnowWorld,pointer:CGPoint?,paused:Bool) {
         size=world.size
-        guard isActive,!paused,size.width>2,size.height>2,!world.banks.isEmpty else{return}
+        guard isActive,!sky.inBlizzard,mode != .clouds,!paused,size.width>2,size.height>2,!world.banks.isEmpty else{return}
         let dt=CGFloat(max(0,min(0.08,seconds)))
         let count=target(size.width*size.height)
         if seedNext {
@@ -175,6 +180,10 @@ import AppKit
     }()
     func draw(in c:CGContext) {
         guard isActive else{return}
+        if sky.inBlizzard || mode == .clouds {
+            sky.draw(in:c,size:size,intensity:intensity)
+            return
+        }
         c.saveGState();defer{c.restoreGState()}
         switch mode {
         case .rain:
