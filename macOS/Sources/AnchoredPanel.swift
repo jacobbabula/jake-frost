@@ -9,6 +9,7 @@ import AppKit
     private weak var previousFocus: NSResponder?
     private var restoreAccessory: NSTitlebarAccessoryViewController?
     private var foldedForTool = false
+    var finishTool:(()->Void)?
     var isCollapsed: Bool { fullContent != nil }
 
     init(contentRect: NSRect, title: String) {
@@ -36,7 +37,7 @@ import AppKit
     private func setSize(_ size:NSSize, left:CGFloat, top:CGFloat) {
         setFrame(NSRect(x:left,y:top-size.height,width:size.width,height:size.height),display:true)
     }
-    private func collapse() {
+    private func collapse(forTool:Bool = false) {
         guard let form = contentView else { return }
         if let editor = firstResponder as? NSTextView, editor.isFieldEditor, let control = editor.delegate as? NSControl {
             control.validateEditing()
@@ -54,9 +55,17 @@ import AppKit
         button.toolTip = "Restore in place (⌘M)"
         button.sizeToFit()
         let accessory = NSTitlebarAccessoryViewController()
-        let holder = NSView(frame:NSRect(x:0,y:0,width:button.frame.width+12,height:24))
+        let done = NSButton(title:"Done",target:self,action:#selector(endDesktopTool))
+        done.bezelStyle = .inline;done.sizeToFit();done.setAccessibilityLabel("Finish desktop tool")
+        let hasDone=forTool && finishTool != nil
+        let holder = NSView(frame:NSRect(x:0,y:0,width:button.frame.width+12+(hasDone ? done.frame.width+6 : 0),height:24))
         button.frame.origin = NSPoint(x:2,y:(holder.frame.height-button.frame.height)/2)
-        holder.addSubview(button); accessory.view = holder; accessory.layoutAttribute = .right
+        holder.addSubview(button)
+        if hasDone {
+            done.frame.origin = NSPoint(x:button.frame.maxX+6,y:(holder.frame.height-done.frame.height)/2)
+            holder.addSubview(done)
+        }
+        accessory.view = holder; accessory.layoutAttribute = .right
         addTitlebarAccessoryViewController(accessory); restoreAccessory = accessory
         hidesOnDeactivate = false; level = .floating
         let compact = frameRect(forContentRect:NSRect(x:0,y:0,width:min(218,fullSize.width),height:1)).size
@@ -64,10 +73,11 @@ import AppKit
         standardWindowButton(.miniaturizeButton)?.toolTip = "Restore in place (⌘M)"
     }
     @objc private func restorePanel(_ sender:Any?) { expand() }
+    @objc private func endDesktopTool() { finishTool?() }
     func setWorkshopEditing(_ active:Bool) {
         if active {
             guard isVisible, !isCollapsed, !isMiniaturized else { return }
-            collapse()
+            collapse(forTool:true)
             foldedForTool = isCollapsed
         } else if foldedForTool {
             foldedForTool = false

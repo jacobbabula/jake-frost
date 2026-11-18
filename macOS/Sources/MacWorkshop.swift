@@ -85,9 +85,9 @@ struct WorkshopPiece: Codable {
     private var puffClock:TimeInterval=0
     private let sleds=MacSledField()
     private var plowMovedDecorations=false
-    private var carriedByBlade=Set<UUID>()
-    private var bladeExit:CGFloat=0
-    private var clearingDirection:CGFloat=0
+    private struct BladeLoad {let truck:ObjectIdentifier?,direction:CGFloat}
+    private var carriedByBlade:[UUID:BladeLoad]=[:]
+    private var leavingDisplay:[UUID:CGFloat]=[:]
     private var snowGesture=false, pickingTree=false
     private var clock:TimeInterval=0
     private var falling:[(tree:WorkshopPiece,ornaments:[WorkshopPiece],age:TimeInterval)]=[]
@@ -107,7 +107,7 @@ struct WorkshopPiece: Codable {
     private var animatingLights:Bool {
         twinkleEnabled && world?.paused != true && pieces.contains { $0.kind == .lights || ($0.kind == .tree && $0.trim & 6 == 6) }
     }
-    var hasMotion: Bool { brushPoint != nil || sleds.hasMotion || animatingLights || !falling.isEmpty || clearingDirection != 0 }
+    var hasMotion: Bool { brushPoint != nil || sleds.hasMotion || animatingLights || !falling.isEmpty || !leavingDisplay.isEmpty }
     var invalidate: (() -> Void)?
     private static let limit = 100
     private static let paletteNames = ["Carnival", "Warm white", "Aurora", "Peppermint"]
@@ -162,20 +162,23 @@ struct WorkshopPiece: Codable {
     }
     func rememberLayoutNow() { save() }
     func finishPlowing() {
-        clearingDirection=carriedByBlade.isEmpty ? 0 : bladeExit
+        for (id,load) in carriedByBlade {leavingDisplay[id]=load.direction}
+        carriedByBlade.removeAll()
         if plowMovedDecorations {plowMovedDecorations=false;save()}
     }
     func plow(_ blade:PlowSweep) {
         guard let world=world else{return}
         sleds.plow(blade,world:world)
-        if blade.advance != 0 {bladeExit=blade.advance<0 ? -1 : 1}
         var moved=false
         var cleared=Set<UUID>()
         for i in pieces.indices {
             let p=pieces[i]
             guard p.attachment==nil,gesture?.piece.id != p.id,gesture?.piece.attachment?.tree != p.id,
                   mounts[p.id].map({$0.id==0}) ?? true else {continue}
-            let captive=carriedByBlade.contains(p.id)
+            guard leavingDisplay[p.id]==nil else{continue}
+            let load=carriedByBlade[p.id]
+            if let load=load,load.truck != blade.truckID {continue}
+            let captive=load != nil
             var area:CGRect
             if p.kind == .lights {
                 if p.firstPin.map({$0.bank != 0}) == true || p.lastPin.map({$0.bank != 0}) == true {continue}
@@ -199,12 +202,15 @@ struct WorkshopPiece: Codable {
                 area=extent(p).offsetBy(dx:p.center.x,dy:p.center.y)
                 guard captive || blade.touches(area,includingSnow:p.onFloor,ink:{ body(p,hits:$0) }) else {continue}
             }
-            carriedByBlade.insert(p.id)
             let dx=blade.advance
             guard dx != 0 else {continue}
+            carriedByBlade[p.id]=BladeLoad(truck:blade.truckID,direction:blade.direction)
             pieces[i].firstPin=nil;pieces[i].lastPin=nil
             pieces[i].center.x+=dx
             if area.minX+dx>=size.width || area.maxX+dx<=0 {cleared.insert(p.id);moved=true;continue}
+            if blade.direction>0 ? blade.bounds.minX>=size.width : blade.bounds.maxX<=0 {
+                leavingDisplay[p.id]=blade.direction;carriedByBlade[p.id]=nil
+            }
             if p.onFloor || mounts[p.id]?.id == 0, let floor=world.banks.first {
                 let x=pieces[i].center.x
                 mounts[p.id]=Mount(id:0,fraction:x/floor.edge.width)
@@ -220,7 +226,7 @@ struct WorkshopPiece: Codable {
             parents.contains(p.id) || p.attachment.map{parents.contains($0.tree)} == true ? p.id : nil
         })
         pieces.removeAll {ids.contains($0.id)}
-        for id in ids {mounts[id]=nil;extents[id]=nil;wires[id]=nil;carriedByBlade.remove(id)}
+        for id in ids {mounts[id]=nil;extents[id]=nil;wires[id]=nil;carriedByBlade[id]=nil;leavingDisplay[id]=nil}
         if let s=selected,ids.contains(s){selected=nil;gesture=nil}
         if let t=lastTree,ids.contains(t){lastTree=nil}
         treeEditor?.refresh()
@@ -436,7 +442,7 @@ struct WorkshopPiece: Codable {
     func clear() {
         pending=nil;gesture=nil;editing=false;selected=nil;lastTree=nil;playTool=nil;brushPoint=nil;sleds.clear()
         pieces.removeAll();mounts.removeAll();extents.removeAll();wires.removeAll()
-        falling.removeAll();carriedByBlade.removeAll();clearingDirection=0;pickingTree=false;snowGesture=false;treeEditor?.refresh()
+        falling.removeAll();carriedByBlade.removeAll();leavingDisplay.removeAll();pickingTree=false;snowGesture=false;treeEditor?.refresh()
         save();invalidate?()
     }
     private func removeSelected() {
@@ -449,7 +455,8 @@ struct WorkshopPiece: Codable {
             if lastTree == id { lastTree = nil }
         }
         mounts.removeValue(forKey:id);extents.removeValue(forKey:id);wires.removeValue(forKey:id)
-        selected=nil;gesture=nil;save();invalidate?()
+        carriedByBlade[id]=nil;leavingDisplay[id]=nil
+        selected=nil;gesture=nil;treeEditor?.refresh();save();invalidate?()
     }
     private func distance(_ a:CGPoint,_ b:CGPoint)->CGFloat { hypot(a.x-b.x,a.y-b.y) }
     private func box(_ p:WorkshopPiece)->CGRect {
@@ -529,6 +536,7 @@ struct WorkshopPiece: Codable {
             gesture=Gesture(action:kind == .lights ? .newWire : .move,piece:p,origin:point,isPlacement:true)
         } else if let (i,action)=action(at:point) {
             selected=pieces[i].id
+            carriedByBlade[pieces[i].id]=nil;leavingDisplay[pieces[i].id]=nil
             if pieces[i].kind == .tree { lastTree = selected }
             else if let a = pieces[i].attachment { lastTree = a.tree }
             if action == .remove {removeSelected();return true}
@@ -643,23 +651,28 @@ struct WorkshopPiece: Codable {
     }
     func step(_ dt:TimeInterval) {
         guard let w=world else{return}
-        if animatingLights {clock+=max(0,min(dt,0.12));invalidate?()}
+        if animatingLights {
+            let previous=clock
+            clock+=max(0,min(dt,0.12))
+            if Int(clock*12) != Int(previous*12) {treeEditor?.redrawLights()}
+            invalidate?()
+        }
         if !falling.isEmpty {
             for i in falling.indices {falling[i].age+=max(0,min(dt,0.12))}
             falling.removeAll{$0.age>=0.86};invalidate?()
         }
-        if clearingDirection != 0 {
-            let distance=clearingDirection*max(0,min(CGFloat(dt),0.12))*160
+        if !leavingDisplay.isEmpty {
+            let distance=max(0,min(CGFloat(dt),0.12))*160
             var gone=Set<UUID>()
-            for i in pieces.indices where carriedByBlade.contains(pieces[i].id) {
+            for i in pieces.indices {
                 let p=pieces[i]
-                pieces[i].center.x+=distance;mounts[p.id]=nil;pieces[i].onFloor=false
+                guard let direction=leavingDisplay[p.id] else{continue}
+                pieces[i].center.x+=direction*distance;mounts[p.id]=nil;pieces[i].onFloor=false
                 moveOrnaments(on:pieces[i])
                 let radius=p.kind == .lights ? p.span/2+20*p.scale : max(extent(p).width,extent(p).height)
                 if pieces[i].center.x+radius<0 || pieces[i].center.x-radius>size.width {gone.insert(p.id)}
             }
             if !gone.isEmpty {removeFamily(gone);save()}
-            if carriedByBlade.isEmpty {clearingDirection=0}
             invalidate?()
         }
         if let p=brushPoint, playTool == .pile {
@@ -867,7 +880,7 @@ struct WorkshopPiece: Codable {
 
 extension MacWorkshop {
     private static let twinkleChange=Notification.Name("JakeFrostLightTwinkleChanged")
-    @objc private func readTwinkle() {twinkleEnabled=settings?.object(forKey:"twinkleLights") as? Bool ?? true}
+    @objc private func readTwinkle() {twinkleEnabled=settings?.object(forKey:"twinkleLights") as? Bool ?? true;treeEditor?.refresh()}
     @objc func toggleTwinkle() {
         settings?.set(!twinkleEnabled,forKey:"twinkleLights")
         if let settings=settings {NotificationCenter.default.post(name:Self.twinkleChange,object:settings)}
@@ -911,7 +924,7 @@ extension MacWorkshop {
     var trees:[WorkshopPiece] {pieces.filter{$0.kind == .tree}}
     var designedTree:WorkshopPiece? {pieces.first{$0.kind == .tree && $0.id==lastTree}}
     func nearestTreeForYeti(to x:CGFloat)->WorkshopPiece? {
-        pieces.filter{$0.kind == .tree && $0.onFloor && gesture?.piece.id != $0.id && !carriedByBlade.contains($0.id)}
+        pieces.filter{$0.kind == .tree && $0.onFloor && gesture?.piece.id != $0.id && carriedByBlade[$0.id]==nil && leavingDisplay[$0.id]==nil}
             .min{abs($0.center.x-x)<abs($1.center.x-x)}
     }
     @discardableResult func chopTree(_ id:UUID)->Bool {

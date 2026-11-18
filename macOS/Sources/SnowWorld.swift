@@ -222,7 +222,7 @@ final class SnowWorld {
     var battlePace:CGFloat = 1
     var hasMotion: Bool {
         (!paused && snowEnabled && (amount > 0 || !particles.isEmpty)) || powderCount > 0 ||
-            battle.active || !fragments.isEmpty || balls.contains { ($0.support == nil || $0.vx != 0) && $0.below == nil } || snowmen.contains { $0.support == nil }
+            (!paused && battle.active) || !fragments.isEmpty || balls.contains { ($0.support == nil || $0.vx != 0) && $0.below == nil } || snowmen.contains { $0.support == nil }
     }
     private(set) var particles = [SnowParticle]()
     private(set) var balls = [PackedBall]()
@@ -407,6 +407,7 @@ final class SnowWorld {
                 if d.edge.contains(x) {
                     if x==b.radius || x==size.width-b.radius {b.vx=0}
                     b.supportFraction=(x-d.edge.x)/d.edge.width;b.y=d.surface(x)-b.radius
+                      if abs(b.vx)>145,hitFigure(b) {splat(b,d);continue}
                     positionUpperBall(on:b);continue
                 }
             }

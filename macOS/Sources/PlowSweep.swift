@@ -5,6 +5,7 @@ struct PlowSweep {
     private let outlines: [[CGPoint]]
     let bounds: CGRect
     let advance, speed, direction: CGFloat
+    var truckID:ObjectIdentifier?
     private var pushedSnow = CGRect.null
 
     init(from old: CGPoint, angle oldAngle: CGFloat, to new: CGPoint, angle: CGFloat, scale: CGFloat, speed: CGFloat, direction: CGFloat = 1) {

@@ -30,6 +30,7 @@ enum MacVisitorKind: String, CaseIterable {
     private static let speeds = ["Leisurely","Steady","Brisk"]
     private let settings: UserDefaults
     private let summon: (MacVisitorKind) -> Void
+    var onManualVisit:(()->Void)?
     private let onChange: () -> Void
     private var visitorItem: NSMenuItem?
     private var nextPlow = Date().addingTimeInterval(15*60)
@@ -100,7 +101,7 @@ enum MacVisitorKind: String, CaseIterable {
         }
     }
     @objc private func send(_ item:NSMenuItem) {
-        if let kind = item.representedObject as? MacVisitorKind { summon(kind) }
+        if let kind = item.representedObject as? MacVisitorKind { summon(kind);onManualVisit?() }
     }
     @objc private func selectOption(_ item:NSMenuItem) {
         guard let choice = item.representedObject as? Choice else { return }
@@ -212,6 +213,7 @@ enum MacVisitorKind: String, CaseIterable {
                 position(v,world:world,scale:scale)
                 var blade=PlowSweep(from:old,angle:oldAngle,to:CGPoint(x:v.x,y:v.y),angle:v.angle,
                                     scale:scale,speed:v.kind.pointsPerSecond*(speeds[v.kind] ?? 1),direction:v.direction)
+                blade.truckID=ObjectIdentifier(v)
                 let bladeX=v.direction>0 ? blade.bounds.maxX:blade.bounds.minX,rear=old.x-v.direction*27*scale
                 if max(bladeX,rear)>=0 && min(bladeX,rear)<=world.size.width {
                     let contact=ground.surface(bladeX)

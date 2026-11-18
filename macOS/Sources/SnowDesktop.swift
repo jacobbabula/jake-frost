@@ -152,8 +152,15 @@ final class SnowCanvas: NSView {
                 path.addLine(to:CGPoint(x:l,y:d.surface(l)))
                 let first=Int(floor((l-d.edge.x)/d.spacing))+1
                 var x=d.edge.x+CGFloat(first)*d.spacing
-                while x<r {path.addLine(to:CGPoint(x:x,y:d.surface(x)));x+=d.spacing}
-                path.addLine(to:CGPoint(x:r,y:d.surface(r)));path.addLine(to:CGPoint(x:r,y:d.edge.y));path.closeSubpath()
+                var previous=CGPoint(x:l,y:d.surface(l))
+                while x<r {
+                    let sample=CGPoint(x:x,y:d.surface(x))
+                    let mid=CGPoint(x:(previous.x+x)/2,y:(previous.y+sample.y)/2)
+                    path.addQuadCurve(to:mid,control:previous)
+                    previous=sample;x+=d.spacing
+                }
+                path.addQuadCurve(to:CGPoint(x:r,y:d.surface(r)),control:previous)
+                path.addLine(to:CGPoint(x:r,y:d.edge.y));path.closeSubpath()
             }
             let entry = (d,d.revision,path as CGPath)
             if index < bankShapes.count {bankShapes[index]=entry} else {bankShapes.append(entry)}
@@ -169,7 +176,7 @@ final class SnowCanvas: NSView {
             let fighter=world.battle.player(for:figure),face=fighter?.face ?? figure.facing
             if let p=fighter {
                 context.rotate(by:face*(p.recoil*0.18-p.windup*0.065+p.follow*0.09))
-                context.scaleBy(x:1+p.recoil*0.045,y:1-p.recoil*0.12)
+                context.scaleBy(x:1+p.recoil*0.045+p.duck*0.045,y:1-p.recoil*0.12-p.duck*0.27)
             }
             giftTrain.drawSnowman(base:figure.base,middle:figure.middle,head:figure.head,style:figure.style,facing:face,in:context)
             if let p=fighter {SnowBattleArt.arm(p,in:context)}

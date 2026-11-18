@@ -4,6 +4,29 @@ import AppKit
     let suite = "JakeFrost-Santa-Checks-" + UUID().uuidString
     guard let settings = UserDefaults(suiteName:suite) else {return false}
     defer {settings.removePersistentDomain(forName:suite)}
+    let canvas = SnowCanvas(frame:CGRect(x:0,y:0,width:280,height:160))
+    canvas.santaPresent.settings=settings
+    canvas.world.setDesktop(size:canvas.bounds.size,edges:[])
+    canvas.world.amount=0
+    canvas.visitors.summon(.santa,in:canvas.world)
+    for _ in 0..<600 {
+        canvas.frameTick(1.0/30,cursor:.zero)
+        if let foot=canvas.santaPresent.foot,foot.y>=159 {break}
+    }
+    guard let drop=canvas.santaPresent.foot,drop.x>90,drop.y>=159 else {return false}
+    let artwork=NSImage(size:canvas.bounds.size,flipped:true) { _ in
+        canvas.santaPresent.draw(in:canvas.bounds);return true
+    }
+    guard let data=artwork.tiffRepresentation,let bmp=NSBitmapImageRep(data:data) else {return false}
+    var ribbonPixels=0, paperPixels=0
+    for y in 0..<bmp.pixelsHigh {
+        for x in max(0,Int(drop.x)-13)..<min(bmp.pixelsWide,Int(drop.x)+14) {
+            guard let color=bmp.colorAt(x:x,y:y)?.usingColorSpace(.deviceRGB),color.alphaComponent>0.7 else {continue}
+            if color.redComponent>0.7 && color.greenComponent>0.55 && color.blueComponent<0.6 {ribbonPixels+=1}
+            if color.redComponent>0.45 && color.greenComponent<0.45 && color.blueComponent<0.45 {paperPixels+=1}
+        }
+    }
+    guard ribbonPixels>14,paperPixels>80 else {return false}
     let world = SnowWorld()
     world.setDesktop(size:CGSize(width:280,height:160),edges:[])
     world.clear()

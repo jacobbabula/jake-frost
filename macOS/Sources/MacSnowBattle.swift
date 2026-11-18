@@ -8,6 +8,7 @@ final class SnowFighter {
     let man:BuiltSnowman
     var team=0,health=2
     var next:CGFloat=0,last:CGFloat = -10,recoil:CGFloat=0,face:CGFloat=1,windup:CGFloat=0,follow:CGFloat=0
+    var duck:CGFloat=0,wave:CGFloat=0
     init(_ man:BuiltSnowman) {self.man=man}
 }
 
@@ -75,7 +76,9 @@ final class MacSnowBattle {
             for (i,p) in players.enumerated() where p.health>0 {
                 p.recoil=max(0,p.recoil-dt*2.5)
                 let rivals=players.filter{$0.team != p.team && $0.health>0}
-                guard !rivals.isEmpty else{continue}
+                p.duck=0.33*max(0,sin(age*3.7+CGFloat(i)*1.2))
+                p.wave=rivals.isEmpty ? abs(sin(7*age)):0
+                guard !rivals.isEmpty else{p.windup=0;p.follow=0;continue}
                 let rival=rivals[(i+throwsMade)%rivals.count];p.face=rival.man.x>=p.man.x ? 1:-1
                 p.windup=max(0,min(1,1-(p.next-age)/0.72));p.follow=max(0,1-(age-p.last)/0.48)
                 guard age>=p.next,shots.count<20 else{continue}

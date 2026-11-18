@@ -90,6 +90,7 @@ import AppKit
     let workshopOK=runWorkshopChecks()
     let panelsOK=runAnchoredPanelChecks()
     check(runMacStudioChecks(),"native studio controls and anchored desktop tools")
+    check(MacGifts.checkComposer(),"online invitation, gift and shared-folder controls fit in the Mac gift composer")
     let atmosphereOK=runMacAtmosphereChecks()
     let impactOK=runMacSnowImpactChecks()
     let weatherOK=runMacWeatherChecks() && atmosphereOK && impactOK

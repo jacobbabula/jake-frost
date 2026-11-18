@@ -1,4 +1,5 @@
 import AppKit
+import IOKit.ps
 
 @MainActor final class FrostApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private static let smoke=CommandLine.arguments.contains("--app-smoke-test")
@@ -17,6 +18,7 @@ import AppKit
     private var previousScreens = [UInt32:CGRect]()
     private var fullscreenDisplays = Set<UInt32>()
     private var lowPower = false
+    private var batteryPower = false, nextPowerRead:TimeInterval=0
     private var currentScene: ScreenScene? {
         let mouse = NSEvent.mouseLocation
         if let screen=NSScreen.screens.first(where: { $0.frame.contains(mouse) }),
@@ -44,7 +46,7 @@ import AppKit
     private var paused:Bool {settings.bool(forKey:"pauseSnow")}
 
     func applicationDidFinishLaunching(_ note:Notification) {
-        settings.register(defaults:["snowfall":1,"snowIntensity":1,"snowPlay":true,"pauseSnow":false,"snowDepth":55,"windowSnow":true,"clickPuff":true,"powerSaving":true])
+        settings.register(defaults:["snowfall":1,"snowIntensity":1,"snowPlay":true,"pauseSnow":false,"snowDepth":55,"windowSnow":true,"clickPuff":true,"powerSaving":true,"batterySaving":true])
         weatherControls.onManualChoice = { [weak self] in
             guard let self=self else{return}
             for scene in self.scenes.values {
@@ -59,6 +61,10 @@ import AppKit
                 image.isTemplate=true;button.image=image
             } else {button.title="❄"}
             button.toolTip="Jake Frost"
+        }
+        visitorControls.onManualVisit = { [weak self] in
+            guard let panel=self?.studio.panel,panel.isVisible,!panel.isCollapsed else{return}
+            panel.performMiniaturize(nil)
         }
         let menu=NSMenu(title:"Jake Frost");menu.delegate=self
         fill(menu);status.menu=menu
@@ -195,7 +201,16 @@ import AppKit
     }
     private func updateEdges(){
         guard let primary=NSScreen.screens.first else{return}
-        lowPower=settings.bool(forKey:"powerSaving") && ProcessInfo.processInfo.isLowPowerModeEnabled
+        let now=ProcessInfo.processInfo.systemUptime
+        if now>=nextPowerRead {
+            nextPowerRead=now+20
+            if let sources=IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+               let power=IOPSGetProvidingPowerSourceType(sources)?.takeUnretainedValue() {
+                batteryPower=(power as String)==kIOPSBatteryPowerValue
+            }
+        }
+        lowPower=(settings.bool(forKey:"powerSaving") && ProcessInfo.processInfo.isLowPowerModeEnabled) ||
+                 (settings.bool(forKey:"batterySaving") && batteryPower)
         let pauseFullscreen=settings.bool(forKey:"pauseFullscreen")
         let windows=windowSnow || pauseFullscreen ? DesktopEdges.windows() : []
         var covered=Set<UInt32>()
@@ -289,6 +304,7 @@ import AppKit
         wallpapers.append(to:menu)
         let snow = NSMenu(title:"Snow and windows")
         menu.addItem(withTitle:snow.title,action:nil,keyEquivalent:"").submenu=snow
+        _=item("Adjust weather…",#selector(adjustWeather),snow)
         func choices(_ title:String,_ key:String,_ values:[(Int,String)],_ current:Int) {
             let list=NSMenu(title:title)
             snow.addItem(withTitle:title,action:nil,keyEquivalent:"").submenu=list
@@ -319,7 +335,7 @@ import AppKit
         }
         let edges=item("Collect snow on window edges",#selector(toggleWindows),snow);edges.state=windowSnow ? .on:.off
         let layer=item("Show behind windows",#selector(toggleLayer),snow);layer.state=settings.bool(forKey:"behindWindows") ? .on:.off
-        for (key,label) in [("pauseFullscreen","Pause over fullscreen apps"),("powerSaving","Reduce animation in Low Power Mode"),("clickPuff","Puff falling flakes on click")] {
+        for (key,label) in [("pauseFullscreen","Pause over fullscreen apps"),("powerSaving","Reduce animation in Low Power Mode"),("batterySaving","Reduce animation on battery"),("clickPuff","Puff falling flakes on click")] {
             let entry=item(label,#selector(toggleOption(_:)),snow);entry.representedObject=key
             entry.state=settings.bool(forKey:key) ? .on:.off
         }
@@ -380,6 +396,12 @@ import AppKit
         settings.set(0,forKey:"onlyDisplay");settings.set(Array(excluded),forKey:"excludedDisplays")
         applyPreferences();updateEdges()
     }
+    @objc private func adjustWeather(){
+        MacWeatherTuning().open(volume:volume,depth:settings.integer(forKey:"snowDepth"),wind:Int(weatherControls.wind)) { values in
+            for (key,value) in values {self.settings.set(value,forKey:key)}
+            self.applyPreferences()
+        }
+    }
     @objc private func wakeSnowmen(){
         guard let scene=currentScene else{return}
         _=scene.view.world.wakeSnowmen();scene.view.needsDisplay=true;startFrames()
@@ -417,6 +439,10 @@ import AppKit
     @objc private func quitApp(){NSApp.terminate(nil)}
     @objc private func showWelcome() {
         settings.set(true,forKey:"welcomed")
+        studio.panel.finishTool = { [weak self] in
+            guard let self=self else{return}
+            for scene in self.scenes.values where scene.view.workshop.editing {scene.view.workshop.finishEditing()}
+        }
         studio.show()
     }
     @objc private func showHelp() {

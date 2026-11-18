@@ -66,5 +66,5 @@ import AppKit
     visitors.clear();visitors.summon(.snowmen,in:view.world)
     for _ in 0..<410 {visitors.step(1.0/30,world:view.world)}
     check(view.world.snowmen.contains{!$0.guest && $0.support==0},"visiting snowmen leave a playable figure in the scene")
-    return passed
+    return runMacSnowGalleryIfRequested() && passed
 }

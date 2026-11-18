@@ -152,6 +152,7 @@ import AppKit
             label("Weather")
             row(b(weather+"…","cloud.snow","Weather"),b("Wind…","wind","Weather","Wind"))
             row(b("Weather volume…","slider.horizontal.3","Snow and windows","Weather volume"),b("Drift depth…","snowflake","Snow and windows","Accumulation depth"))
+            row(b("Adjust weather…","slider.horizontal.3","Snow and windows","Adjust weather…"))
             label("Desktop")
             row(b("Wallpaper…","photo","Desktop wallpaper"),b("Snow and windows…","macwindow","Snow and windows"))
             let pause=paused ? "Resume weather":"Pause weather"

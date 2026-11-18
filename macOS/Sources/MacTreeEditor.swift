@@ -2,10 +2,17 @@ import AppKit
 
 @MainActor enum MacTreeLights {
     static let paletteNames = ["Candlelight", "Festive", "Aurora"]
-    private static let colors = [
+    private static let paletteHex: [[Int]] = [
         [0xFFD678,0xFFF1C3,0xFFAF57], [0xF56570,0x70DAA1,0x66C6F8,0xFFD36C,0xCF91FF],
         [0x7EE9D7,0x8ABBF5,0xC49AF6,0xA1EAA8]
-    ].map { $0.map { rgb in CGColor(red:CGFloat(rgb>>16)/255,green:CGFloat((rgb>>8)&255)/255,blue:CGFloat(rgb&255)/255,alpha:1) } }
+    ]
+    private static func color(_ value:Int)->CGColor {
+        let red=CGFloat(value>>16)/255
+        let green=CGFloat((value>>8)&255)/255
+        let blue=CGFloat(value&255)/255
+        return CGColor(red:red,green:green,blue:blue,alpha:1)
+    }
+    private static let colors:[[CGColor]] = paletteHex.map { $0.map(color) }
     private static let positions:[CGPoint] = [(-8,-20),(-3,-16),(3,-13),(10,-12),(-14,-5),(-7,0),(1,3),(8,3),(16,2),
                                                (-22,11),(-14,16),(-5,19),(3,21),(12,21),(21,18)].map {CGPoint(x:$0.0,y:$0.1)}
     private static let baubles:[CGPoint] = [(-7,-10),(8,-5),(-16,8),(4,11),(-9,24),(18,24)].map{CGPoint(x:$0.0,y:$0.1)}
@@ -74,6 +81,7 @@ import AppKit
     init(workshop:MacWorkshop) {
         self.workshop=workshop
         super.init()
+        panel.finishTool={ [weak workshop] in workshop?.finishEditing() }
         preview.workshop=workshop
         palette.addItems(withTitles:MacTreeLights.paletteNames);ornaments.addItems(withTitles:kinds.map(\.rawValue))
         ornaments.selectItem(withTitle:WorkshopKind.bauble.rawValue)
@@ -106,6 +114,7 @@ import AppKit
     }
     func show(){panel.expand();refresh();NSApp.activate(ignoringOtherApps:true);panel.makeKeyAndOrderFront(nil)}
     func setPicking(_ value:Bool){panel.setWorkshopEditing(value)}
+    func redrawLights(){if panel.isVisible && !panel.isCollapsed {preview.needsDisplay=true}}
     func refresh() {
         guard let owner=workshop else{return}
         let trees=owner.trees,tree=owner.designedTree

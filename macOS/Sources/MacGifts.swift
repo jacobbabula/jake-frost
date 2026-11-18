@@ -134,7 +134,7 @@ extension SnowWorld {
         } catch { notice("Couldn’t replay the gift",error.localizedDescription) }
     }
 
-    @objc private func compose() {
+    private func prepareComposer() {
         if composer == nil {
             let panel=AnchoredPanel(contentRect:NSRect(x:0,y:0,width:465,height:430),title:"Send a Gift")
             let column=NSStackView()
@@ -178,6 +178,10 @@ extension SnowWorld {
             }
             panel.center();composer=panel
         }
+    }
+
+    @objc private func compose() {
+        prepareComposer()
         NSApp.activate(ignoringOtherApps:true);composer?.expand();composer?.makeKeyAndOrderFront(nil);composer?.makeFirstResponder(noteField)
         friends.poll(force:true);online.poll(force:true)
     }
@@ -214,5 +218,42 @@ extension SnowWorld {
             sharing=picker;picker.show(relativeTo:shareButton.bounds,of:shareButton,preferredEdge:.minY)
             feedback.stringValue="Choose a sharing app to send the gift file."
         } catch { feedback.stringValue=error.localizedDescription }
+    }
+}
+
+extension MacGifts {
+    @MainActor static func checkComposer() -> Bool {
+        let gifts=MacGifts()
+        gifts.prepareComposer()
+        guard let panel=gifts.composer,let content=panel.contentView else {return false}
+        gifts.senderField.stringValue=""
+        defer {panel.close()}
+        panel.orderFront(nil)
+        func descendants(_ view:NSView)->[NSView] { [view]+view.subviews.flatMap(descendants) }
+        guard let tabs=descendants(content).compactMap({$0 as? NSTabView}).first,
+              tabs.tabViewItems.map({$0.label}) == ["Online friends","Shared folder"] else {return false}
+        for (index,required) in [["Copy Invitation","Accept Invitation","Send to Friend","Check Deliveries","Remove"],
+                                  ["Connect Folder…","Disconnect","Send to Friend"]].enumerated() {
+            tabs.selectTabViewItem(at:index)
+            content.layoutSubtreeIfNeeded()
+            guard let page=tabs.selectedTabViewItem?.view else {return false}
+            let buttons=descendants(page).compactMap{$0 as? NSButton}
+            guard required.allSatisfy({ title in buttons.contains { button in
+                button.title==title && button.action != nil && button.target != nil &&
+                    content.bounds.contains(button.convert(button.bounds,to:content))
+            } }) else {return false}
+        }
+        tabs.selectTabViewItem(at:0)
+        guard let folder=ProcessInfo.processInfo.environment["JAKEFROST_MAC_GALLERY"] else {return true}
+        content.layoutSubtreeIfNeeded();panel.displayIfNeeded()
+        guard let bitmap=content.bitmapImageRepForCachingDisplay(in:content.bounds) else {return false}
+        content.cacheDisplay(in:content.bounds,to:bitmap)
+        guard let png=bitmap.representation(using:.png,properties:[:]) else {return false}
+        do {
+            let url=URL(fileURLWithPath:folder,isDirectory:true)
+            try FileManager.default.createDirectory(at:url,withIntermediateDirectories:true)
+            try png.write(to:url.appendingPathComponent("friend-composer.png"))
+            return true
+        } catch {return false}
     }
 }

@@ -18,7 +18,7 @@ enum SnowBattleArt {
     }
     static func arm(_ p:SnowFighter,in c:CGContext) {
         let m=p.man,r=m.middle,shoulder=CGPoint(x:p.face*r*0.62,y:-m.base-0.78*(m.base+r))
-        let angle = -0.32-p.windup*1.63+p.follow*0.65
+        let angle = -0.32-p.windup*1.63+p.follow*0.65-p.wave*1.65
         let hand=CGPoint(x:shoulder.x+p.face*cos(angle)*r*1.38,y:shoulder.y+sin(angle)*r*1.38)
         c.setLineCap(.round);c.setLineWidth(max(1.6,r*0.14));c.setStrokeColor(red:0.43,green:0.29,blue:0.20,alpha:1)
         c.beginPath();c.move(to:shoulder);c.addLine(to:hand)

@@ -47,10 +47,13 @@ import AppKit
           "a saved snowman returns to its ledge with its original proportions, scarf and facing")
     reopened.setDesktop(size:desktop,edges:[])
     for _ in 0..<120 { reopened.step(1.0/30) }
+    check(reopened.snowmen.isEmpty && settings.object(forKey:"snowmen.v1.6")==nil && reopened.banks[0].depth.reduce(0,+)>0,
+          "a snowman falling from a removed window breaks into the floor and stays removed on disk")
+    reopened.dropVisitorSnowman(at:figure.x,scale:1)
     let resized=SnowWorld(), wide=CGSize(width:750,height:350)
     resized.configureSnowmanStorage(settings:settings,displayID:6);resized.setDesktop(size:wide,edges:[])
     check(resized.snowmen.count == 1 && resized.snowmen[0].support == 0 &&
-          abs(resized.snowmen[0].x-figure.x*1.5)<0.05,"after its window closes, the new ground position survives a resolution change")
+          abs(resized.snowmen[0].x-figure.x*1.5)<0.05,"a newly arrived snowman retains its ground position across a resolution change")
     let unrelated=SnowWorld()
     unrelated.configureSnowmanStorage(settings:settings,displayID:7);unrelated.setDesktop(size:desktop,edges:[])
     check(unrelated.snowmen.isEmpty && settings.data(forKey:"snowmen.v1.6") != nil,"each display owns its own snowmen")
