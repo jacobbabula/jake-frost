@@ -59,17 +59,15 @@ import AppKit
     func close(){panel.close()}
     func setWorkshopEditing(_ editing: Bool){panel.setWorkshopEditing(editing)}
     func captureGalleryIfRequested() -> Bool {
-        guard let output=ProcessInfo.processInfo.environment["JAKEFROST_MAC_GALLERY"] else{return true}
-        guard let view=panel.contentView,!panel.isCollapsed else{return false}
+        guard !panel.isCollapsed else{return false}
+        guard let output=ProcessInfo.processInfo.environment["JAKEFROST_MAC_GALLERY"] else{return MacPanelSnapshot.png(panel) != nil}
         let directory=URL(fileURLWithPath:output,isDirectory:true),previous=tabs.selectedSegment
         defer {tabs.selectedSegment=previous;refresh()}
         do {
             try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
             for (i,name) in ["scene","play","decorate","friends"].enumerated() {
-                tabs.selectedSegment=i;refresh();view.layoutSubtreeIfNeeded();panel.displayIfNeeded()
-                guard let rep=view.bitmapImageRepForCachingDisplay(in:view.bounds) else{return false}
-                view.cacheDisplay(in:view.bounds,to:rep)
-                guard let png=rep.representation(using:.png,properties:[:]) else{return false}
+                tabs.selectedSegment=i;refresh()
+                guard let png=MacPanelSnapshot.png(panel) else{return false}
                 try png.write(to:directory.appendingPathComponent("studio-"+name+".png"))
             }
         } catch {print("FAIL: studio capture \(error)");return false}

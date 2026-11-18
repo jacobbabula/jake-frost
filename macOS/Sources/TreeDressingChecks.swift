@@ -194,17 +194,15 @@ import AppKit
     let frozen=pixels(snapshot())
     for _ in 0..<30{workshop.step(1.0/30)}
     guard frozen != nil,frozen==pixels(snapshot()) else{print("FAIL: disabled twinkle should keep bulbs steady");return false}
+    workshop.openTreeEditor()
+    guard let editorPNG=MacPanelSnapshot.png(editor) else{return false}
     if let output=ProcessInfo.processInfo.environment["JAKEFROST_MAC_GALLERY"] {
         let directory=URL(fileURLWithPath:output,isDirectory:true)
         do {
             try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
-            workshop.openTreeEditor();editor.displayIfNeeded();root.layoutSubtreeIfNeeded()
-            guard let bitmap=root.bitmapImageRepForCachingDisplay(in:root.bounds),let scene=snapshot() else{return false}
-            root.cacheDisplay(in:root.bounds,to:bitmap)
-            for (name,rep) in [("tree-editor.png",bitmap),("trees-and-lights.png",scene)]{
-                guard let bytes=rep.representation(using:.png,properties:[:]) else{return false}
-                try bytes.write(to:directory.appendingPathComponent(name))
-            }
+            guard let scene=snapshot()?.representation(using:.png,properties:[:]) else{return false}
+            try editorPNG.write(to:directory.appendingPathComponent("tree-editor.png"))
+            try scene.write(to:directory.appendingPathComponent("trees-and-lights.png"))
         } catch {print("FAIL: rendering desktop tree checks: \(error)");return false}
     }
     print("PASS: native Mac editor selects and dresses individual desktop trees, restores gifts and choices, anchors and sizes strands and switches actual rendered bulbs between twinkle and steady")

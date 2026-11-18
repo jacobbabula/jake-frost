@@ -244,11 +244,8 @@ extension MacGifts {
             } }) else {return false}
         }
         tabs.selectTabViewItem(at:0)
+        guard let png=MacPanelSnapshot.png(panel) else {return false}
         guard let folder=ProcessInfo.processInfo.environment["JAKEFROST_MAC_GALLERY"] else {return true}
-        content.layoutSubtreeIfNeeded();panel.displayIfNeeded()
-        guard let bitmap=content.bitmapImageRepForCachingDisplay(in:content.bounds) else {return false}
-        content.cacheDisplay(in:content.bounds,to:bitmap)
-        guard let png=bitmap.representation(using:.png,properties:[:]) else {return false}
         do {
             let url=URL(fileURLWithPath:folder,isDirectory:true)
             try FileManager.default.createDirectory(at:url,withIntermediateDirectories:true)
