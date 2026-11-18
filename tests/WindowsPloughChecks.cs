@@ -78,7 +78,16 @@ internal static class WindowsPloughChecks
         var overheadWire=new LightString{X1=x(280),X2=x(345),Y1=80,Y2=82,Bend=3};scene.Lights.Add(overheadWire);
         scene.DailyPresent=new WinterPresent{X=x(700),Y=Height};
         scene.SendSnowplough();
-        for (int i=0;i<1200;i++) scene.Step(1.0/60,0,0);
+        bool checkedSave=false;
+        for (int i=0;i<1200;i++) {
+            scene.Step(1.0/60,0,0);
+            if(!checkedSave && scene.Lights.Contains(strand) && (dir>0 ? strand.X2>Width : strand.X1<0)) {
+                var restored=Scene(dir,100);
+                restored.ImportDecorations(scene.ExportDecorations());
+                checkedSave=restored.Lights.Count==1 && restored.Lights[0].Y1<150;
+            }
+        }
+        Check(checkedSave,"exiting mid-sweep cannot restore a clipped strand in a corner");
         Check(scene.Plough==null,"vehicle completes its pass with loose objects on the ground");
         Check(scene.Balls.Contains(ball) && dir*(ball.X-x(170))>12,"loose snowball moves in blade direction");
         Check(scene.Snowmen.Contains(figure) && dir*(figure.X-x(255))>12,"built snowman is pushed and survives");

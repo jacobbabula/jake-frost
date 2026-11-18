@@ -24,7 +24,8 @@ try {
         $command[0].PerformClick()
         $panel.UpdateLayout()
         $restore=$panel.FindName('RestoreButton')
-        if (!$panel.IsVisible -or !$restore.IsVisible -or $restore.Content -ne 'Restore' -or
+        if (!$panel.IsVisible -or !$restore.IsVisible -or $panel.ActualWidth -gt 45 -or $panel.ActualHeight -gt 45 -or
+            [Windows.Automation.AutomationProperties]::GetName($restore) -ne 'Restore Jake Frost' -or
             [Math]::Abs($x-$panel.Left) -gt 1 -or [Math]::Abs($y-$panel.Top) -gt 1) {
             throw "$visitor failed to show the Restore bar at the previous anchor."
         }

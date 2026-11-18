@@ -9,7 +9,7 @@ using System.Windows.Media;
 
 namespace Frostpane
 {
-    internal sealed class DecorationPicker : WrapPanel
+    internal sealed class DecorationPicker : UniformGrid
     {
         private readonly Dictionary<DecorationKind,Button> tiles=new Dictionary<DecorationKind,Button>();
         private static readonly string[] names={"Christmas tree","String lights","Candle","Red bauble","Gold bauble","Star","Wreath",
@@ -17,14 +17,14 @@ namespace Frostpane
         internal static string NameOf(DecorationKind kind) { return names[(int)kind]; }
         public DecorationPicker(Action<DecorationKind> choose)
         {
-            Orientation=Orientation.Horizontal;
+            Columns=6;
             foreach(DecorationKind option in Enum.GetValues(typeof(DecorationKind))) {
                 DecorationKind kind=option;
                 var content=new StackPanel {Orientation=Orientation.Vertical,HorizontalAlignment=HorizontalAlignment.Center};
                 content.Children.Add(new Image{Source=DecorationArt.Icon(kind),Width=34,Height=34});
                 content.Children.Add(new TextBlock{Text=NameOf(kind),HorizontalAlignment=HorizontalAlignment.Center,
                     FontSize=11,Margin=new Thickness(0,3,0,0),Foreground=Brushes.MidnightBlue});
-                var button=new Button{Content=content,Width=77,Height=62,Margin=new Thickness(2),Padding=new Thickness(1),
+                var button=new Button{Content=content,Height=62,Margin=new Thickness(2),Padding=new Thickness(1),
                     Background=DecorationArt.Tile,Cursor=Cursors.Hand,ToolTip=NameOf(kind)};
                 AutomationProperties.SetName(button,NameOf(kind));
                 AutomationProperties.SetAutomationId(button,"Decor"+kind.ToString());
@@ -32,6 +32,12 @@ namespace Frostpane
                 tiles.Add(kind,button);Children.Add(button);
             }
             SelectKind(DecorationKind.Tree);
+        }
+        protected override Size MeasureOverride(Size available)
+        {
+            if(!double.IsInfinity(available.Width))
+                Columns=Math.Max(1,Math.Min(6,(int)(available.Width/74)));
+            return base.MeasureOverride(available);
         }
         public void SelectKind(DecorationKind kind)
         {

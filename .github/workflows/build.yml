@@ -47,6 +47,12 @@ jobs:
         run: |
           .\baseline\Build.ps1 -OutputDirectory .\dist\baseline
           .\tests\WindowsStartup.ps1 -BaselineApplication .\dist\baseline\JakeFrost.exe -Application .\dist\Jake-Frost\JakeFrost.exe
+      - name: Test private invitations and encrypted Windows deliveries
+        shell: powershell
+        run: |
+          node --test relay/post.test.mjs
+          if ($LASTEXITCODE) { throw 'Relay protocol checks failed.' }
+          .\tests\WindowsOnlineFriends.ps1 -AppDirectory .\dist\Jake-Frost
       - name: Restore the settings bar after summoning a visitor from the tray
         shell: powershell
         run: .\tests\WindowsVisitorMenu.ps1 -AppDirectory .\dist\Jake-Frost
@@ -64,6 +70,14 @@ jobs:
         with:
           name: windows-downloads
           path: dist/public/
+          if-no-files-found: error
+      - name: Capture the native Windows daytime and nighttime scenes
+        shell: powershell
+        run: .\tests\WindowsSceneGallery.ps1 -OutputDirectory .\dist\store-listing
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-store-screenshots
+          path: dist/store-listing/
           if-no-files-found: error
       - name: Send a tree from the Windows release
         shell: powershell

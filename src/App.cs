@@ -373,7 +373,7 @@ namespace Frostpane
             menu.Items.Add("Open Jake Frost",null,delegate { OpenPanel(); });
             AddStudioMenu(menu);
             trayBuild=(Forms.ToolStripMenuItem)menu.Items.Add("Play on desktop",null,delegate { SetBuild(!building); });
-            trayPause=(Forms.ToolStripMenuItem)menu.Items.Add("Pause snow",null,delegate { TogglePause(); });
+            trayPause=(Forms.ToolStripMenuItem)menu.Items.Add("Pause effects",null,delegate { TogglePause(); });
             menu.Items.Add("Clear scene",null,delegate { ClearSnow(); });
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add("Quit Jake Frost",null,delegate { Quit(); });
@@ -420,8 +420,8 @@ namespace Frostpane
         {
             paused=!paused;
             if (paused && building) SetBuild(false);
-            string text=paused?"Resume snow":"Pause snow";
-            Control<Button>("PauseButton").Content=text; trayPause.Text=text;
+            string text=paused?"Resume":"Pause";
+            Control<Button>("PauseButton").Content=text; trayPause.Text=text+" effects";
             foreach(Overlay o in overlays) UpdateGrab(o);
             ScheduleFrames();
         }

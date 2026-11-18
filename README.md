@@ -15,6 +15,8 @@ The Windows installer is unsigned, so Windows may show a publisher warning. The 
 
 ## Send your first gift
 
+**Between two Windows PCs**, open **Friends**, enter your display name and copy a private invitation. Send the code to your friend and have them choose **Accept invite**. Once paired, choose their name and send a note, tree or snowman. The train can deliver after the recipient comes back online. The code is for one friendship. Share it privately. [Gift service privacy](https://jake-frost-mail.netlify.app/privacy.html)
+
 Install Jake Frost on both computers. A Windows user can send to a Mac user and vice versa. All you need to share is a small gift file.
 
 1. **On Windows**, open **Friends**, choose your gift, and select **Copy gift to send**. Paste it into a chat that accepts files, or choose **Save gift file…** and attach the file. **On Mac**, open the snowflake menu, choose **Send a Gift…**, then **Share…** or **Save Gift File…**.
@@ -24,6 +26,13 @@ For automatic deliveries, connect the same shared or synced folder on both compu
 
 ## Play on the desktop
 
+**New on Windows**
+
+- **Weather → Desktop wallpaper** offers two original painted landscapes. Switchback Station has a smoking chimney. Lantern Sound has moving water and a sweeping beacon. Choose **Follow local time** for changing daylight, hold a particular time, or turn motion off. Select **System wallpaper** to reveal your regular desktop again.
+- **Workshop → Elf snowball fight** starts a short animated visit. **Wake the snowmen** starts a game with your own snowmen. A lone snowman plays against an elf. Send the Yeti to see it chop a planted ground tree or greet a snowman.
+- Stack three balls gently to preserve their individual sizes. A hard landing or thrown snowball can break the snowman apart. The plough clears ground decorations on its way offscreen.
+- Open **Decorate → Tree design** to choose a tree’s colors, baubles and lights. You can change the bulbs on a desktop light strand from 50% to 500%, bend its wire, or switch twinkling off. In **Weather**, select **Rain** and enable lightning for occasional branching bolts.
+
 **Mac preview.** Open the snowflake menu to play on the display under your pointer.
 
 - **Decorate** includes all 17 Windows decorations and a mitten. Select **Arrange decorations** to move, rotate or resize a piece. Drag the ends of a light strand to tilt it and pull its center to set the sag. Drop ornaments on a tree to dress it. They travel with that tree when you move it or send it to a friend.
@@ -32,7 +41,7 @@ For automatic deliveries, connect the same shared or synced folder on both compu
 - **Visitors** sends the snowplow, Yeti, Santa and reindeer, visiting snowmen or elf train. Choose a size and speed for each visitor, or enable occasional snowplow and Santa visits. The plow clears a path through accumulated snow.
 - The help window and gift composer fold where they stand when you choose a desktop tool. **Done** restores them with your draft intact. You can also fold a panel yourself with the yellow button or **⌘M**, then click **Restore** when you want it back.
 
-**Windows.** Click **−** in the Jake Frost panel to leave a compact bar at its current position. Sending a visitor from Workshop, Friends or the tray leaves **Restore** visible on that bar. Choosing a desktop tool folds the panel there too. **Tools…** switches tools, **Done** returns to the full panel, and **Restore** reopens it. The **×** hides Jake Frost in the system tray.
+**Windows.** Click **−** or send a visitor to fold the panel into a small blue snowflake where it stands. Click the snowflake to reopen Jake Frost, or drag it to move it. While a desktop tool is active, click the snowflake to change tools or **Done** to finish. The **×** hides Jake Frost in the system tray.
 
 - Grab snow on a window ledge or above the taskbar. Drag it to roll a ball, flick to throw, or gently stack three balls to build a snowman.
 - Open **Workshop** to puff snow, pile up a hill, or push a sled down it. **Done** or **Esc** ends desktop editing.
@@ -69,6 +78,8 @@ On Windows with .NET Framework 4.8, open PowerShell in the repository root and r
 The script uses the Windows .NET Framework C# compiler and MSBuild to compile the settings window and build **JakeFrost.exe** and its configuration file in the repository root. Settings, saved decorations, and local gift records live in `%LOCALAPPDATA%\Frostpane` for compatibility with earlier releases.
 
 To build the Windows installer as well, install Inno Setup 6.7 or later and run `.\BuildSetup.ps1`.
+
+For Microsoft Store packaging, listing material and the Partner Center identity fields, see the [Store submission guide](installer/store/Submission.md).
 
 On a Mac with the Xcode Command Line Tools installed, run the following from the repository root. It compiles for Apple silicon and Intel, runs the native scene and app checks, and creates **Jake Frost.app** under **macOS/dist**.
 

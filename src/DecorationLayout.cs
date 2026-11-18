@@ -46,7 +46,8 @@ namespace Frostpane
             if (width < 1 || height < 1 || (Trees.Count == 0 && Lights.Count == 0 && Decorations.Count==0 && Snowmen.Count==0)) return "";
             var text = new StringBuilder();
             text.Append(LayoutTag).Append('\t').Append(LayoutNumber(width)).Append('\t').Append(LayoutNumber(height));
-            foreach (WinterTree tree in Trees)
+            var savedTrees=leavingDecorations.Count==0 ? Trees : Trees.FindAll(t=>!IsLeaving(t));
+            foreach (WinterTree tree in savedTrees)
             {
                 // A resting tree's placement stays stable as flakes accumulate under it.
                 double baseY = tree.Support == null ? tree.Y : tree.Support.Y;
@@ -57,6 +58,7 @@ namespace Frostpane
             }
             foreach (LightString strand in Lights)
             {
+                if(IsLeaving(strand)) continue;
                 text.Append("\nL\t").Append(LayoutNumber(strand.X1)).Append('\t').Append(LayoutNumber(strand.Y1));
                 WriteMount(text, strand.Left.Support, strand.Left.Anchor);
                 text.Append('\t').Append(LayoutNumber(strand.X2)).Append('\t').Append(LayoutNumber(strand.Y2));
@@ -64,7 +66,7 @@ namespace Frostpane
                 text.Append('\t').Append(LayoutNumber(strand.Bend)).Append('\t').Append(LayoutNumber(strand.BulbScale))
                     .Append('\t').Append(strand.Palette.ToString(CultureInfo.InvariantCulture));
             }
-            ExportCatalog(text);
+            ExportCatalog(text,savedTrees);
             foreach(Snowman man in Snowmen) {
                 SnowBank support=man.Held ? null : PropSurfaceBelow(man.X,man.Y,2.5);
                 if(support!=null && Math.Abs(SnowSurfaceY(support,man.X)-man.Y)>2.5) support=null;

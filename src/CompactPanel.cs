@@ -1,6 +1,5 @@
 using System;
 using System.Windows;
-using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -14,7 +13,19 @@ namespace Frostpane
         private void ConnectCompactPanel()
         {
             Control<Button>("MinimizeButton").Click += delegate { SetCompact(true); };
-            Control<Button>("RestoreButton").Click += delegate {
+            var restore=Control<Button>("RestoreButton");
+            Point origin=new Point();
+            restore.PreviewMouseLeftButtonDown+=delegate(object sender,MouseButtonEventArgs e) {
+                origin=e.GetPosition(restore);
+            };
+            restore.PreviewMouseMove+=delegate(object sender,MouseEventArgs e) {
+                if(!restore.IsMouseCaptured || e.LeftButton!=MouseButtonState.Pressed) return;
+                Point here=e.GetPosition(restore);
+                if(Math.Abs(here.X-origin.X)<SystemParameters.MinimumHorizontalDragDistance &&
+                   Math.Abs(here.Y-origin.Y)<SystemParameters.MinimumVerticalDragDistance) return;
+                restore.ReleaseMouseCapture();panel.DragMove();e.Handled=true;
+            };
+            restore.Click += delegate {
                 if (building) OpenPage("Workshop"); else OpenPanel();
             };
             Control<Button>("DoneButton").Click += delegate { SetBuild(false); };
@@ -39,22 +50,17 @@ namespace Frostpane
                 compact = value;
                 Control<DockPanel>("ExpandedPanel").Visibility = value ? Visibility.Collapsed : Visibility.Visible;
                 Control<DockPanel>("CompactPanel").Visibility = value ? Visibility.Visible : Visibility.Collapsed;
-                panel.Width = value ? (building ? 278 : 188) : expandedWidth;
+                panel.Width = value ? (building ? 124 : 42) : expandedWidth;
                 if (!double.IsNaN(left) && !double.IsNaN(top)) {panel.Left = left; panel.Top = top;}
             }
             if (!value) return;
-            panel.Width = building ? 278 : 188;
+            panel.Width = building ? 124 : 42;
             var restore = Control<Button>("RestoreButton");
-            restore.Content = building ? "Tools…" : "Restore";
-            AutomationProperties.SetName(restore, building ? "Choose another tool" : "Restore Jake Frost");
+            restore.ToolTip=building?"Choose another desktop tool":"Open Jake Frost. Drag to move.";
             var done = Control<Button>("DoneButton");
             done.Visibility = building ? Visibility.Visible : Visibility.Collapsed;
             done.Content = escapeRegistered ? "Done · Esc" : "Done";
-            var title = Control<TextBlock>("CompactTitle");
-            title.Text = !building ? "Jake Frost" : prefs.Tool == PlayTool.Decorate ?
-                DecorationPicker.NameOf(prefs.Decoration) : prefs.Tool == PlayTool.Erase ? "Remove" :
-                prefs.Tool==PlayTool.StyleTree ? "Style a tree" : prefs.Tool.ToString();
-            title.ToolTip = building ? PlayPalette.Hint(prefs.Tool) : "Drag to move, or double-click to restore";
+            done.ToolTip=building?PlayPalette.Hint(prefs.Tool):null;
         }
     }
 }

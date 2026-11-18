@@ -214,14 +214,15 @@ namespace Frostpane
             foreach(var d in decoded) SetTreePosition(d);
         }
 
-        private void ExportCatalog(StringBuilder text)
+        private void ExportCatalog(StringBuilder text,List<WinterTree> savedTrees)
         {
             foreach(var d in Decorations) {
+                if(IsLeaving(d) || (d.Tree!=null && IsLeaving(d.Tree))) continue;
                 double y=d.Mount.Support==null ? d.Y : d.Mount.Support.Y-Footprint(d).BottomOffset(d.Scale);
                 // Mounted world coordinates are recoverable if a window has closed.
                 text.Append("\nD\t").Append(((int)d.Kind).ToString(CultureInfo.InvariantCulture))
                     .Append('\t').Append(LayoutNumber(d.X)).Append('\t').Append(LayoutNumber(y))
-                    .Append('\t').Append(Trees.IndexOf(d.Tree).ToString(CultureInfo.InvariantCulture))
+                    .Append('\t').Append(savedTrees.IndexOf(d.Tree).ToString(CultureInfo.InvariantCulture))
                     .Append('\t').Append(LayoutFactor(d.LocalX)).Append('\t').Append(LayoutFactor(d.LocalY));
                 WriteMount(text,d.Mount.Support,d.Mount.Anchor);
                 text.Append('\t').Append(LayoutFactor(d.Magnification));

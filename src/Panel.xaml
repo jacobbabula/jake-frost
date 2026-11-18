@@ -142,7 +142,7 @@
           <Path Stroke="#287BA7" StrokeThickness="1.65" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Stretch="Uniform" Data="{StaticResource Snowflake}"/>
         </Border>
         <TextBlock Grid.Column="1" Text="Jake Frost" FontWeight="SemiBold" FontSize="23" Foreground="#143E5A" VerticalAlignment="Center"/>
-        <Button x:Name="PauseButton" Grid.Column="2" Content="Pause snow" Margin="0,0,9,0" Padding="11,5" ToolTip="Pause or resume falling snow"/>
+        <Button x:Name="PauseButton" Grid.Column="2" Content="Pause" Margin="0,0,9,0" Padding="11,5" ToolTip="Pause or resume desktop effects"/>
         <Button x:Name="MinimizeButton" Grid.Column="3" Content="−" FontSize="17" Padding="8,1" Background="Transparent" ToolTip="Minimize here" AutomationProperties.Name="Minimize here"/>
         <Button x:Name="HideButton" Grid.Column="4" Background="Transparent" FontSize="18" Padding="6,0" Foreground="#42667F" Content="×" ToolTip="Hide in system tray" AutomationProperties.Name="Hide in system tray"/>
       </Grid>
@@ -316,11 +316,12 @@
        </StackPanel>
       </ScrollViewer>
     </DockPanel>
-    <DockPanel x:Name="CompactPanel" Visibility="Collapsed" Background="Transparent" Margin="8,5">
-      <Button x:Name="DoneButton" DockPanel.Dock="Right" Content="Done" Background="#D0EBFC" Foreground="#12466D" Padding="9,4" Margin="4,0,0,0"/>
-      <Button x:Name="RestoreButton" DockPanel.Dock="Right" Content="Restore" Padding="7,3" ToolTip="Open the full panel here"/>
-      <Path DockPanel.Dock="Left" Data="{StaticResource Snowflake}" Stroke="#287BA7" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center"/>
-      <TextBlock x:Name="CompactTitle" Text="Jake Frost" FontWeight="SemiBold" Foreground="#1F4259" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="4,0,8,0"/>
+    <DockPanel x:Name="CompactPanel" Visibility="Collapsed" Background="Transparent" Margin="4">
+      <Button x:Name="RestoreButton" DockPanel.Dock="Left" Width="32" Height="32" Padding="6" Background="#E0F2FD"
+              AutomationProperties.Name="Restore Jake Frost" ToolTip="Open Jake Frost. Drag to move.">
+        <Path Data="{StaticResource Snowflake}" Stroke="#287BA7" StrokeThickness="1.65" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Stretch="Uniform"/>
+      </Button>
+      <Button x:Name="DoneButton" Content="Done" Background="#D0EBFC" Foreground="#12466D" Padding="4,2" Margin="4,0,0,0"/>
     </DockPanel>
    </Grid>
   </Border>
