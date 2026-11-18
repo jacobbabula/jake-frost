@@ -2,8 +2,9 @@ import AppKit
 
 @MainActor final class FrostApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private static let smoke=CommandLine.arguments.contains("--app-smoke-test")
-    private let settings=FrostApp.smoke ? UserDefaults(suiteName:"io.jakefrost.test."+UUID().uuidString)! : UserDefaults.standard
-    private let gifts=MacGifts()
+    private static let testMailbox=ProcessInfo.processInfo.environment["JAKE_FROST_TEST_MAILBOX"].map { URL(fileURLWithPath:$0,isDirectory:true) }
+    private let settings=FrostApp.smoke || FrostApp.testMailbox != nil ? UserDefaults(suiteName:"io.jakefrost.test."+UUID().uuidString)! : UserDefaults.standard
+    private let gifts=MacGifts(mailboxRoot:FrostApp.testMailbox)
     private var scenes=[UInt32:ScreenScene]()
     private var status:NSStatusItem!
     private var timer:Timer?

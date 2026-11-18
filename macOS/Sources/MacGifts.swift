@@ -8,11 +8,18 @@ import AppKit
     private var shareButton = NSButton(), feedback = NSTextField(wrappingLabelWithString: "")
     private var activeID: String?, pendingReceipt: FrostGift?, replayGift: FrostGift?
     private var needsDrain = true, lastFailure: String?
+    private let mailboxRoot: URL?
+
+    init(mailboxRoot: URL? = nil) {
+        self.mailboxRoot = mailboxRoot
+        super.init()
+    }
 
     private func box() throws -> GiftMailbox {
         if let mailbox = mailbox { return mailbox }
-        let appData = try FileManager.default.url(for:.applicationSupportDirectory, in:.userDomainMask, appropriateFor:nil, create:true)
-        let mailbox = try GiftMailbox(root:appData.appendingPathComponent("Jake Frost/Gifts",isDirectory:true))
+        let root = try mailboxRoot ?? FileManager.default.url(for:.applicationSupportDirectory, in:.userDomainMask, appropriateFor:nil, create:true)
+            .appendingPathComponent("Jake Frost/Gifts",isDirectory:true)
+        let mailbox = try GiftMailbox(root:root)
         self.mailbox = mailbox
         return mailbox
     }
